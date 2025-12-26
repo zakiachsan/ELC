@@ -1,0 +1,7 @@
+{
+  "name": "ELC Management System",
+  "description": "An adaptive English learning platform with smart grading, family unit management, and automated progression logic.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

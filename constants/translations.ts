@@ -1,0 +1,157 @@
+
+export const translations = {
+  en: {
+    // General
+    app_name: "System",
+    welcome: "Welcome back",
+    lets_learn: "Let's learn something new",
+    
+    // Roles
+    role_admin: "System Administration",
+    role_teacher: "Instructor Portal",
+    role_student: "Student Learning Center",
+    role_parent: "Parent Monitoring",
+    
+    // Sidebar
+    menu_main: "Main Menu",
+    nav_accounts: "Accounts",
+    nav_schedule: "Schedule",
+    nav_locations: "Locations",
+    nav_student_reports: "Student",
+    nav_dashboard: "Dashboard",
+    nav_my_students: "My Students",
+    nav_materials: "Online Materials",
+    nav_my_progress: "My Progress",
+    nav_learning_hub: "Learning Hub",
+    nav_activity_log: "Exam Progress",
+    nav_teacher_apps: "Teacher Apps",
+    nav_switch_role: "Dev: Switch Role",
+    nav_homepage: "Homepage",
+    
+    // Homepage
+    hp_programs: "Programs",
+    hp_testimonial: "Testimonial",
+    hp_about: "About Us",
+    hp_login: "Log In",
+    hp_register: "Register",
+    hp_hero_title_1: "Master English with",
+    hp_hero_title_2: "Smart Adaptive",
+    hp_hero_title_3: "Logic.",
+    hp_hero_desc: "Personalized curriculum that adapts to your skill level. Fail a quiz? We automatically adjust the difficulty so you truly learn before moving forward.",
+    hp_cta_start: "Start Learning Now",
+    hp_cta_demo: "Watch Demo",
+    hp_active_students: "Active Students",
+    hp_why_title: "Why Choose ELC?",
+    hp_why_desc: "We use advanced logic to ensure no student is left behind. Our system adapts to your pace.",
+    hp_retry_logic: "Adaptive Retry Logic",
+    hp_retry_desc: "Failed a quiz? The system automatically routes you to remedial variants (Type B & C) before adjusting your level.",
+    hp_feat_family: "Family Integration",
+    hp_feat_family_desc: "Parents get their own dashboard linked instantly to their child's account to monitor attendance and grades.",
+    hp_feat_ai: "Instant Essay Grading",
+    hp_feat_ai_desc: "Get instant feedback on your writing. Our system analyzes grammar, coherence, and structure in seconds.",
+    hp_bottom_cta_title: "Ready to boost your English skills?",
+    hp_bottom_cta_desc: "Join thousands of students who are mastering the language with our adaptive technology.",
+    hp_bottom_cta_btn: "Register for Free",
+    
+    // Student Dashboard
+    st_skill_levels: "My Skill Levels",
+    st_skill_desc: "Based on your last 5 exam results per category.",
+    st_today_class: "Happening Today",
+    st_upcoming_class: "Upcoming Class",
+    st_no_data: "No Data Yet",
+    st_minutes: "Minutes",
+    st_modules_done: "Modules Done",
+    st_info_tip: "Your skill levels are calculated independently. Complete exams in different categories to unlock your full profile.",
+
+    // Teacher Dashboard
+    tc_dashboard_title: "Dashboard",
+    tc_dashboard_desc: "Overview of your day and priority items.",
+    tc_avg_att: "Avg. Attendance (Week)",
+    tc_pending_tasks: "Pending Tasks",
+    tc_items: "items",
+    tc_today_schedule: "Today's Schedule",
+    tc_no_classes: "No classes scheduled for today.",
+    tc_view_upcoming: "View upcoming classes",
+    tc_needs_attention: "Needs Attention",
+    tc_no_flags: "Great job! No students flagged.",
+    tc_view_all_students: "View All Students",
+    tc_start: "Start"
+  },
+  id: {
+    // General
+    app_name: "Sistem",
+    welcome: "Selamat datang kembali",
+    lets_learn: "Mari belajar sesuatu yang baru",
+
+    // Roles
+    role_admin: "Administrasi Sistem",
+    role_teacher: "Portal Instruktur",
+    role_student: "Pusat Belajar Siswa",
+    role_parent: "Pemantauan Orang Tua",
+
+    // Sidebar
+    menu_main: "Menu Utama",
+    nav_accounts: "Akun Pengguna",
+    nav_schedule: "Jadwal Kelas",
+    nav_locations: "Lokasi",
+    nav_student_reports: "Siswa",
+    nav_dashboard: "Dasbor",
+    nav_my_students: "Siswa Saya",
+    nav_materials: "Materi Online",
+    nav_my_progress: "Progres Saya",
+    nav_learning_hub: "Pusat Materi",
+    nav_activity_log: "Progres Ujian",
+    nav_teacher_apps: "Pelamar Guru",
+    nav_switch_role: "Dev: Ganti Peran",
+    nav_homepage: "Beranda",
+
+    // Homepage
+    hp_programs: "Program",
+    hp_testimonial: "Testimoni",
+    hp_about: "Tentang Kami",
+    hp_login: "Masuk",
+    hp_register: "Daftar",
+    hp_hero_title_1: "Kuasai Bahasa Inggris dengan",
+    hp_hero_title_2: "Logika Cerdas",
+    hp_hero_title_3: ".",
+    hp_hero_desc: "Kurikulum personal yang beradaptasi dengan level kemampuanmu. Gagal kuis? Kami otomatis menyesuaikan kesulitan agar kamu benar-benar paham sebelum lanjut.",
+    hp_cta_start: "Mulai Belajar",
+    hp_cta_demo: "Lihat Demo",
+    hp_active_students: "Siswa Aktif",
+    hp_why_title: "Mengapa Memilih ELC?",
+    hp_why_desc: "Kami menggunakan logika canggih untuk memastikan tidak ada siswa yang tertinggal. Sistem kami beradaptasi dengan kecepatanmu.",
+    hp_retry_logic: "Logika Pengulangan Adaptif",
+    hp_retry_desc: "Gagal kuis? Sistem otomatis mengarahkan ke varian remedial (Tipe B & C) sebelum menyesuaikan level.",
+    hp_feat_family: "Integrasi Keluarga",
+    hp_feat_family_desc: "Orang tua mendapatkan dasbor sendiri yang terhubung instan ke akun anak untuk memantau kehadiran dan nilai.",
+    hp_feat_ai: "Penilaian Esai Otomatis",
+    hp_feat_ai_desc: "Dapatkan umpan balik instan pada tulisanmu. Sistem kami menganalisis tata bahasa, koherensi, dan struktur dalam hitungan detik.",
+    hp_bottom_cta_title: "Siap meningkatkan kemampuan Bahasa Inggris?",
+    hp_bottom_cta_desc: "Bergabunglah dengan ribuan siswa yang menguasai bahasa dengan teknologi adaptif kami.",
+    hp_bottom_cta_btn: "Daftar Gratis",
+
+    // Student Dashboard
+    st_skill_levels: "Level Kemampuan Saya",
+    st_skill_desc: "Berdasarkan 5 hasil ujian terakhir per kategori.",
+    st_today_class: "Kelas Hari Ini",
+    st_upcoming_class: "Kelas Mendatang",
+    st_no_data: "Belum Ada Data",
+    st_minutes: "Menit",
+    st_modules_done: "Modul Selesai",
+    st_info_tip: "Level kemampuan dihitung secara independen. Selesaikan ujian di berbagai kategori untuk melengkapi profilmu.",
+
+    // Teacher Dashboard
+    tc_dashboard_title: "Dasbor",
+    tc_dashboard_desc: "Ringkasan hari ini dan item prioritas.",
+    tc_avg_att: "Rata-rata Kehadiran (Mingguan)",
+    tc_pending_tasks: "Tugas Tertunda",
+    tc_items: "item",
+    tc_today_schedule: "Jadwal Hari Ini",
+    tc_no_classes: "Tidak ada kelas dijadwalkan hari ini.",
+    tc_view_upcoming: "Lihat kelas mendatang",
+    tc_needs_attention: "Perlu Perhatian",
+    tc_no_flags: "Bagus! Tidak ada siswa yang bermasalah.",
+    tc_view_all_students: "Lihat Semua Siswa",
+    tc_start: "Mulai"
+  }
+};
