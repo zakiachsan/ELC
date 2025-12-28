@@ -39,60 +39,63 @@ export const LocationManager: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="space-y-4">
       <div className="flex justify-between items-center">
          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Location Presets</h2>
-            <p className="text-gray-500">Manage classrooms and venues for scheduling.</p>
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+               <MapPin className="w-5 h-5 text-orange-600" /> Location Presets
+            </h2>
+            <p className="text-xs text-gray-500">Manage classrooms and venues for scheduling.</p>
          </div>
-         <Button onClick={() => setIsAdding(!isAdding)}>
+         <Button onClick={() => setIsAdding(!isAdding)} className="text-xs py-1.5 px-3">
             {isAdding ? 'Cancel' : 'Add Location'}
          </Button>
       </div>
 
       {isAdding && (
-         <Card title="Add New Location">
-            <form onSubmit={handleAdd} className="space-y-4">
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                     <label className="block text-sm font-medium text-gray-700">Location Name</label>
-                     <input required type="text" value={name} onChange={e => setName(e.target.value)} className="w-full mt-1 border rounded px-3 py-2" placeholder="e.g. Room 101" />
+         <Card className="!p-4">
+            <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Add New Location</h3>
+            <form onSubmit={handleAdd} className="space-y-3">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                     <label className="text-[9px] font-black text-gray-400 uppercase">Location Name</label>
+                     <input required type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-orange-500 outline-none" placeholder="e.g. Room 101" />
                   </div>
-                  <div>
-                     <label className="block text-sm font-medium text-gray-700">Capacity</label>
-                     <input required type="number" value={capacity} onChange={e => setCapacity(e.target.value)} className="w-full mt-1 border rounded px-3 py-2" placeholder="e.g. 20" />
+                  <div className="space-y-1">
+                     <label className="text-[9px] font-black text-gray-400 uppercase">Capacity</label>
+                     <input required type="number" value={capacity} onChange={e => setCapacity(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-orange-500 outline-none" placeholder="e.g. 20" />
                   </div>
                </div>
-               <div>
-                  <label className="block text-sm font-medium text-gray-700">Address / Description</label>
-                  <input required type="text" value={address} onChange={e => setAddress(e.target.value)} className="w-full mt-1 border rounded px-3 py-2" placeholder="e.g. Main Building, Floor 2" />
+               <div className="space-y-1">
+                  <label className="text-[9px] font-black text-gray-400 uppercase">Address / Description</label>
+                  <input required type="text" value={address} onChange={e => setAddress(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-orange-500 outline-none" placeholder="e.g. Main Building, Floor 2" />
                </div>
                <div className="flex justify-end">
-                  <Button type="submit">Save Location</Button>
+                  <Button type="submit" className="text-xs py-1.5 px-3">Save Location</Button>
                </div>
             </form>
          </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
          {locations.map(loc => (
-            <div key={loc.id} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center group">
-               <div className="flex items-start gap-3">
-                  <div className="bg-orange-100 p-2 rounded-lg text-orange-600">
-                     <Building className="w-5 h-5" />
+            <div key={loc.id} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center group">
+               <div className="flex items-start gap-2">
+                  <div className="bg-orange-100 p-1.5 rounded-lg text-orange-600">
+                     <Building className="w-4 h-4" />
                   </div>
                   <div>
-                     <h3 className="font-bold text-gray-900">{loc.name}</h3>
-                     <p className="text-sm text-gray-500">{loc.address}</p>
-                     <p className="text-xs text-gray-400 mt-1">Capacity: {loc.capacity} Students</p>
+                     <h3 className="text-xs font-bold text-gray-900">{loc.name}</h3>
+                     <p className="text-[10px] text-gray-500">{loc.address}</p>
+                     <p className="text-[9px] text-gray-400 mt-0.5">Cap: {loc.capacity}</p>
                   </div>
                </div>
-               <button 
-                  onClick={() => setDeleteConfirm({ isOpen: true, id: loc.id, name: loc.name })} 
-                  className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-2 hover:bg-red-50 rounded-lg" 
+               <button
+                  onClick={() => setDeleteConfirm({ isOpen: true, id: loc.id, name: loc.name })}
+                  className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 rounded"
                   title="Delete Location"
                >
-                  <Trash2 className="w-5 h-5" />
+                  <Trash2 className="w-4 h-4" />
                </button>
             </div>
          ))}

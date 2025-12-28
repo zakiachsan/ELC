@@ -6,18 +6,24 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "screenshot": "playwright test tests/homepage.spec.ts --project=chromium"
   },
   "dependencies": {
     "@google/genai": "^1.33.0",
+    "lucide-react": "^0.560.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "recharts": "^3.5.1",
-    "lucide-react": "^0.560.0"
+    "recharts": "^3.5.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "playwright": "^1.57.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

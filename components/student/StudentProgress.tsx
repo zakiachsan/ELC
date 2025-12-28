@@ -1,190 +1,295 @@
 
 import React, { useState } from 'react';
-import { User, SkillCategory } from '../../types';
+import { User, SkillCategory, CEFRLevel, Homework } from '../../types';
 import { Card } from '../Card';
-import { LEVEL_COLORS, MOCK_SESSION_REPORTS, MOCK_SESSIONS, MOCK_MODULE_PROGRESS, MOCK_ONLINE_MODULES } from '../../constants';
-import { SKILL_ICONS } from './StudentView';
-import { TrendingUp, School, Globe, Filter, Brain } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { MOCK_SESSION_REPORTS, MOCK_SESSIONS, MOCK_HOMEWORKS } from '../../constants';
+import { TrendingUp, BookOpen, Clock, CheckCircle, ClipboardCheck, Calendar } from 'lucide-react';
 
 export const StudentProgress: React.FC<{ student: User }> = ({ student }) => {
-  const [activeSource, setActiveSource] = useState<'OFFLINE' | 'ONLINE'>('OFFLINE');
-  const [selectedSkill, setSelectedSkill] = useState<SkillCategory | 'ALL'>('ALL');
+  const [activeTab, setActiveTab] = useState<'grades' | 'homework'>('grades');
 
-  // --- DATA PROCESSING ---
+  // 1. Get all session grades for this student (from teacher input)
+  const sessionGrades = MOCK_SESSIONS.map(s => {
+    const report = MOCK_SESSION_REPORTS[s.id]?.find(r => r.studentId === student.id);
+    if (!report) return null;
+    return {
+      sessionId: s.id,
+      date: s.dateTime,
+      topic: s.topic,
+      skillCategory: s.skillCategory,
+      writtenScore: report.writtenScore,
+      oralScore: report.oralScore,
+      cefrLevel: report.cefrLevel,
+      teacherNotes: report.teacherNotes
+    };
+  }).filter(Boolean);
 
-  // 1. OFFLINE (Classroom) Exam History
-  const offlineExams = MOCK_SESSIONS
-    .map(s => {
-       const report = MOCK_SESSION_REPORTS[s.id]?.find(r => r.studentId === student.id);
-       if (!report || (report.examScore === undefined && !report.placementResult)) return null;
-       return {
-         id: s.id,
-         date: s.dateTime,
-         topic: s.topic,
-         skill: s.skillCategory,
-         score: report.examScore,
-         placement: report.placementResult,
-         teacherName: 'Mr. John Keating', // Mock
-         feedback: "Excellent work on the structure. Keep improving vocabulary.", // Mock
-         type: 'Class Exam'
-       };
-    })
-    .filter(Boolean);
+  // 2. CEFR progression chart data
+  const cefrChartData = sessionGrades
+    .filter(g => g?.cefrLevel)
+    .map(g => {
+      const cefrOrder: Record<string, number> = {
+        'A1 - Beginner': 1,
+        'A2 - Elementary': 2,
+        'B1 - Intermediate': 3,
+        'B2 - Upper Intermediate': 4,
+        'C1 - Advanced': 5,
+        'C2 - Proficient': 6
+      };
+      return {
+        name: new Date(g!.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+        level: cefrOrder[g!.cefrLevel!] || 0,
+        label: g!.cefrLevel?.split(' - ')[0]
+      };
+    });
 
-  // 2. ONLINE (Learning Hub) Module History
-  const onlineExams = MOCK_MODULE_PROGRESS
-    .filter(p => p.studentId === student.id && p.status === 'COMPLETED')
-    .map(p => {
-        const module = MOCK_ONLINE_MODULES.find(m => m.id === p.moduleId);
-        if (!module) return null;
-        return {
-            id: module.id,
-            date: p.completedDate || new Date().toISOString(),
-            topic: module.title,
-            skill: module.skillCategory,
-            score: p.quizScore,
-            placement: p.placementResult,
-            teacherName: 'AI Auto-Graded',
-            feedback: "Automated scoring completed.",
-            type: 'Module Quiz'
-        };
-    })
-    .filter(Boolean);
+  // 3. Homework for this student
+  const studentHomeworks = MOCK_HOMEWORKS.filter(h => h.studentId === student.id);
+  const pendingHomeworks = studentHomeworks.filter(h => h.status === 'PENDING');
+  const completedHomeworks = studentHomeworks.filter(h => h.status !== 'PENDING');
 
-  // 3. Determine which list to show based on Source Toggle
-  const currentList = activeSource === 'OFFLINE' ? offlineExams : onlineExams;
-  
-  // 4. Apply Skill Filter
-  const filteredList = currentList
-    .filter(e => selectedSkill === 'ALL' || e!.skill === selectedSkill)
-    .sort((a,b) => new Date(b!.date).getTime() - new Date(a!.date).getTime());
+  // 4. Latest CEFR level
+  const latestCefr = sessionGrades.filter(g => g?.cefrLevel).pop()?.cefrLevel;
+
+  // 5. Average scores
+  const writtenScores = sessionGrades.filter(g => g?.writtenScore !== undefined).map(g => g!.writtenScore!);
+  const oralScores = sessionGrades.filter(g => g?.oralScore !== undefined).map(g => g!.oralScore!);
+  const avgWritten = writtenScores.length > 0 ? Math.round(writtenScores.reduce((a, b) => a + b, 0) / writtenScores.length) : null;
+  const avgOral = oralScores.length > 0 ? Math.round(oralScores.reduce((a, b) => a + b, 0) / oralScores.length) : null;
 
   return (
-    <div className="space-y-6 animate-in fade-in">
-       <div>
-         <h2 className="text-2xl font-bold text-gray-900">My Progress</h2>
-         <p className="text-gray-500">Track your academic achievements and skill level improvements.</p>
-       </div>
+    <div className="space-y-4 animate-in fade-in">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">My Progress</h2>
+          <p className="text-xs text-gray-500">Track your grades, CEFR level, and homework.</p>
+        </div>
+        <div className="flex gap-3">
+          <div className="text-right px-3 border-r border-gray-200">
+            <p className="text-[9px] text-gray-400 font-bold uppercase">Avg Written</p>
+            <p className="text-base font-bold text-blue-600">{avgWritten ?? '—'}</p>
+          </div>
+          <div className="text-right px-3 border-r border-gray-200">
+            <p className="text-[9px] text-gray-400 font-bold uppercase">Avg Oral</p>
+            <p className="text-base font-bold text-purple-600">{avgOral ?? '—'}</p>
+          </div>
+          <div className="text-right px-2">
+            <p className="text-[9px] text-gray-400 font-bold uppercase">CEFR Level</p>
+            <p className="text-base font-bold text-teal-600">{latestCefr?.split(' - ')[0] || '—'}</p>
+          </div>
+        </div>
+      </div>
 
-       {/* Results Header View (Always Academic Results now) */}
-       <div className="space-y-6">
-           {/* Source Toggle & Filter Row */}
-           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-              {/* Learning Source Switch */}
-              <div className="flex bg-gray-100 p-1 rounded-lg">
-                  <button 
-                      onClick={() => setActiveSource('OFFLINE')}
-                      className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-md transition-all ${activeSource === 'OFFLINE' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                      <School className="w-4 h-4" /> Classroom (Offline)
-                  </button>
-                  <button 
-                      onClick={() => setActiveSource('ONLINE')}
-                      className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-md transition-all ${activeSource === 'ONLINE' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                      <Globe className="w-4 h-4" /> Learning Hub (Online)
-                  </button>
-              </div>
+      {/* Tab Navigation */}
+      <div className="flex bg-white p-0.5 rounded-lg border border-gray-200 shadow-sm w-fit">
+        <button
+          onClick={() => setActiveTab('grades')}
+          className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-md transition-all flex items-center gap-1 ${activeTab === 'grades' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+        >
+          <ClipboardCheck className="w-3 h-3" /> Grades
+        </button>
+        <button
+          onClick={() => setActiveTab('homework')}
+          className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-md transition-all flex items-center gap-1 ${activeTab === 'homework' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+        >
+          <BookOpen className="w-3 h-3" /> Homework
+          {pendingHomeworks.length > 0 && (
+            <span className="bg-orange-500 text-white text-[8px] px-1.5 py-0.5 rounded-full ml-1">{pendingHomeworks.length}</span>
+          )}
+        </button>
+      </div>
 
-              {/* Simplified Category Filter */}
-              <div className="flex items-center gap-2 w-full md:w-auto">
-                  <span className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
-                      <Filter className="w-3 h-3" /> Filter:
-                  </span>
-                  <select 
-                      className="text-sm border-gray-200 rounded-lg focus:ring-teal-500 focus:border-teal-500 py-1.5 pl-3 pr-8 bg-gray-50 text-gray-700 font-medium"
-                      value={selectedSkill}
-                      onChange={(e) => setSelectedSkill(e.target.value as SkillCategory | 'ALL')}
-                  >
-                      <option value="ALL">All Skills</option>
-                      {Object.values(SkillCategory).map(skill => (
-                          <option key={skill} value={skill}>{skill}</option>
-                      ))}
-                  </select>
-              </div>
-           </div>
+      {/* Tab Content */}
+      {activeTab === 'grades' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* CEFR Progression Chart */}
+          <Card className="!p-3 lg:col-span-1">
+            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+              <TrendingUp className="w-3 h-3 text-teal-600" /> CEFR Progression
+            </h3>
+            <div className="h-36">
+              {cefrChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={cefrChartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                    <YAxis domain={[0, 6]} ticks={[1, 2, 3, 4, 5, 6]} tickFormatter={(v) => ['', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'][v]} tick={{ fontSize: 9 }} width={25} />
+                    <Tooltip formatter={(value, name, props) => [props.payload.label, 'CEFR']} />
+                    <Line type="monotone" dataKey="level" stroke="#0d9488" strokeWidth={2} dot={{ r: 4, fill: '#0d9488' }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-400 text-[10px] italic">
+                  No CEFR data yet.
+                </div>
+              )}
+            </div>
+          </Card>
 
-           {/* MINIMALIST Current Skill Snapshot - NO BARS */}
-           <div className="space-y-2">
-              <h3 className="text-sm font-bold text-gray-700 ml-1 flex items-center gap-2">
-                 <TrendingUp className="w-4 h-4 text-teal-600" /> Current Skill Snapshot
+          {/* Grades Table */}
+          <Card className="!p-0 overflow-hidden lg:col-span-2">
+            <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
+              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                <ClipboardCheck className="w-3 h-3 text-blue-600" /> Grades History
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                  {Object.values(SkillCategory).filter(s => selectedSkill === 'ALL' || s === selectedSkill).map(skill => {
-                      const level = student.skillLevels?.[skill];
-                      const Icon = SKILL_ICONS[skill];
-
-                      return (
-                      <div key={skill} className="bg-white border border-gray-200 rounded-lg p-3 flex flex-col justify-between gap-3 hover:border-teal-300 transition-all shadow-sm h-full">
-                          <div className="flex items-center gap-2">
-                              <Icon className={`w-4 h-4 ${level ? 'text-teal-600' : 'text-gray-300'}`} />
-                              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{skill}</div>
-                          </div>
-                          
-                          <div className="text-sm font-bold text-gray-800">
-                              {level ? level.replace('-', ' ') : 'N/A'}
-                          </div>
-                      </div>
-                      );
-                  })}
-              </div>
-           </div>
-
-           {/* History Log */}
-           <Card title={`${activeSource === 'OFFLINE' ? 'Classroom' : 'Learning Hub'} Assessment History`}>
-              <div className="space-y-4">
-                  {filteredList.length === 0 && (
-                      <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                         <Brain className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                         <p className="italic">No results found for {activeSource.toLowerCase()} learning.</p>
-                      </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                  <tr>
+                    <th className="px-3 py-2">Date</th>
+                    <th className="px-3 py-2">Topic</th>
+                    <th className="px-3 py-2">Category</th>
+                    <th className="px-3 py-2 text-center">Written</th>
+                    <th className="px-3 py-2 text-center">Oral</th>
+                    <th className="px-3 py-2 text-center">CEFR</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {sessionGrades.length === 0 && (
+                    <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400 text-[10px] italic">No grades recorded yet.</td></tr>
                   )}
-                  
-                  {filteredList.map((exam, idx) => (
-                      <div key={idx} className="bg-white rounded-lg p-4 border border-gray-100 hover:border-teal-200 transition-colors shadow-sm">
-                      <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                          <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-[10px] font-bold text-gray-500 uppercase bg-gray-100 px-1.5 py-0.5 rounded">
-                                      {new Date(exam!.date).toLocaleDateString()}
-                                  </span>
-                                  <span className="text-[10px] font-bold text-teal-600 uppercase bg-teal-50 px-1.5 py-0.5 rounded">
-                                      {exam!.type}
-                                  </span>
-                                  {exam!.skill && (
-                                      <span className="text-[10px] font-bold text-gray-600 uppercase border px-1.5 py-0.5 rounded">
-                                          {exam!.skill}
-                                      </span>
-                                  )}
-                              </div>
-                              <h4 className="font-bold text-gray-900 text-base">{exam!.topic}</h4>
-                              <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-                                  <span className="font-semibold">Feedback:</span> "{exam!.feedback}"
-                              </p>
-                          </div>
-
-                          <div className="flex items-center gap-6 border-l pl-6 border-gray-100 min-w-[140px]">
-                              <div className="text-center">
-                                  <div className={`text-xl font-bold ${exam!.score && exam!.score >= 70 ? 'text-green-600' : 'text-orange-500'}`}>
-                                      {exam!.score ?? '-'}
-                                  </div>
-                                  <div className="text-[10px] text-gray-400 uppercase font-bold">Score</div>
-                              </div>
-                              {exam!.placement && (
-                                  <div className="text-center">
-                                      <div className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${LEVEL_COLORS[exam!.placement]}`}>
-                                          {exam!.placement}
-                                      </div>
-                                      <div className="text-[10px] text-gray-400 uppercase font-bold mt-1">Placement</div>
-                                  </div>
-                              )}
-                          </div>
-                      </div>
-                      </div>
+                  {sessionGrades.map((grade, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 text-[10px] text-gray-700 font-medium">
+                        {new Date(grade!.date).toLocaleDateString()}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="text-[10px] font-bold text-gray-900">{grade!.topic}</div>
+                        {grade!.teacherNotes && (
+                          <div className="text-[9px] text-gray-500 italic line-clamp-1">"{grade!.teacherNotes}"</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="text-[8px] font-bold text-gray-600 uppercase bg-gray-100 px-1.5 py-0.5 rounded">
+                          {grade!.skillCategory}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {grade!.writtenScore !== undefined ? (
+                          <span className={`text-[10px] font-bold ${grade!.writtenScore >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                            {grade!.writtenScore}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-[10px]">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {grade!.oralScore !== undefined ? (
+                          <span className={`text-[10px] font-bold ${grade!.oralScore >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                            {grade!.oralScore}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-[10px]">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {grade!.cefrLevel ? (
+                          <span className="bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded text-[8px] font-bold border border-teal-100">
+                            {grade!.cefrLevel.split(' - ')[0]}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-[10px]">—</span>
+                        )}
+                      </td>
+                    </tr>
                   ))}
-              </div>
-           </Card>
-       </div>
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'homework' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Pending Homework */}
+          <div className="lg:col-span-1 space-y-3">
+            <Card className="!p-3">
+              <h3 className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-2 flex items-center gap-1">
+                <Clock className="w-3 h-3" /> Pending ({pendingHomeworks.length})
+              </h3>
+              {pendingHomeworks.length > 0 ? (
+                <div className="space-y-2">
+                  {pendingHomeworks.map(hw => (
+                    <div key={hw.id} className="p-2 bg-orange-50 rounded-lg border border-orange-100">
+                      <p className="text-xs font-bold text-gray-900">{hw.title}</p>
+                      <p className="text-[9px] text-gray-600 mt-0.5 line-clamp-2">{hw.description}</p>
+                      <div className="text-[8px] text-orange-600 font-bold flex items-center gap-1 mt-1">
+                        <Calendar className="w-2.5 h-2.5" /> Due: {new Date(hw.dueDate).toLocaleDateString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <CheckCircle className="w-6 h-6 text-green-300 mx-auto mb-1" />
+                  <p className="text-[9px] text-gray-400">All done!</p>
+                </div>
+              )}
+            </Card>
+          </div>
+
+          {/* Completed Homework */}
+          <Card className="!p-0 overflow-hidden lg:col-span-2">
+            <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
+              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                <CheckCircle className="w-3 h-3 text-green-600" /> Completed Homework
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                  <tr>
+                    <th className="px-3 py-2">Title</th>
+                    <th className="px-3 py-2">Due Date</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2 text-center">Score</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {completedHomeworks.length === 0 && (
+                    <tr><td colSpan={4} className="px-3 py-6 text-center text-gray-400 text-[10px] italic">No completed homework yet.</td></tr>
+                  )}
+                  {completedHomeworks.map(hw => (
+                    <tr key={hw.id} className="hover:bg-gray-50">
+                      <td className="px-3 py-2">
+                        <div className="text-[10px] font-bold text-gray-900">{hw.title}</div>
+                        {hw.feedback && (
+                          <div className="text-[9px] text-blue-600 italic">Feedback: {hw.feedback}</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-[10px] text-gray-500">
+                        {new Date(hw.dueDate).toLocaleDateString()}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase ${
+                          hw.status === 'GRADED' ? 'bg-green-100 text-green-700' :
+                          hw.status === 'SUBMITTED' ? 'bg-blue-100 text-blue-700' :
+                          'bg-orange-100 text-orange-700'
+                        }`}>
+                          {hw.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {hw.score !== undefined ? (
+                          <span className={`text-[10px] font-bold ${hw.score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                            {hw.score}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-[10px]">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

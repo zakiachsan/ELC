@@ -76,64 +76,66 @@ export const StudentList: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
-          <h2 className="text-2xl font-black text-gray-900 tracking-tight">Manajemen Siswa</h2>
-          <p className="text-gray-500 text-sm">Kelola direktori siswa dan penghargaan Hall of Fame.</p>
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <UserIcon className="w-5 h-5 text-blue-600" /> Manajemen Siswa
+          </h2>
+          <p className="text-xs text-gray-500">Kelola direktori siswa dan Hall of Fame.</p>
         </div>
-        
-        <div className="flex bg-white p-1 rounded-xl border border-gray-200 shadow-sm">
-           <button 
+
+        <div className="flex bg-white p-0.5 rounded-lg border border-gray-200 shadow-sm">
+           <button
              onClick={() => setActiveSubTab('directory')}
-             className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all ${activeSubTab === 'directory' ? 'theme-bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${activeSubTab === 'directory' ? 'theme-bg-primary text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
            >
-              <ListIcon className="w-4 h-4" /> Direktori
+              <ListIcon className="w-3 h-3" /> Direktori
            </button>
-           <button 
+           <button
              onClick={() => setActiveSubTab('hall-of-fame')}
-             className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all ${activeSubTab === 'hall-of-fame' ? 'theme-bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${activeSubTab === 'hall-of-fame' ? 'theme-bg-primary text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
            >
-              <Award className="w-4 h-4" /> Hall of Fame
+              <Award className="w-3 h-3" /> Hall of Fame
            </button>
         </div>
       </div>
 
       {activeSubTab === 'hall-of-fame' ? (
-        <div className="space-y-8 animate-in fade-in duration-300">
-           <div className="space-y-4">
+        <div className="space-y-4 animate-in fade-in duration-300">
+           <div className="space-y-3">
               <div className="flex justify-between items-center">
-                 <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                    <Star className="w-4 h-4 text-yellow-400 fill-current" /> Active Winners (Display on Homepage)
+                 <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Star className="w-3 h-3 text-yellow-400 fill-current" /> Active Winners
                  </h3>
-                 <Button onClick={handleOpenNominate} className="h-9 px-4 text-xs flex items-center gap-2">
-                    <Plus className="w-4 h-4" /> Add Student
+                 <Button onClick={handleOpenNominate} className="text-xs py-1.5 px-3">
+                    Add
                  </Button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                  {somList.slice(0, 3).map((som) => (
-                   <Card key={som.id} className="relative group border-blue-100 bg-gradient-to-br from-white to-blue-50/20 overflow-hidden p-5 transition-all hover:shadow-md">
-                      <button 
+                   <Card key={som.id} className="relative group border-blue-100 bg-gradient-to-br from-white to-blue-50/20 overflow-hidden !p-3 transition-all hover:shadow-md">
+                      <button
                         onClick={() => setDeleteConfirm({ isOpen: true, type: 'SOM', id: som.id, name: som.name })}
-                        className="absolute top-2 right-2 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all z-10 opacity-0 group-hover:opacity-100"
+                        className="absolute top-2 right-2 p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-all z-10 opacity-0 group-hover:opacity-100"
                         title="Remove SOM"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3 h-3" />
                       </button>
-                      <div className="flex items-center gap-4 relative z-0">
+                      <div className="flex items-center gap-3 relative z-0">
                          <div className="relative">
-                            <img src={som.image} className="w-14 h-14 rounded-2xl border-2 border-white shadow-md object-cover" alt="" />
-                            <div className="absolute -bottom-1 -right-1 bg-yellow-400 text-white p-1 rounded-lg shadow-sm border-2 border-white">
-                               <Award className="w-3 h-3" />
+                            <img src={som.image} className="w-10 h-10 rounded-xl border-2 border-white shadow-sm object-cover" alt="" />
+                            <div className="absolute -bottom-1 -right-1 bg-yellow-400 text-white p-0.5 rounded shadow-sm border border-white">
+                               <Award className="w-2 h-2" />
                             </div>
                          </div>
                          <div className="min-w-0">
-                            <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest">{som.monthYear}</p>
-                            <h4 className="text-base font-black text-gray-900 truncate">{som.name}</h4>
+                            <p className="text-[8px] font-bold text-blue-500 uppercase tracking-widest">{som.monthYear}</p>
+                            <h4 className="text-xs font-bold text-gray-900 truncate">{som.name}</h4>
                          </div>
                       </div>
-                      <p className="mt-4 text-[11px] text-gray-600 italic line-clamp-3 leading-relaxed border-t border-blue-50 pt-3">
+                      <p className="mt-2 text-[10px] text-gray-600 italic line-clamp-2 leading-relaxed border-t border-blue-50 pt-2">
                          "{som.achievement}"
                       </p>
                    </Card>
@@ -142,70 +144,77 @@ export const StudentList: React.FC = () => {
            </div>
         </div>
       ) : (
-        <div className="space-y-4 animate-in fade-in duration-300">
-          <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-             <div className="relative w-full sm:w-96">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input 
-                  type="text" 
-                  placeholder="Cari nama atau email siswa..." 
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+        <div className="space-y-3 animate-in fade-in duration-300">
+          <div className="flex flex-col sm:flex-row gap-2 justify-between items-center">
+             <div className="relative w-full sm:w-64">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-3.5 h-3.5" />
+                <input
+                  type="text"
+                  placeholder="Cari siswa..."
+                  className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 transition-all text-xs"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                 />
              </div>
-             <div className="bg-blue-50 px-4 py-2 rounded-xl border border-blue-100 text-right">
-                <span className="text-[10px] font-black text-blue-400 uppercase block tracking-widest">Total Students</span>
-                <span className="text-sm font-black text-blue-900">{students.length} Siswa</span>
+             <div className="bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 text-right">
+                <span className="text-[9px] font-bold text-blue-400 uppercase block">Total</span>
+                <span className="text-xs font-bold text-blue-900">{students.length} Siswa</span>
              </div>
           </div>
 
-          <Card className="p-0 overflow-hidden">
+          <Card className="!p-0 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                    <th className="px-6 py-5">Identitas Siswa</th>
-                    <th className="px-6 py-5">Level / CEFR</th>
-                    <th className="px-6 py-5">Cabang</th>
-                    <th className="px-6 py-5 text-right">Aksi</th>
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                  <tr>
+                    <th className="px-3 py-2">Siswa</th>
+                    <th className="px-3 py-2">Level</th>
+                    <th className="px-3 py-2">Cabang</th>
+                    <th className="px-3 py-2 text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredStudents.map((student) => (
-                    <tr key={student.id} className="hover:bg-gray-50/50 transition-colors group">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl theme-bg-primary text-white flex items-center justify-center font-black text-sm shadow-sm">
+                    <tr key={student.id} className="hover:bg-gray-50 transition-colors group">
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg theme-bg-primary text-white flex items-center justify-center font-bold text-[10px]">
                             {student.name.charAt(0)}
                           </div>
                           <div>
-                            <p className="font-bold text-gray-900">{student.name}</p>
-                            <p className="text-[10px] text-gray-400 flex items-center gap-1 font-medium"><Mail className="w-3 h-3" /> {student.email}</p>
+                            <p className="text-xs font-bold text-gray-900">{student.name}</p>
+                            <p className="text-[10px] text-gray-400 flex items-center gap-1"><Mail className="w-2.5 h-2.5" /> {student.email}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
-                          student.status === 'ACTIVE' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'
+                      <td className="px-3 py-2">
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                          student.status === 'ACTIVE' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
                         }`}>
                           {getDisplayLevel(student)}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
-                         <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-md">{student.branch || 'Online'}</span>
+                      <td className="px-3 py-2">
+                         <span className="text-[10px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">{student.branch || 'Online'}</span>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <button 
+                      <td className="px-3 py-2 text-right">
+                        <button
                           onClick={() => setSelectedStudent(student)}
-                          className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl transition-all shadow-sm active:scale-95 border border-blue-100"
-                          title="Lihat Detail Profil & Orang Tua"
+                          className="p-1.5 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded transition-all"
+                          title="Lihat Detail"
                         >
-                           <Eye className="w-5 h-5" />
+                           <Eye className="w-4 h-4" />
                         </button>
                       </td>
                     </tr>
                   ))}
+                  {filteredStudents.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-8 text-center text-gray-400 text-xs italic">
+                        Tidak ada siswa ditemukan.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -344,7 +353,7 @@ export const StudentList: React.FC = () => {
                      </div>
                   </div>
                   <div className="pt-2">
-                     <Button onClick={handleSaveNomination} disabled={!selectedStudentId || !achievement || !monthYear} className="w-full h-12 rounded-xl flex items-center justify-center gap-2 font-black uppercase text-[10px] shadow-xl shadow-blue-500/20"><Save className="w-4 h-4" /> Simpan & Publikasi</Button>
+                     <Button onClick={handleSaveNomination} disabled={!selectedStudentId || !achievement || !monthYear} className="w-full h-12 rounded-xl font-black uppercase text-[10px] shadow-xl shadow-blue-500/20">Simpan & Publikasi</Button>
                   </div>
                </div>
             </div>

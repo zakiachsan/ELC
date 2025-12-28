@@ -58,8 +58,8 @@ export const NewsManager: React.FC = () => {
           <p className="text-gray-500">Create and manage your articles.</p>
         </div>
         {view === 'list' && (
-          <Button onClick={handleCreate} className="flex items-center gap-2">
-            <Plus className="w-4 h-4" /> Create New Article
+          <Button onClick={handleCreate}>
+            Create New Article
           </Button>
         )}
       </div>
@@ -196,8 +196,8 @@ const NewsEditor: React.FC<{ news: News, onSave: (n: News) => void, onCancel: ()
   return (
     <form onSubmit={submit} className="space-y-6 pb-20">
        <div className="flex gap-3">
-          <Button type="button" variant="outline" onClick={onCancel} className="flex items-center gap-2"><ChevronLeft className="w-4 h-4" /> Cancel</Button>
-          <Button type="submit" className="flex items-center gap-2"><Save className="w-4 h-4" /> Save Article</Button>
+          <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button type="submit">Save Article</Button>
        </div>
 
        <div className="space-y-6">

@@ -29,6 +29,9 @@ export interface TeacherApplication {
   policeCheckUrl?: string;
   appliedDate: string;
   isConverted?: boolean;
+  // Teaching availability
+  daysPerWeek?: 5 | 6;
+  hoursPerWeek?: 15 | 20 | 25;
 }
 
 export enum QuestionType {
@@ -80,8 +83,14 @@ export interface OlympiadRegistration {
   name: string;
   email: string;
   wa: string;
+  personalWa?: string;
   school: string;
   grade: string;
+  schoolOrigin?: string;
+  dob?: string;
+  address?: string;
+  parentName?: string;
+  parentWa?: string;
   status: 'PENDING' | 'SUCCESS';
   timestamp: string;
 }
@@ -136,12 +145,16 @@ export interface Olympiad {
   status: OlympiadStatus;
   startDate: string;
   endDate: string;
+  eventDate?: string;
+  eventTime?: string;
+  eventLocation?: string;
   questions: OlympiadQuestion[];
   reward?: string;
   participantCount: number;
   price: number;
   terms: string;
   benefits: OlympiadBenefit[];
+  isActive?: boolean;
 }
 
 export interface PlacementQuestion {
@@ -158,14 +171,21 @@ export interface PlacementSubmission {
   email: string;
   grade: string;
   wa: string;
+  personalWa?: string;
   score: number;
   cefrResult: CEFRLevel;
   timestamp: string;
   // Full form data
   dob?: string;
+  parentName?: string;
   parentWa?: string;
   address?: string;
   schoolOrigin?: string;
+  // Oral Test Data
+  oralTestStatus?: 'none' | 'booked' | 'completed';
+  oralTestDate?: string;
+  oralTestTime?: string;
+  oralTestScore?: CEFRLevel;
 }
 
 export interface OlympiadAttempt {
@@ -181,30 +201,37 @@ export interface Transaction {
   id: string;
   studentId: string;
   studentName: string;
-  olympiadId: string;
-  olympiadTitle: string;
+  type: 'LEARNING_HUB' | 'OLYMPIAD';
+  itemId: string; // olympiadId or subscription period
+  itemName: string; // olympiadTitle or "Learning Hub - Month/Year"
   amount: number;
   status: 'SUCCESS' | 'PENDING' | 'FAILED';
   timestamp: string;
+  paymentMethod?: string;
 }
 
 export interface User {
   id: string;
   name: string;
-  email?: string; 
+  email?: string;
   password?: string;
   phone?: string;
   address?: string;
   role: UserRole;
   linkedStudentId?: string;
-  skillLevels?: Partial<Record<SkillCategory, DifficultyLevel>>; 
-  branch?: string; 
+  skillLevels?: Partial<Record<SkillCategory, DifficultyLevel>>;
+  branch?: string;
   teacherNotes?: string;
   needsAttention?: boolean;
-  assignedSubjects?: string[]; 
+  assignedSubjects?: string[];
   assignedLocationId?: string;
   schoolOrigin?: string;
   status?: 'ACTIVE' | 'INACTIVE';
+  // Learning Hub subscription
+  learningHubSubscription?: {
+    isActive: boolean;
+    expiresAt?: string; // ISO date string
+  };
 }
 
 export interface Location {
@@ -294,7 +321,37 @@ export interface StudentSessionReport {
   attendanceStatus: 'PRESENT' | 'ABSENT' | 'LATE';
   examScore?: number;
   placementResult?: DifficultyLevel;
-  isVerified?: boolean; 
+  isVerified?: boolean;
+  // Enhanced fields for teacher input
+  writtenScore?: number;
+  oralScore?: number;
+  cefrLevel?: CEFRLevel;
+  teacherNotes?: string;
+}
+
+export interface Homework {
+  id: string;
+  sessionId: string;
+  studentId: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  assignedDate: string;
+  status: 'PENDING' | 'SUBMITTED' | 'GRADED';
+  submissionUrl?: string;
+  score?: number;
+  feedback?: string;
+}
+
+export interface ClassReport {
+  id: string;
+  sessionId: string;
+  teacherId: string;
+  date: string;
+  topicsCovered: string;
+  materialsUsed: string[];
+  studentReports: StudentSessionReport[];
+  homeworks: Homework[];
 }
 
 export interface LevelHistory {
@@ -314,4 +371,17 @@ export interface StudentModuleProgress {
   completedDate?: string;
   quizScore?: number;
   placementResult?: DifficultyLevel;
+}
+
+export interface FeaturedTeacher {
+  id: string;
+  name: string;
+  country: string;
+  countryFlag: string;
+  type: 'native' | 'local';
+  photoUrl: string;
+  certifications: string[];
+  experience: number;
+  specialty: string;
+  quote: string;
 }

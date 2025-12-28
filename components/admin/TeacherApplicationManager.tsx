@@ -2,10 +2,10 @@
 import React, { useState } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { 
-  Briefcase, Search, Filter, CheckCircle, XCircle, Clock, 
-  Eye, FileText, Download, User as UserIcon, Globe, MapPin, 
-  Calendar, Award, Flag, ChevronRight, X, Mail, Phone, UserPlus, ShieldCheck
+import {
+  Briefcase, Search, Filter, CheckCircle, XCircle, Clock,
+  Eye, FileText, Download, User as UserIcon, Globe, MapPin,
+  Calendar, Award, Flag, ChevronRight, X, Mail, Phone, UserPlus, ShieldCheck, CalendarDays
 } from 'lucide-react';
 import { MOCK_TEACHER_APPLICATIONS } from '../../constants';
 import { TeacherApplication, ApplicationStatus } from '../../types';
@@ -242,6 +242,23 @@ export const TeacherApplicationManager: React.FC = () => {
                           <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Degree</p>
                              <p className="text-lg font-bold text-gray-900">{selectedApp.hasDegree ? 'Bachelor' : 'No Degree'}</p>
+                          </div>
+                       </div>
+
+                       {/* Teaching Availability */}
+                       <div className="space-y-3">
+                          <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                             <CalendarDays className="w-4 h-4 text-teal-600" /> Ketersediaan Mengajar
+                          </h4>
+                          <div className="grid grid-cols-2 gap-4">
+                             <div className="p-4 bg-teal-50 rounded-2xl border border-teal-100">
+                                <p className="text-[10px] font-black text-teal-600 uppercase tracking-widest mb-1">Hari per Minggu</p>
+                                <p className="text-lg font-bold text-teal-900">{selectedApp.daysPerWeek || '-'} Hari</p>
+                             </div>
+                             <div className="p-4 bg-teal-50 rounded-2xl border border-teal-100">
+                                <p className="text-[10px] font-black text-teal-600 uppercase tracking-widest mb-1">Jam per Minggu</p>
+                                <p className="text-lg font-bold text-teal-900">{selectedApp.hoursPerWeek || '-'} Jam</p>
+                             </div>
                           </div>
                        </div>
 

@@ -51,8 +51,8 @@ export const StudentOfMonthManager: React.FC = () => {
           <p className="text-gray-500">Celebrate outstanding students of the month.</p>
         </div>
         {view === 'list' && (
-          <Button onClick={handleCreate} className="flex items-center gap-2">
-            <Plus className="w-4 h-4" /> Add Student
+          <Button onClick={handleCreate}>
+            Add Student
           </Button>
         )}
       </div>
@@ -133,8 +133,8 @@ const StudentEditor: React.FC<{ item: StudentOfTheMonth, onSave: (s: StudentOfTh
   return (
     <form onSubmit={submit} className="space-y-6">
        <div className="flex gap-3">
-          <Button type="button" variant="outline" onClick={onCancel} className="flex items-center gap-2"><ChevronLeft className="w-4 h-4" /> Cancel</Button>
-          <Button type="submit" className="flex items-center gap-2"><Save className="w-4 h-4" /> Save Student</Button>
+          <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button type="submit">Save Student</Button>
        </div>
 
        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
