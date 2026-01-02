@@ -1,9 +1,11 @@
 
 import React from 'react';
 import { Card } from '../Card';
-import { MOCK_SESSIONS, MOCK_USERS, LEVEL_COLORS } from '../../constants';
-import { UserRole, SkillCategory } from '../../types';
-import { Calendar, AlertCircle, TrendingUp, Clock, MapPin, ChevronRight, ClipboardList, CheckCircle } from 'lucide-react';
+import { LEVEL_COLORS } from '../../constants';
+import { useTodaySessions, useSessions } from '../../hooks/useSessions';
+import { useStudents } from '../../hooks/useProfiles';
+import { SkillCategory, DifficultyLevel, ClassSession } from '../../types';
+import { Calendar, AlertCircle, TrendingUp, Clock, MapPin, ChevronRight, ClipboardList, CheckCircle, Loader2 } from 'lucide-react';
 import { SKILL_ICONS } from '../student/StudentView';
 import { useLanguage } from '../../contexts/LanguageContext';
 
@@ -13,18 +15,30 @@ interface TeacherViewProps {
 
 export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
   const { t } = useLanguage();
+  const { sessions: todaySessionsData, loading: todayLoading, error: todayError } = useTodaySessions();
+  const { sessions: allSessionsData, loading: sessionsLoading, error: sessionsError } = useSessions();
+  const { profiles: studentsData, loading: studentsLoading, error: studentsError } = useStudents();
+
+  // Check if there are any errors
+  const hasError = todayError || sessionsError || studentsError;
+
   const now = new Date();
-  
-  // 1. TODAY'S SCHEDULE LOGIC
-  const todaySessions = MOCK_SESSIONS.filter(s => {
-    const d = new Date(s.dateTime);
-    return d.getDate() === now.getDate() && 
-           d.getMonth() === now.getMonth() && 
-           d.getFullYear() === now.getFullYear();
-  }).sort((a,b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+
+  // Map database format to component format
+  const todaySessions: ClassSession[] = todaySessionsData.map(s => ({
+    id: s.id,
+    teacherId: s.teacher_id,
+    topic: s.topic,
+    description: s.description || '',
+    dateTime: s.date_time,
+    location: s.location,
+    skillCategory: s.skill_category as SkillCategory,
+    difficultyLevel: s.difficulty_level as DifficultyLevel,
+    materials: s.materials || [],
+  })).sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
 
   // 2. STUDENTS NEED ATTENTION LOGIC
-  const studentsAtRisk = MOCK_USERS.filter(u => u.role === UserRole.STUDENT && u.needsAttention).map(u => {
+  const studentsAtRisk = studentsData.filter(u => u.needs_attention).map(u => {
     // Mocking specific reasons for display purposes
     const reasons = [
         "Absent 3x in a row",
@@ -33,15 +47,33 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
         "Placement test failed twice"
     ];
     return {
-        ...u,
+        id: u.id,
+        name: u.name,
         reason: reasons[Math.floor(Math.random() * reasons.length)]
     };
   });
 
   // 3. STATS LOGIC
-  const pendingTasks = MOCK_SESSIONS.filter(s => {
-    return new Date(s.dateTime) < now && (!s.description || s.description.length < 10);
+  const pendingTasks = allSessionsData.filter(s => {
+    return new Date(s.date_time) < now && (!s.description || s.description.length < 10);
   }).length;
+
+  // Show loading only if still loading and no errors
+  const isLoading = (todayLoading || sessionsLoading || studentsLoading) && !hasError;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading dashboard...</span>
+      </div>
+    );
+  }
+
+  // Show error message if there's an error but allow viewing the dashboard with partial data
+  if (hasError) {
+    console.error('Dashboard data errors:', { todayError, sessionsError, studentsError });
+  }
 
   return (
     <div className="space-y-4 animate-in fade-in duration-500">

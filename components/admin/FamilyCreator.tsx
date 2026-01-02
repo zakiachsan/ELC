@@ -2,14 +2,21 @@
 import React, { useState, useRef } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { Users, Link as LinkIcon, Lock, Mail, GraduationCap, Briefcase, Trash2, Pencil, MapPin, School, TrendingUp, UserCheck, Activity, ToggleLeft, ToggleRight, Camera, X as XIcon, Upload, ShieldAlert, Smartphone, Globe } from 'lucide-react';
+import { Users, Link as LinkIcon, Lock, Mail, GraduationCap, Briefcase, Trash2, Pencil, MapPin, School, TrendingUp, UserCheck, Activity, ToggleLeft, ToggleRight, Camera, X as XIcon, Upload, ShieldAlert, Smartphone, Globe, Loader2 } from 'lucide-react';
 import { MOCK_USERS, MOCK_SCHOOLS, MOCK_SESSIONS, MOCK_SESSION_REPORTS } from '../../constants';
 import { UserRole, User } from '../../types';
+import { useTeachers, useLocations } from '../../hooks/useProfiles';
 
 export const AccountManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'families' | 'teachers'>('families');
   const [view, setView] = useState<'list' | 'form'>('list');
   const [mockUsers, setMockUsers] = useState(MOCK_USERS);
+
+  // Supabase hooks for real data
+  const { profiles: teachersData, loading: teachersLoading, updateProfile, refetch: refetchTeachers } = useTeachers();
+  const { locations, loading: locationsLoading } = useLocations();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editParentId, setEditParentId] = useState<string | null>(null);
@@ -105,7 +112,17 @@ export const AccountManager: React.FC = () => {
     return { parent, student };
   });
 
-  const teachers = mockUsers.filter(u => u.role === UserRole.TEACHER);
+  // Use real Supabase data for teachers, fallback to mock if empty
+  const teachers = teachersData.length > 0
+    ? teachersData.map(t => ({
+        id: t.id,
+        name: t.name,
+        email: t.email,
+        assignedLocationId: t.assigned_location_id,
+        status: t.status,
+        assignedSubjects: t.assigned_subjects || [],
+      }))
+    : mockUsers.filter(u => u.role === UserRole.TEACHER);
 
   const resetForm = () => {
     setParentName(''); setParentEmail(''); setParentPassword(''); setParentPhone(''); setParentAddress('');
@@ -154,15 +171,30 @@ export const AccountManager: React.FC = () => {
     setView('form');
   };
 
-  const handleEditTeacher = (teacher: User) => {
+  const handleEditTeacher = (teacher: any) => {
     resetForm();
+    setSubmitError(null);
     setIsEditing(true);
     setEditTeacherId(teacher.id);
     setTeacherName(teacher.name);
     setTeacherEmail(teacher.email || '');
-    setTeacherPassword(teacher.password || '');
+    setTeacherPassword(''); // Don't show password
     setTeacherLocationId(teacher.assignedLocationId || '');
     setTeacherStatus(teacher.status || 'ACTIVE');
+
+    // Load subjects if available
+    const subjects = teacher.assignedSubjects || [];
+    setTeacherSubjects(subjects);
+
+    // Determine teacher type based on subjects
+    if (subjects.some((s: string) => s.startsWith('english-') || s.startsWith('conversation-'))) {
+      setTeacherType('bilingual');
+    } else if (subjects.includes('conversational')) {
+      setTeacherType('regular');
+    } else {
+      setTeacherType('');
+    }
+
     setView('form');
   };
 
@@ -187,20 +219,80 @@ export const AccountManager: React.FC = () => {
     }, 1500);
   };
 
-  const handleTeacherSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSuccess(true);
-    setTimeout(() => {
-      setSuccess(false);
-      setView('list');
-      resetForm();
-    }, 1500);
+  // Helper to check if string is valid UUID
+  const isValidUUID = (str: string) => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str);
   };
 
-  const getSchoolName = (id?: string) => {
+  const handleTeacherSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitError(null);
+    setIsSubmitting(true);
+
+    try {
+      if (isEditing && editTeacherId) {
+        // Check if this is a real Supabase record (valid UUID) or mock data
+        if (!isValidUUID(editTeacherId)) {
+          setSubmitError('Data ini adalah mock data dan tidak dapat disimpan ke database. Silakan jalankan seed.sql terlebih dahulu untuk menambahkan data teacher ke Supabase.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Validate location ID if provided
+        if (teacherLocationId && !isValidUUID(teacherLocationId)) {
+          setSubmitError('Sekolah yang dipilih tidak valid. Silakan pilih sekolah dari database.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Update existing teacher in Supabase
+        console.log('Updating teacher:', {
+          id: editTeacherId,
+          name: teacherName,
+          email: teacherEmail,
+          assigned_location_id: teacherLocationId || null,
+          status: teacherStatus,
+          assigned_subjects: teacherSubjects,
+        });
+
+        await updateProfile(editTeacherId, {
+          name: teacherName,
+          email: teacherEmail,
+          assigned_location_id: teacherLocationId || null,
+          status: teacherStatus,
+          assigned_subjects: teacherSubjects,
+        });
+
+        // Refetch to update the list
+        await refetchTeachers();
+
+        setSuccess(true);
+        setTimeout(() => {
+          setSuccess(false);
+          setView('list');
+          resetForm();
+        }, 1500);
+      } else {
+        // Create new teacher - for now just show success (needs auth integration)
+        console.log('Creating new teacher - requires auth user creation first');
+        setSubmitError('Fitur create teacher baru memerlukan integrasi dengan Supabase Auth');
+      }
+    } catch (error) {
+      console.error('Failed to save teacher:', error);
+      setSubmitError(error instanceof Error ? error.message : 'Gagal menyimpan data teacher');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getSchoolName = (id?: string | null) => {
     if (!id) return "Belum Assign";
-    const school = MOCK_SCHOOLS.find(s => s.id === id);
-    return school ? school.name : "Unknown";
+    // Use real locations from Supabase, fallback to MOCK_SCHOOLS
+    const location = locations.find(l => l.id === id);
+    if (location) return location.name;
+    const mockSchool = MOCK_SCHOOLS.find(s => s.id === id);
+    return mockSchool ? mockSchool.name : "Unknown";
   }
 
   return (
@@ -409,6 +501,12 @@ export const AccountManager: React.FC = () => {
          <>
             {view === 'list' ? (
                 <Card className="!p-0">
+                    {teachersLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                        <span className="ml-2 text-sm text-gray-500">Loading teachers...</span>
+                      </div>
+                    ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-xs">
                           <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
@@ -464,6 +562,7 @@ export const AccountManager: React.FC = () => {
                           </tbody>
                       </table>
                     </div>
+                    )}
                 </Card>
             ) : (
                 <Card title={isEditing ? "Edit Teacher" : "Add New Teacher"} className="!p-4">
@@ -491,9 +590,12 @@ export const AccountManager: React.FC = () => {
                         </div>
                         <div className="space-y-1">
                             <label className="text-[9px] font-bold text-gray-500 uppercase">Sekolah</label>
-                            <select required value={teacherLocationId} onChange={(e) => setTeacherLocationId(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none bg-white text-xs">
+                            <select value={teacherLocationId} onChange={(e) => setTeacherLocationId(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none bg-white text-xs">
                               <option value="">Pilih Sekolah</option>
-                              {MOCK_SCHOOLS.map(school => <option key={school.id} value={school.id}>{school.name}</option>)}
+                              {locations.length > 0
+                                ? locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)
+                                : MOCK_SCHOOLS.map(school => <option key={school.id} value={school.id}>{school.name}</option>)
+                              }
                             </select>
                         </div>
 
@@ -623,12 +725,21 @@ export const AccountManager: React.FC = () => {
                           </div>
                         )}
 
+                        {submitError && (
+                          <div className="p-3 bg-red-50 text-red-700 rounded-lg border border-red-100 text-xs">
+                            {submitError}
+                          </div>
+                        )}
+
                         <div className="flex justify-between items-center pt-2">
-                            <Button type="button" variant="outline" onClick={() => setView('list')} className="text-xs py-1.5 px-3">Cancel</Button>
-                            <Button type="submit" className="px-6 shadow-md text-xs py-1.5">{isEditing ? "Update" : "Create"}</Button>
+                            <Button type="button" variant="outline" onClick={() => setView('list')} className="text-xs py-1.5 px-3" disabled={isSubmitting}>Cancel</Button>
+                            <Button type="submit" className="px-6 shadow-md text-xs py-1.5 flex items-center gap-2" disabled={isSubmitting}>
+                              {isSubmitting && <Loader2 className="w-3 h-3 animate-spin" />}
+                              {isSubmitting ? "Menyimpan..." : (isEditing ? "Update" : "Create")}
+                            </Button>
                         </div>
                      </form>
-                     {success && <div className="mt-3 p-3 bg-green-50 text-green-700 rounded-lg border border-green-100 font-bold text-center text-xs">Success!</div>}
+                     {success && <div className="mt-3 p-3 bg-green-50 text-green-700 rounded-lg border border-green-100 font-bold text-center text-xs">Berhasil disimpan!</div>}
                 </Card>
             )}
          </>

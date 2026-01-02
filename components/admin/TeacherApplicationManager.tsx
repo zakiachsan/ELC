@@ -5,17 +5,37 @@ import { Button } from '../Button';
 import {
   Briefcase, Search, Filter, CheckCircle, XCircle, Clock,
   Eye, FileText, Download, User as UserIcon, Globe, MapPin,
-  Calendar, Award, Flag, ChevronRight, X, Mail, Phone, UserPlus, ShieldCheck, CalendarDays
+  Calendar, Award, Flag, ChevronRight, X, Mail, Phone, UserPlus, ShieldCheck, CalendarDays, Loader2
 } from 'lucide-react';
-import { MOCK_TEACHER_APPLICATIONS } from '../../constants';
+import { useTeacherApplications } from '../../hooks/useContent';
 import { TeacherApplication, ApplicationStatus } from '../../types';
 
 export const TeacherApplicationManager: React.FC = () => {
-  const [applications, setApplications] = useState<TeacherApplication[]>(MOCK_TEACHER_APPLICATIONS);
+  const { applications: appsData, loading, error, updateStatus: updateAppStatus, markAsConverted } = useTeacherApplications();
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'local' | 'native'>('all');
   const [selectedApp, setSelectedApp] = useState<TeacherApplication | null>(null);
   const [isConverting, setIsConverting] = useState(false);
+
+  // Map database format to component format
+  const applications: TeacherApplication[] = appsData.map(app => ({
+    id: app.id,
+    name: app.name,
+    email: app.email,
+    phone: app.phone || '',
+    country: app.country,
+    dob: app.dob,
+    type: app.type as 'local' | 'native',
+    experience: app.experience,
+    motivation: app.motivation,
+    hasDegree: app.has_degree,
+    salary: app.salary,
+    photoUrl: app.photo_url || undefined,
+    status: app.status as ApplicationStatus,
+    isConverted: app.is_converted,
+    daysPerWeek: app.days_per_week || undefined,
+    hoursPerWeek: app.hours_per_week || undefined,
+  }));
 
   const filteredApps = applications.filter(app => {
     const matchesSearch = app.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -23,25 +43,51 @@ export const TeacherApplicationManager: React.FC = () => {
     return matchesSearch && matchesType;
   });
 
-  const updateStatus = (id: string, newStatus: ApplicationStatus) => {
-    setApplications(prev => prev.map(app => app.id === id ? { ...app, status: newStatus } : app));
-    if (selectedApp?.id === id) {
-      setSelectedApp({ ...selectedApp, status: newStatus });
+  const updateStatus = async (id: string, newStatus: ApplicationStatus) => {
+    try {
+      await updateAppStatus(id, newStatus);
+      if (selectedApp?.id === id) {
+        setSelectedApp({ ...selectedApp, status: newStatus });
+      }
+    } catch (err) {
+      console.error('Error updating status:', err);
+      alert('Failed to update status.');
     }
   };
 
-  const handleConvertToAccount = (app: TeacherApplication) => {
+  const handleConvertToAccount = async (app: TeacherApplication) => {
     setIsConverting(true);
-    // Logic: In a real app, this would hit an API to create a User record
-    setTimeout(() => {
-        setApplications(prev => prev.map(a => a.id === app.id ? { ...a, isConverted: true, status: ApplicationStatus.ACCEPTED } : a));
-        if (selectedApp?.id === app.id) {
-            setSelectedApp({ ...selectedApp, isConverted: true, status: ApplicationStatus.ACCEPTED });
-        }
-        setIsConverting(false);
-        alert(`Account for ${app.name} has been created successfully! They can now log in using their email.`);
-    }, 1500);
+    try {
+      await markAsConverted(app.id);
+      await updateAppStatus(app.id, ApplicationStatus.ACCEPTED);
+      if (selectedApp?.id === app.id) {
+        setSelectedApp({ ...selectedApp, isConverted: true, status: ApplicationStatus.ACCEPTED });
+      }
+      alert(`Account for ${app.name} has been created successfully! They can now log in using their email.`);
+    } catch (err) {
+      console.error('Error converting to account:', err);
+      alert('Failed to create account.');
+    } finally {
+      setIsConverting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading applications...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+        Error loading applications: {error.message}
+      </div>
+    );
+  }
 
   const getStatusBadge = (status: ApplicationStatus) => {
     switch (status) {

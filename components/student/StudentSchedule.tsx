@@ -2,30 +2,82 @@
 import React, { useState } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { MOCK_SESSIONS, MOCK_SESSION_REPORTS } from '../../constants';
-import { ClassSession } from '../../types';
-import { Calendar, MapPin, Clock, User, FileText, Download, ChevronRight } from 'lucide-react';
+import { useSessions } from '../../hooks/useSessions';
+import { useReports } from '../../hooks/useReports';
+import { useAuth } from '../../contexts/AuthContext';
+import { ClassSession, SkillCategory, DifficultyLevel, CEFRLevel } from '../../types';
+import { Calendar, MapPin, Clock, User, FileText, Download, ChevronRight, Loader2 } from 'lucide-react';
 
 export const StudentSchedule: React.FC = () => {
+  const { user } = useAuth();
+  const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError } = useSessions();
+  const { reports: reportsData } = useReports();
+
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming');
   const [selectedSession, setSelectedSession] = useState<ClassSession | null>(null);
 
   const now = new Date();
 
-  // Filter Logic
-  const upcomingSessions = MOCK_SESSIONS
-    .filter(s => new Date(s.dateTime) > now)
-    .sort((a,b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+  // Map sessions from database
+  const sessions: ClassSession[] = sessionsData.map(s => ({
+    id: s.id,
+    teacherId: s.teacher_id,
+    topic: s.topic,
+    description: s.description || '',
+    dateTime: s.date_time,
+    location: s.location,
+    skillCategory: s.skill_category as SkillCategory,
+    difficultyLevel: s.difficulty_level as DifficultyLevel,
+    materials: s.materials || [],
+  }));
 
-  const pastSessions = MOCK_SESSIONS
+  // Build reports by session
+  const sessionReportsMap: Record<string, any[]> = {};
+  reportsData.forEach(r => {
+    if (!sessionReportsMap[r.session_id]) {
+      sessionReportsMap[r.session_id] = [];
+    }
+    sessionReportsMap[r.session_id].push({
+      studentId: r.student_id,
+      studentName: r.student_name || 'Unknown',
+      writtenScore: r.written_score,
+      oralScore: r.oral_score,
+      cefrLevel: r.cefr_level as CEFRLevel,
+      teacherNotes: r.notes,
+    });
+  });
+
+  // Filter Logic
+  const upcomingSessions = sessions
+    .filter(s => new Date(s.dateTime) > now)
+    .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+
+  const pastSessions = sessions
     .filter(s => new Date(s.dateTime) <= now)
-    .sort((a,b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
+    .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
 
   // Helper to get my specific report for a session
   const getMyReport = (sessionId: string) => {
-    const reports = MOCK_SESSION_REPORTS[sessionId] || [];
-    return reports.find(r => r.studentId === 'u3'); // Hardcoded for Sarah Connor
+    const reports = sessionReportsMap[sessionId] || [];
+    return reports.find(r => r.studentId === user?.id);
   };
+
+  if (sessionsLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading schedule...</span>
+      </div>
+    );
+  }
+
+  if (sessionsError) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+        Error loading schedule: {sessionsError.message}
+      </div>
+    );
+  }
 
   // --- DETAIL VIEW COMPONENT ---
   if (selectedSession) {

@@ -2,20 +2,87 @@
 import React, { useState } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { MOCK_USERS, MOCK_SCHOOLS, MOCK_SESSIONS, MOCK_SESSION_REPORTS } from '../../constants';
-import { UserRole, User } from '../../types';
-import { School, ChevronRight, GraduationCap, Calendar, MapPin, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { useStudents, useLocations } from '../../hooks/useProfiles';
+import { useSessions } from '../../hooks/useSessions';
+import { useReports } from '../../hooks/useReports';
+import { User, SkillCategory, DifficultyLevel, CEFRLevel } from '../../types';
+import { School, ChevronRight, GraduationCap, Calendar, MapPin, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 export const StudentGrades: React.FC = () => {
+  const { profiles: studentsData, loading: studentsLoading, error: studentsError } = useStudents();
+  const { locations: locationsData, loading: locationsLoading } = useLocations();
+  const { sessions: sessionsData } = useSessions();
+  const { reports: reportsData } = useReports();
+
   const [selectedSchool, setSelectedSchool] = useState<string | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
   const [semesterGrades, setSemesterGrades] = useState<Record<string, { mid: string; final: string }>>({});
 
-  // Get schools
-  const schools = MOCK_SCHOOLS;
+  // Map schools from database
+  const schools = locationsData.map(l => ({
+    id: l.id,
+    name: l.name,
+  }));
 
-  // Get all students
-  const students = MOCK_USERS.filter(u => u.role === UserRole.STUDENT);
+  // Map students from database
+  const students: User[] = studentsData.map(s => ({
+    id: s.id,
+    name: s.name,
+    email: s.email,
+    phone: s.phone || undefined,
+    address: s.address || undefined,
+    role: s.role as any,
+    status: s.status as 'ACTIVE' | 'INACTIVE',
+    branch: s.branch || undefined,
+    teacherNotes: s.teacher_notes || undefined,
+    needsAttention: s.needs_attention,
+    schoolOrigin: s.school_origin || undefined,
+    skillLevels: (s.skill_levels as Partial<Record<SkillCategory, DifficultyLevel>>) || {},
+  }));
+
+  // Build reports map by session
+  const MOCK_SESSION_REPORTS: Record<string, any[]> = {};
+  reportsData.forEach(r => {
+    if (!MOCK_SESSION_REPORTS[r.session_id]) {
+      MOCK_SESSION_REPORTS[r.session_id] = [];
+    }
+    MOCK_SESSION_REPORTS[r.session_id].push({
+      studentId: r.student_id,
+      studentName: r.student_name || 'Unknown',
+      writtenScore: r.written_score,
+      oralScore: r.oral_score,
+      cefrLevel: r.cefr_level as CEFRLevel,
+    });
+  });
+
+  // Map sessions
+  const MOCK_SESSIONS = sessionsData.map(s => ({
+    id: s.id,
+    teacherId: s.teacher_id,
+    topic: s.topic,
+    description: s.description || '',
+    dateTime: s.date_time,
+    location: s.location,
+    skillCategory: s.skill_category as SkillCategory,
+    difficultyLevel: s.difficulty_level as DifficultyLevel,
+  }));
+
+  if (studentsLoading || locationsLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading data...</span>
+      </div>
+    );
+  }
+
+  if (studentsError) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+        Error loading students: {studentsError.message}
+      </div>
+    );
+  }
 
   const saveSemesterGrade = (studentId: string) => {
     const grade = semesterGrades[studentId];
@@ -27,7 +94,7 @@ export const StudentGrades: React.FC = () => {
 
   const saveAllGrades = () => {
     const gradesWithValues = Object.entries(semesterGrades).filter(
-      ([_, grade]) => grade.mid || grade.final
+      ([_, grade]: [string, { mid: string; final: string }]) => grade.mid || grade.final
     );
     if (gradesWithValues.length > 0) {
       console.log('Saving all grades:', gradesWithValues, 'at school:', selectedSchool);

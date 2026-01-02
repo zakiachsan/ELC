@@ -1,15 +1,47 @@
 
 import React, { useState } from 'react';
 import { Card } from '../Card';
-import { CreditCard, Search, Download, Filter, CheckCircle, BookOpen, Trophy } from 'lucide-react';
-import { MOCK_TRANSACTIONS } from '../../constants';
+import { CreditCard, Search, Download, Filter, CheckCircle, BookOpen, Trophy, Loader2 } from 'lucide-react';
+import { useTransactions } from '../../hooks/useBilling';
 import { Transaction } from '../../types';
 
 export const TransactionManager: React.FC = () => {
-  // Only show successful transactions (online payments that went through)
-  const successfulTransactions = MOCK_TRANSACTIONS.filter(t => t.status === 'SUCCESS');
+  const { transactions: txData, loading, error } = useTransactions();
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'LEARNING_HUB' | 'OLYMPIAD'>('ALL');
+
+  // Map database format to component format and filter successful transactions
+  const allTransactions: Transaction[] = txData.map(tx => ({
+    id: tx.id,
+    studentId: tx.student_id,
+    studentName: tx.student_name || 'Unknown',
+    type: tx.type as 'LEARNING_HUB' | 'OLYMPIAD',
+    itemName: tx.item_name,
+    amount: tx.amount,
+    status: tx.status as 'SUCCESS' | 'PENDING' | 'FAILED',
+    paymentMethod: tx.payment_method || undefined,
+    timestamp: tx.created_at,
+  }));
+
+  // Only show successful transactions (online payments that went through)
+  const successfulTransactions = allTransactions.filter(t => t.status === 'SUCCESS');
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading transactions...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+        Error loading transactions: {error.message}
+      </div>
+    );
+  }
 
   const filteredTransactions = successfulTransactions.filter(t => {
     const matchesSearch = t.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||

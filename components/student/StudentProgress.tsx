@@ -1,17 +1,72 @@
 
 import React, { useState } from 'react';
-import { User, SkillCategory, CEFRLevel, Homework } from '../../types';
+import { User, SkillCategory, CEFRLevel, Homework, DifficultyLevel } from '../../types';
 import { Card } from '../Card';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { MOCK_SESSION_REPORTS, MOCK_SESSIONS, MOCK_HOMEWORKS } from '../../constants';
-import { TrendingUp, BookOpen, Clock, CheckCircle, ClipboardCheck, Calendar } from 'lucide-react';
+import { useSessions } from '../../hooks/useSessions';
+import { useReports } from '../../hooks/useReports';
+import { useHomeworks } from '../../hooks/useHomeworks';
+import { TrendingUp, BookOpen, Clock, CheckCircle, ClipboardCheck, Calendar, Loader2 } from 'lucide-react';
 
 export const StudentProgress: React.FC<{ student: User }> = ({ student }) => {
+  const { sessions: sessionsData, loading: sessionsLoading } = useSessions();
+  const { reports: reportsData, loading: reportsLoading } = useReports();
+  const { homeworks: homeworksData, loading: homeworksLoading } = useHomeworks({ studentId: student.id });
+
   const [activeTab, setActiveTab] = useState<'grades' | 'homework'>('grades');
 
+  // Build reports map by session
+  const sessionReportsMap: Record<string, any[]> = {};
+  reportsData.forEach(r => {
+    if (!sessionReportsMap[r.session_id]) {
+      sessionReportsMap[r.session_id] = [];
+    }
+    sessionReportsMap[r.session_id].push({
+      studentId: r.student_id,
+      studentName: r.student_name || 'Unknown',
+      writtenScore: r.written_score,
+      oralScore: r.oral_score,
+      cefrLevel: r.cefr_level as CEFRLevel,
+      teacherNotes: r.notes,
+    });
+  });
+
+  // Map sessions
+  const sessions = sessionsData.map(s => ({
+    id: s.id,
+    dateTime: s.date_time,
+    topic: s.topic,
+    skillCategory: s.skill_category as SkillCategory,
+    difficultyLevel: s.difficulty_level as DifficultyLevel,
+  }));
+
+  // Map homeworks
+  const homeworks: Homework[] = homeworksData.map(h => ({
+    id: h.id,
+    sessionId: h.session_id,
+    studentId: h.student_id,
+    title: h.title,
+    description: h.description || undefined,
+    dueDate: h.due_date,
+    assignedDate: h.assigned_date,
+    status: h.status as 'PENDING' | 'SUBMITTED' | 'GRADED',
+    submissionUrl: h.submission_url || undefined,
+    score: h.score || undefined,
+    feedback: h.feedback || undefined,
+  }));
+
+  if (sessionsLoading || reportsLoading || homeworksLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading progress...</span>
+      </div>
+    );
+  }
+
   // 1. Get all session grades for this student (from teacher input)
-  const sessionGrades = MOCK_SESSIONS.map(s => {
-    const report = MOCK_SESSION_REPORTS[s.id]?.find(r => r.studentId === student.id);
+  const sessionGrades = sessions.map(s => {
+    const report = sessionReportsMap[s.id]?.find((r: any) => r.studentId === student.id);
     if (!report) return null;
     return {
       sessionId: s.id,
@@ -45,7 +100,7 @@ export const StudentProgress: React.FC<{ student: User }> = ({ student }) => {
     });
 
   // 3. Homework for this student
-  const studentHomeworks = MOCK_HOMEWORKS.filter(h => h.studentId === student.id);
+  const studentHomeworks = homeworks.filter(h => h.studentId === student.id);
   const pendingHomeworks = studentHomeworks.filter(h => h.status === 'PENDING');
   const completedHomeworks = studentHomeworks.filter(h => h.status !== 'PENDING');
 

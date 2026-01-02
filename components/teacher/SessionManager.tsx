@@ -1,22 +1,96 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { MOCK_SESSIONS, LEVEL_COLORS, MOCK_USERS, MOCK_SESSION_REPORTS, MOCK_HOMEWORKS, MOCK_SCHOOLS } from '../../constants';
-import { ClassSession, UserRole, StudentSessionReport, CEFRLevel, Homework, SkillCategory, DifficultyLevel } from '../../types';
-import { Clock, MapPin, Calendar, CheckCircle, FileText, Upload, Trash2, Download, ShieldCheck, ShieldAlert, UserCheck, PenLine, Save, X, BookOpen, ClipboardList, Award, Mic, FileEdit, Plus, School, ChevronRight, GraduationCap } from 'lucide-react';
+import { LEVEL_COLORS, MOCK_USERS } from '../../constants';
+import { useSessions } from '../../hooks/useSessions';
+import { useLocations } from '../../hooks/useProfiles';
+import { useReports } from '../../hooks/useReports';
+import { useHomeworks } from '../../hooks/useHomeworks';
+import { useStudents } from '../../hooks/useProfiles';
+import { ClassSession, StudentSessionReport, CEFRLevel, Homework, SkillCategory, DifficultyLevel, UserRole } from '../../types';
+import { Clock, MapPin, Calendar, CheckCircle, FileText, Upload, Trash2, Download, ShieldCheck, ShieldAlert, UserCheck, PenLine, Save, X, BookOpen, ClipboardList, Award, Mic, FileEdit, Plus, School, ChevronRight, GraduationCap, Loader2 } from 'lucide-react';
 import { SKILL_ICONS } from '../student/StudentView';
 
 export const SessionManager: React.FC = () => {
+  const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError, createSession } = useSessions();
+  const { locations: locationsData, loading: locationsLoading } = useLocations();
+  const { reports: reportsData, loading: reportsLoading, createReport, updateReport } = useReports();
+  const { homeworks: homeworksData, loading: homeworksLoading, createHomework } = useHomeworks();
+
   const [selectedSchool, setSelectedSchool] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming');
   const [selectedSession, setSelectedSession] = useState<ClassSession | null>(null);
-  const [reports, setReports] = useState<Record<string, StudentSessionReport[]>>(MOCK_SESSION_REPORTS);
-  const [homeworks, setHomeworks] = useState<Homework[]>(MOCK_HOMEWORKS);
   const [editingStudent, setEditingStudent] = useState<string | null>(null);
   const [showHomeworkModal, setShowHomeworkModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [detailTab, setDetailTab] = useState<'students' | 'materials'>('students');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Build reports by session from database - use local state for now
+  const [reports, setReports] = useState<Record<string, StudentSessionReport[]>>({});
+  const [homeworks, setHomeworks] = useState<Homework[]>(homeworksData || []);
+
+  // Sync homeworks from database
+  useEffect(() => {
+    if (homeworksData) {
+      setHomeworks(homeworksData.map(h => ({
+        id: h.id,
+        sessionId: h.session_id,
+        studentId: h.student_id,
+        title: h.title,
+        description: h.description || '',
+        dueDate: h.due_date,
+        assignedDate: h.assigned_date,
+        status: h.status as 'PENDING' | 'SUBMITTED' | 'GRADED',
+        submissionUrl: h.submission_url || undefined,
+        score: h.score ?? undefined,
+        feedback: h.feedback || undefined
+      })));
+    }
+  }, [homeworksData]);
+
+  // Sync reports from database
+  useEffect(() => {
+    if (reportsData && reportsData.length > 0) {
+      const newReports: Record<string, StudentSessionReport[]> = {};
+      reportsData.forEach(r => {
+        if (!newReports[r.session_id]) {
+          newReports[r.session_id] = [];
+        }
+        newReports[r.session_id].push({
+          studentId: r.student_id,
+          studentName: r.student_name || 'Unknown',
+          attendanceStatus: 'PRESENT',
+          writtenScore: r.written_score || undefined,
+          oralScore: r.oral_score || undefined,
+          cefrLevel: r.cefr_level as CEFRLevel || undefined,
+          teacherNotes: r.notes || undefined,
+          isVerified: r.is_verified,
+        });
+      });
+      setReports(newReports);
+    }
+  }, [reportsData]);
+
+  // Map sessions from database
+  const sessions: ClassSession[] = sessionsData.map(s => ({
+    id: s.id,
+    teacherId: s.teacher_id,
+    topic: s.topic,
+    description: s.description || '',
+    dateTime: s.date_time,
+    location: s.location,
+    skillCategory: s.skill_category as SkillCategory,
+    difficultyLevel: s.difficulty_level as DifficultyLevel,
+    materials: s.materials || [],
+  }));
+
+  // Map schools/locations
+  const schools = locationsData.map(l => ({
+    id: l.id,
+    name: l.name,
+  }));
 
   // Form states for student scores
   const [editForm, setEditForm] = useState<{
@@ -29,29 +103,45 @@ export const SessionManager: React.FC = () => {
   // Homework form
   const [hwForm, setHwForm] = useState({ title: '', description: '', dueDate: '' });
 
-  // Create schedule form
+  // Create schedule form - supports multiple dates
   const [scheduleForm, setScheduleForm] = useState({
-    date: '',
-    time: '',
+    dates: [] as string[],
+    startTime: '',
+    endTime: '',
     topic: '',
     skillCategory: '' as SkillCategory | '',
     difficultyLevel: '' as DifficultyLevel | '',
     description: '',
     materials: [] as string[]
   });
+  const [newDate, setNewDate] = useState('');
 
   const now = new Date();
 
-  // Get schools
-  const schools = MOCK_SCHOOLS;
-
   // Filter sessions by selected school
   const filteredSessions = selectedSchool
-    ? MOCK_SESSIONS.filter(s => s.location.includes(selectedSchool.split(' - ')[0]))
-    : MOCK_SESSIONS;
+    ? sessions.filter(s => s.location.includes(selectedSchool.split(' - ')[0]))
+    : sessions;
 
   const upcomingSessions = filteredSessions.filter(s => new Date(s.dateTime) > now);
   const pastSessions = filteredSessions.filter(s => new Date(s.dateTime) <= now);
+
+  if (sessionsLoading || locationsLoading || reportsLoading || homeworksLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading sessions...</span>
+      </div>
+    );
+  }
+
+  if (sessionsError) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+        Error loading sessions: {sessionsError.message}
+      </div>
+    );
+  }
 
   const cefrLevels = Object.values(CEFRLevel);
   const skillCategories = Object.values(SkillCategory);
@@ -124,24 +214,79 @@ export const SessionManager: React.FC = () => {
     setShowHomeworkModal(false);
   };
 
-  const handleCreateSchedule = () => {
-    if (!scheduleForm.date || !scheduleForm.time || !scheduleForm.topic || !selectedSchool) {
+  const handleAddDate = () => {
+    if (newDate && !scheduleForm.dates.includes(newDate)) {
+      setScheduleForm({ ...scheduleForm, dates: [...scheduleForm.dates, newDate].sort() });
+      setNewDate('');
+    }
+  };
+
+  const handleRemoveDate = (dateToRemove: string) => {
+    setScheduleForm({
+      ...scheduleForm,
+      dates: scheduleForm.dates.filter(d => d !== dateToRemove)
+    });
+  };
+
+  // Calculate duration in hours
+  const calculateDuration = () => {
+    if (!scheduleForm.startTime || !scheduleForm.endTime) return null;
+    const [startH, startM] = scheduleForm.startTime.split(':').map(Number);
+    const [endH, endM] = scheduleForm.endTime.split(':').map(Number);
+    const startMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+    const duration = (endMinutes - startMinutes) / 60;
+    return duration > 0 ? duration : null;
+  };
+
+  const handleCreateSchedule = async () => {
+    if (scheduleForm.dates.length === 0 || !scheduleForm.startTime || !scheduleForm.endTime || !scheduleForm.topic || !selectedSchool) {
       alert('Silakan lengkapi semua field yang wajib diisi!');
       return;
     }
-    // In real app, this would POST to backend
-    console.log('Creating schedule:', { ...scheduleForm, location: selectedSchool });
-    alert('Jadwal berhasil ditambahkan!');
-    setShowCreateModal(false);
-    setScheduleForm({
-      date: '',
-      time: '',
-      topic: '',
-      skillCategory: '',
-      difficultyLevel: '',
-      description: '',
-      materials: []
-    });
+
+    const duration = calculateDuration();
+    if (!duration || duration <= 0) {
+      alert('Waktu selesai harus lebih besar dari waktu mulai!');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // Create a session for each selected date
+      for (const date of scheduleForm.dates) {
+        const dateTime = `${date}T${scheduleForm.startTime}:00`;
+        await createSession({
+          teacher_id: MOCK_USERS.find(u => u.role === UserRole.TEACHER)?.id || '',
+          topic: scheduleForm.topic,
+          date_time: dateTime,
+          location: selectedSchool,
+          skill_category: scheduleForm.skillCategory as any || 'Grammar',
+          difficulty_level: scheduleForm.difficultyLevel as any || 'Elementary',
+          description: scheduleForm.description || null,
+          materials: scheduleForm.materials,
+        });
+      }
+
+      alert(`${scheduleForm.dates.length} jadwal berhasil ditambahkan!`);
+      setShowCreateModal(false);
+      setScheduleForm({
+        dates: [],
+        startTime: '',
+        endTime: '',
+        topic: '',
+        skillCategory: '',
+        difficultyLevel: '',
+        description: '',
+        materials: []
+      });
+    } catch (error) {
+      console.error('Error creating sessions:', error);
+      alert('Gagal menyimpan jadwal. Silakan coba lagi.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // --- SCHOOL SELECTION VIEW ---
@@ -652,26 +797,71 @@ export const SessionManager: React.FC = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[9px] font-black text-gray-400 uppercase">Tanggal</label>
+            {/* Multiple Dates Section */}
+            <div className="space-y-2">
+              <label className="text-[9px] font-black text-gray-400 uppercase">Tanggal (bisa pilih beberapa)</label>
+              <div className="flex gap-2">
                 <input
                   type="date"
-                  value={scheduleForm.date}
-                  onChange={e => setScheduleForm({ ...scheduleForm, date: e.target.value })}
+                  value={newDate}
+                  onChange={e => setNewDate(e.target.value)}
+                  className="flex-1 border rounded-lg px-3 py-1.5 text-xs"
+                />
+                <button
+                  onClick={handleAddDate}
+                  disabled={!newDate}
+                  className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {scheduleForm.dates.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {scheduleForm.dates.map(date => (
+                    <span key={date} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-medium border border-blue-100">
+                      {new Date(date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      <button
+                        onClick={() => handleRemoveDate(date)}
+                        className="p-0.5 hover:bg-blue-200 rounded"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {scheduleForm.dates.length === 0 && (
+                <p className="text-[10px] text-gray-400 italic">Belum ada tanggal dipilih</p>
+              )}
+            </div>
+
+            {/* Start & End Time */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[9px] font-black text-gray-400 uppercase">Waktu Mulai</label>
+                <input
+                  type="time"
+                  value={scheduleForm.startTime}
+                  onChange={e => setScheduleForm({ ...scheduleForm, startTime: e.target.value })}
                   className="w-full border rounded-lg px-3 py-1.5 text-xs"
                 />
               </div>
               <div>
-                <label className="text-[9px] font-black text-gray-400 uppercase">Waktu</label>
+                <label className="text-[9px] font-black text-gray-400 uppercase">Waktu Selesai</label>
                 <input
                   type="time"
-                  value={scheduleForm.time}
-                  onChange={e => setScheduleForm({ ...scheduleForm, time: e.target.value })}
+                  value={scheduleForm.endTime}
+                  onChange={e => setScheduleForm({ ...scheduleForm, endTime: e.target.value })}
                   className="w-full border rounded-lg px-3 py-1.5 text-xs"
                 />
               </div>
             </div>
+            {calculateDuration() && (
+              <div className="flex items-center gap-1 text-[10px] text-green-600 font-medium">
+                <Clock className="w-3 h-3" />
+                Durasi: {calculateDuration()} jam
+              </div>
+            )}
 
             <div>
               <label className="text-[9px] font-black text-gray-400 uppercase">Topik/Materi</label>
@@ -731,15 +921,40 @@ export const SessionManager: React.FC = () => {
               </p>
             </div>
 
+            {/* Summary */}
+            {scheduleForm.dates.length > 0 && scheduleForm.startTime && scheduleForm.endTime && (
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                <p className="text-[9px] font-black text-blue-600 uppercase mb-1">Ringkasan</p>
+                <p className="text-xs text-blue-800">
+                  <span className="font-bold">{scheduleForm.dates.length}</span> sesi akan dibuat
+                  {calculateDuration() && (
+                    <span> • Total <span className="font-bold">{(scheduleForm.dates.length * (calculateDuration() || 0)).toFixed(1)}</span> jam</span>
+                  )}
+                </p>
+              </div>
+            )}
+
             <div className="flex gap-2 pt-2">
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
+                disabled={isSubmitting}
+                className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50"
               >
                 Batal
               </button>
-              <Button onClick={handleCreateSchedule} className="flex-1 text-xs py-2">
-                Simpan Jadwal
+              <Button
+                onClick={handleCreateSchedule}
+                disabled={isSubmitting || scheduleForm.dates.length === 0}
+                className="flex-1 text-xs py-2 disabled:opacity-50"
+              >
+                {isSubmitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Menyimpan...
+                  </span>
+                ) : (
+                  `Simpan ${scheduleForm.dates.length > 1 ? `${scheduleForm.dates.length} Jadwal` : 'Jadwal'}`
+                )}
               </Button>
             </div>
           </Card>

@@ -2,24 +2,59 @@
 import React, { useState } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { MOCK_ONLINE_MODULES } from '../../constants';
+import { useModules } from '../../hooks/useModules';
 import { OnlineModule, ModuleExam, DifficultyLevel, SkillCategory } from '../../types';
-import { Video, FileText, Paperclip, Filter, Globe, Trash2, Layers, Search } from 'lucide-react';
+import { Video, FileText, Paperclip, Filter, Globe, Trash2, Layers, Search, Loader2 } from 'lucide-react';
 
 export const OnlineMaterialsManager: React.FC = () => {
-  const [modules, setModules] = useState<OnlineModule[]>(MOCK_ONLINE_MODULES);
+  const { modules: modulesData, loading, error, createModule, updateModule, deleteModule } = useModules();
+
+  // ALL useState hooks must be called before any conditional returns
   const [isEditing, setIsEditing] = useState(false);
   const [currentModule, setCurrentModule] = useState<Partial<OnlineModule>>({});
-  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // States for Adding specific exams inside the edit view
   const [examFile, setExamFile] = useState<File | null>(null);
-  // NEW: State for the specific level of the exam being uploaded
+  // State for the specific level of the exam being uploaded
   const [examUploadLevel, setExamUploadLevel] = useState<DifficultyLevel>(DifficultyLevel.INTERMEDIATE);
 
   // Filter States
   const [levelFilter, setLevelFilter] = useState<DifficultyLevel | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Map database format to component format
+  const modules: OnlineModule[] = modulesData.map(m => ({
+    id: m.id,
+    title: m.title,
+    videoUrl: m.video_url || '',
+    description: m.description || undefined,
+    skillCategory: m.skill_category as SkillCategory,
+    difficultyLevel: m.difficulty_level as DifficultyLevel,
+    materials: (m.materials as string[]) || [],
+    exams: (m.exams as ModuleExam[]) || [],
+    status: m.status as 'DRAFT' | 'PUBLISHED',
+    totalDuration: m.total_duration || undefined,
+    order: m.order || 0,
+  }));
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading modules...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+        Error loading modules: {error.message}
+      </div>
+    );
+  }
 
   const filteredModules = modules.filter(m => {
     const levelMatch = levelFilter === 'all' || m.difficultyLevel === levelFilter;
@@ -48,29 +83,41 @@ export const OnlineMaterialsManager: React.FC = () => {
     setIsEditing(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!currentModule.title) return;
 
-    if (currentModule.id) {
-       // Update existing
-       setModules(prev => prev.map(m => m.id === currentModule.id ? { ...m, ...currentModule } as OnlineModule : m));
-    } else {
-       // Create new
-       const newModule: OnlineModule = {
-         ...currentModule,
-         id: `om${Date.now()}`,
-         postedDate: new Date().toISOString().split('T')[0],
-         materials: currentModule.materials || [],
-         exams: currentModule.exams || [],
-         videoUrl: currentModule.videoUrl || '',
-         description: currentModule.description || '',
-         status: currentModule.status || 'DRAFT',
-         skillCategory: currentModule.skillCategory || SkillCategory.GRAMMAR,
-         difficultyLevel: currentModule.difficultyLevel || DifficultyLevel.INTERMEDIATE
-       } as OnlineModule;
-       setModules(prev => [newModule, ...prev]);
+    setIsSubmitting(true);
+    try {
+      if (currentModule.id) {
+         // Update existing
+         await updateModule(currentModule.id, {
+           title: currentModule.title,
+           description: currentModule.description || null,
+           video_url: currentModule.videoUrl || null,
+           skill_category: currentModule.skillCategory,
+           difficulty_level: currentModule.difficultyLevel,
+           materials: currentModule.materials || [],
+           status: currentModule.status || 'DRAFT',
+         });
+      } else {
+         // Create new
+         await createModule({
+           title: currentModule.title!,
+           description: currentModule.description || null,
+           video_url: currentModule.videoUrl || null,
+           skill_category: currentModule.skillCategory || SkillCategory.GRAMMAR,
+           difficulty_level: currentModule.difficultyLevel || DifficultyLevel.INTERMEDIATE,
+           materials: currentModule.materials || [],
+           status: currentModule.status || 'DRAFT',
+         });
+      }
+      setIsEditing(false);
+    } catch (err) {
+      console.error('Error saving module:', err);
+      alert('Failed to save module');
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsEditing(false);
   };
 
   const handleAddExam = () => {

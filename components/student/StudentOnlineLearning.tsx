@@ -2,8 +2,9 @@
 import React, { useState } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { MOCK_ONLINE_MODULES, MOCK_MODULE_PROGRESS, LEVEL_COLORS, MOCK_USERS } from '../../constants';
-import { User, OnlineModule, SkillCategory, QuestionType, EssayGradeResult, DifficultyLevel } from '../../types';
+import { LEVEL_COLORS } from '../../constants';
+import { useModules, useModuleProgress } from '../../hooks/useModules';
+import { User, OnlineModule, SkillCategory, QuestionType, EssayGradeResult, DifficultyLevel, ModuleExam } from '../../types';
 import { gradeEssay } from '../../services/geminiService';
 import {
   BookOpen, PlayCircle, FileText, Lock,
@@ -68,6 +69,37 @@ export const StudentOnlineLearning: React.FC<{ student: User }> = ({ student }) 
   const [searchQuery, setSearchQuery] = useState('');
   const [showPaywall, setShowPaywall] = useState(false);
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
+
+  // Fetch modules and progress from Supabase
+  const { modules: modulesData, loading: modulesLoading } = useModules({ publishedOnly: true });
+  const { progress: progressData, loading: progressLoading } = useModuleProgress(student.id);
+
+  // Map database modules to OnlineModule type
+  const MOCK_ONLINE_MODULES: OnlineModule[] = modulesData.map(m => ({
+    id: m.id,
+    title: m.title,
+    description: m.description || '',
+    videoUrl: m.video_url,
+    thumbnailUrl: m.thumbnail_url || '',
+    skillCategory: m.skill_category as SkillCategory,
+    difficultyLevel: m.difficulty_level as DifficultyLevel,
+    status: m.status as 'DRAFT' | 'PUBLISHED',
+    createdBy: m.created_by,
+    createdAt: m.created_at,
+    updatedAt: m.updated_at,
+    exam: m.exam_questions as ModuleExam | undefined,
+    passingScore: m.passing_score,
+    materials: m.materials || [],
+  }));
+
+  // Map progress data
+  const MOCK_MODULE_PROGRESS = progressData.map(p => ({
+    studentId: p.student_id,
+    moduleId: p.module_id,
+    status: p.status,
+    quizScore: p.quiz_score,
+    completedAt: p.completed_at,
+  }));
 
   // Check subscription status
   const hasActiveSubscription = student.learningHubSubscription?.isActive &&

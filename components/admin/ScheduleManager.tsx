@@ -1,22 +1,65 @@
 
 import React, { useState } from 'react';
 import { Card } from '../Card';
-import { Calendar, Clock, User as UserIcon, BookOpen, MapPin, Eye, Filter, School } from 'lucide-react';
-import { MOCK_USERS, MOCK_SESSIONS, MOCK_SCHOOLS, MOCK_SESSION_REPORTS } from '../../constants';
-import { UserRole, ClassSession } from '../../types';
+import { Calendar, Clock, User as UserIcon, BookOpen, MapPin, Eye, Filter, School, Loader2 } from 'lucide-react';
+import { useSessions } from '../../hooks/useSessions';
+import { useTeachers, useLocations } from '../../hooks/useProfiles';
+import { useReports } from '../../hooks/useReports';
+import { ClassSession, SkillCategory, DifficultyLevel } from '../../types';
 import { LEVEL_COLORS } from '../../constants';
 import { SKILL_ICONS } from '../student/StudentView';
 
 export const ScheduleManager: React.FC = () => {
+  const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError } = useSessions();
+  const { profiles: teachersData, loading: teachersLoading } = useTeachers();
+  const { locations: locationsData, loading: locationsLoading } = useLocations();
+  const { reports: reportsData } = useReports();
+
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
   const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
   const [selectedSession, setSelectedSession] = useState<ClassSession | null>(null);
 
-  const teachers = MOCK_USERS.filter(u => u.role === UserRole.TEACHER);
-  const schools = MOCK_SCHOOLS;
+  // Map database format to component format
+  const sessions: ClassSession[] = sessionsData.map(s => ({
+    id: s.id,
+    teacherId: s.teacher_id,
+    topic: s.topic,
+    description: s.description || '',
+    dateTime: s.date_time,
+    location: s.location,
+    skillCategory: s.skill_category as SkillCategory,
+    difficultyLevel: s.difficulty_level as DifficultyLevel,
+    materials: s.materials || [],
+  }));
+
+  const teachers = teachersData.map(t => ({
+    id: t.id,
+    name: t.name,
+    role: t.role,
+  }));
+
+  const schools = locationsData.map(l => ({
+    id: l.id,
+    name: l.name,
+  }));
+
+  // Build reports by session
+  const sessionReportsMap: Record<string, any[]> = {};
+  reportsData.forEach(r => {
+    if (!sessionReportsMap[r.session_id]) {
+      sessionReportsMap[r.session_id] = [];
+    }
+    sessionReportsMap[r.session_id].push({
+      studentName: r.student_name || 'Unknown',
+      writtenScore: r.written_score,
+      oralScore: r.oral_score,
+      cefrLevel: r.cefr_level,
+      teacherNotes: r.notes,
+    });
+  });
 
   // Filter sessions based on selected filters
-  let filteredSessions = [...MOCK_SESSIONS];
+  let filteredSessions = [...sessions];
 
   if (selectedLocation !== 'all') {
     filteredSessions = filteredSessions.filter(s => s.location.includes(selectedLocation));
@@ -30,13 +73,13 @@ export const ScheduleManager: React.FC = () => {
   filteredSessions = filteredSessions.sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
 
   const getTeacherName = (id: string) => {
-    return MOCK_USERS.find(u => u.id === id)?.name || 'Unknown Teacher';
+    return teachers.find(t => t.id === id)?.name || 'Unknown Teacher';
   };
 
   const getSessionStatus = (session: ClassSession) => {
     const now = new Date();
     const sessionDate = new Date(session.dateTime);
-    const reports = MOCK_SESSION_REPORTS[session.id] || [];
+    const reports = sessionReportsMap[session.id] || [];
 
     if (sessionDate > now) {
       return { label: 'Upcoming', color: 'bg-blue-50 text-blue-700 border-blue-100' };
@@ -47,10 +90,27 @@ export const ScheduleManager: React.FC = () => {
     return { label: 'Needs Input', color: 'bg-orange-50 text-orange-700 border-orange-100' };
   };
 
+  if (sessionsLoading || teachersLoading || locationsLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading schedule...</span>
+      </div>
+    );
+  }
+
+  if (sessionsError) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+        Error loading schedule: {sessionsError.message}
+      </div>
+    );
+  }
+
   // Detail view for a selected session
   if (selectedSession) {
     const Icon = SKILL_ICONS[selectedSession.skillCategory];
-    const reports = MOCK_SESSION_REPORTS[selectedSession.id] || [];
+    const reports = sessionReportsMap[selectedSession.id] || [];
     const status = getSessionStatus(selectedSession);
 
     return (

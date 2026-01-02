@@ -1,14 +1,20 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import {
   Gamepad2, Plus, Pencil, Trash2, Play, ChevronLeft, Save,
   Brain, Clock, CheckCircle, XCircle, GripVertical, Copy, Eye,
-  Users, X, Trophy, Target, Calendar
+  Users, X, Trophy, Target, Calendar, Loader2
 } from 'lucide-react';
+import { useKahootQuizzes } from '../../hooks/useOlympiads';
+import { olympiadService } from '../../services/olympiad.service';
+import type { Database } from '../../lib/database.types';
 
-// Types
+type DBKahootQuiz = Database['public']['Tables']['kahoot_quizzes']['Row'];
+type DBKahootParticipant = Database['public']['Tables']['kahoot_participants']['Row'];
+
+// Types for UI
 interface KahootQuestion {
   id: string;
   question: string;
@@ -27,7 +33,7 @@ interface QuizParticipant {
   completedAt: string;
 }
 
-interface KahootQuiz {
+interface UIKahootQuiz {
   id: string;
   title: string;
   description: string;
@@ -39,73 +45,58 @@ interface KahootQuiz {
   participants?: QuizParticipant[];
 }
 
-// Mock initial data
-const INITIAL_QUIZZES: KahootQuiz[] = [
-  {
-    id: 'quiz-grammar-101',
-    title: 'English Grammar Challenge',
-    description: 'Test your grammar skills with 5 quick questions!',
-    createdBy: 'ELC Team',
-    isActive: true,
-    totalPlays: 156,
-    createdAt: '2024-12-01',
-    participants: [
-      { id: 'p1', name: 'Budi Santoso', email: 'budi@gmail.com', score: 100, correctAnswers: 5, totalQuestions: 5, completedAt: '2024-12-20 14:30' },
-      { id: 'p2', name: 'Siska Putri', email: 'siska@yahoo.com', score: 80, correctAnswers: 4, totalQuestions: 5, completedAt: '2024-12-20 15:45' },
-      { id: 'p3', name: 'Andi Wijaya', email: 'andi.w@gmail.com', score: 60, correctAnswers: 3, totalQuestions: 5, completedAt: '2024-12-21 09:15' },
-      { id: 'p4', name: 'Maya Sari', email: 'maya.sari@gmail.com', score: 80, correctAnswers: 4, totalQuestions: 5, completedAt: '2024-12-21 10:00' },
-      { id: 'p5', name: 'Reza Pratama', email: 'reza.p@gmail.com', score: 40, correctAnswers: 2, totalQuestions: 5, completedAt: '2024-12-22 11:30' },
-    ],
-    questions: [
-      {
-        id: 'q1',
-        question: 'Choose the correct sentence:',
-        options: ['She don\'t like coffee', 'She doesn\'t likes coffee', 'She doesn\'t like coffee', 'She not like coffee'],
-        correctIndex: 2,
-        timeLimit: 15
-      },
-      {
-        id: 'q2',
-        question: 'Fill in the blank: "I have been living here ___ 2015."',
-        options: ['for', 'since', 'from', 'at'],
-        correctIndex: 1,
-        timeLimit: 12
-      },
-      {
-        id: 'q3',
-        question: 'Which word is a noun?',
-        options: ['Quickly', 'Beautiful', 'Happiness', 'Run'],
-        correctIndex: 2,
-        timeLimit: 10
-      },
-      {
-        id: 'q4',
-        question: 'Choose the correct past tense: "Yesterday, I ___ to the market."',
-        options: ['go', 'went', 'gone', 'going'],
-        correctIndex: 1,
-        timeLimit: 10
-      },
-      {
-        id: 'q5',
-        question: 'Identify the correct question form:',
-        options: ['Where you are going?', 'Where are you going?', 'Where going you are?', 'You are going where?'],
-        correctIndex: 1,
-        timeLimit: 12
-      }
-    ]
-  }
-];
+// Helper to convert DB format to UI format
+const dbToUI = (dbQuiz: DBKahootQuiz): UIKahootQuiz => ({
+  id: dbQuiz.id,
+  title: dbQuiz.title,
+  description: dbQuiz.description || '',
+  questions: (dbQuiz.questions as unknown as KahootQuestion[]) || [],
+  createdBy: dbQuiz.created_by || 'Admin',
+  isActive: dbQuiz.is_active,
+  totalPlays: dbQuiz.play_count || 0,
+  createdAt: dbQuiz.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+});
+
+// Helper to convert UI format to DB format for insert/update
+const uiToDB = (uiQuiz: UIKahootQuiz): Partial<DBKahootQuiz> => ({
+  title: uiQuiz.title,
+  description: uiQuiz.description || null,
+  questions: uiQuiz.questions as any,
+  created_by: uiQuiz.createdBy || null,
+  is_active: uiQuiz.isActive,
+});
 
 export const KahootManager: React.FC = () => {
-  const [quizzes, setQuizzes] = useState<KahootQuiz[]>(INITIAL_QUIZZES);
+  const { quizzes: dbQuizzes, loading, error, createQuiz, updateQuiz, deleteQuiz, setActive, refetch } = useKahootQuizzes();
+
+  // Convert DB quizzes to UI format (filter out any null values)
+  const quizzes: UIKahootQuiz[] = dbQuizzes.filter(q => q !== null).map(dbToUI);
   const [view, setView] = useState<'list' | 'editor' | 'preview'>('list');
-  const [editingQuiz, setEditingQuiz] = useState<KahootQuiz | null>(null);
-  const [previewQuiz, setPreviewQuiz] = useState<KahootQuiz | null>(null);
+  const [editingQuiz, setEditingQuiz] = useState<UIKahootQuiz | null>(null);
+  const [previewQuiz, setPreviewQuiz] = useState<UIKahootQuiz | null>(null);
+  const [saving, setSaving] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
-  const [viewingParticipants, setViewingParticipants] = useState<KahootQuiz | null>(null);
+  const [viewingParticipants, setViewingParticipants] = useState<UIKahootQuiz | null>(null);
+  const [participants, setParticipants] = useState<DBKahootParticipant[]>([]);
+  const [loadingParticipants, setLoadingParticipants] = useState(false);
+
+  // Fetch participants when modal opens
+  const handleViewParticipants = async (quiz: UIKahootQuiz) => {
+    setViewingParticipants(quiz);
+    setLoadingParticipants(true);
+    try {
+      const data = await olympiadService.getKahootParticipants(quiz.id);
+      setParticipants(data || []);
+    } catch (err) {
+      console.error('Failed to fetch participants:', err);
+      setParticipants([]);
+    } finally {
+      setLoadingParticipants(false);
+    }
+  };
 
   const handleCreate = () => {
-    const newQuiz: KahootQuiz = {
+    const newQuiz: UIKahootQuiz = {
       id: `quiz-${Date.now()}`,
       title: '',
       description: '',
@@ -119,41 +110,45 @@ export const KahootManager: React.FC = () => {
     setView('editor');
   };
 
-  const handleEdit = (quiz: KahootQuiz) => {
+  const handleEdit = (quiz: UIKahootQuiz) => {
     setEditingQuiz({ ...quiz, questions: [...quiz.questions] });
     setView('editor');
   };
 
-  const handlePreview = (quiz: KahootQuiz) => {
+  const handlePreview = (quiz: UIKahootQuiz) => {
     setPreviewQuiz(quiz);
     setPreviewIndex(0);
     setView('preview');
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Hapus quiz ini? Tindakan ini tidak dapat dibatalkan.')) {
-      setQuizzes(quizzes.filter(q => q.id !== id));
+      try {
+        await deleteQuiz(id);
+      } catch (err) {
+        alert('Gagal menghapus quiz: ' + (err as Error).message);
+      }
     }
   };
 
-  const handleToggleActive = (id: string) => {
+  const handleToggleActive = async (id: string) => {
     const targetQuiz = quizzes.find(q => q.id === id);
     if (!targetQuiz) return;
 
-    // If activating, deactivate all others first
-    if (!targetQuiz.isActive) {
-      setQuizzes(quizzes.map(q =>
-        q.id === id ? { ...q, isActive: true } : { ...q, isActive: false }
-      ));
-    } else {
-      // If deactivating, just toggle off
-      setQuizzes(quizzes.map(q =>
-        q.id === id ? { ...q, isActive: false } : q
-      ));
+    try {
+      if (!targetQuiz.isActive) {
+        // Activate this quiz (setActive will deactivate others)
+        await setActive(id);
+      } else {
+        // Deactivate by setting is_active to false
+        await updateQuiz(id, { is_active: false });
+      }
+    } catch (err) {
+      alert('Gagal mengubah status quiz: ' + (err as Error).message);
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editingQuiz) return;
 
     if (!editingQuiz.title.trim()) {
@@ -166,14 +161,29 @@ export const KahootManager: React.FC = () => {
       return;
     }
 
-    const existingIndex = quizzes.findIndex(q => q.id === editingQuiz.id);
-    if (existingIndex >= 0) {
-      setQuizzes(quizzes.map(q => q.id === editingQuiz.id ? editingQuiz : q));
-    } else {
-      setQuizzes([editingQuiz, ...quizzes]);
+    setSaving(true);
+    try {
+      const existingQuiz = dbQuizzes.find(q => q.id === editingQuiz.id);
+      if (existingQuiz) {
+        // Update existing quiz
+        await updateQuiz(editingQuiz.id, uiToDB(editingQuiz));
+      } else {
+        // Create new quiz
+        await createQuiz({
+          title: editingQuiz.title,
+          description: editingQuiz.description || null,
+          questions: editingQuiz.questions as any,
+          created_by: editingQuiz.createdBy || null,
+          is_active: false,
+        });
+      }
+      setView('list');
+      setEditingQuiz(null);
+    } catch (err) {
+      alert('Gagal menyimpan quiz: ' + (err as Error).message);
+    } finally {
+      setSaving(false);
     }
-    setView('list');
-    setEditingQuiz(null);
   };
 
   const handleAddQuestion = () => {
@@ -315,8 +325,8 @@ export const KahootManager: React.FC = () => {
                 Preview
               </Button>
             )}
-            <Button onClick={handleSave} className="text-xs py-1 px-3">
-              Simpan
+            <Button onClick={handleSave} disabled={saving} className="text-xs py-1 px-3">
+              {saving ? <><Loader2 className="w-3 h-3 animate-spin mr-1" /> Menyimpan...</> : 'Simpan'}
             </Button>
           </div>
         </div>
@@ -462,30 +472,51 @@ export const KahootManager: React.FC = () => {
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
             <Gamepad2 className="w-5 h-5 text-purple-600" /> Live Quiz Manager
           </h2>
-          <p className="text-xs text-gray-500">Kelola quiz interaktif untuk siswa.</p>
+          <p className="text-xs text-gray-500">Kelola quiz interaktif untuk siswa. Data terintegrasi dengan homepage.</p>
         </div>
         <Button onClick={handleCreate} className="bg-purple-600 hover:bg-purple-700 text-xs py-1.5 px-3">
           Buat Quiz
         </Button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="!p-3 bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-100">
-          <p className="text-[9px] font-bold text-purple-600 uppercase">Total Quiz</p>
-          <p className="text-xl font-bold text-purple-900">{quizzes.length}</p>
-        </Card>
-        <Card className="!p-3 bg-gradient-to-br from-green-50 to-emerald-50 border-green-100">
-          <p className="text-[9px] font-bold text-green-600 uppercase">Quiz Aktif</p>
-          <p className="text-xl font-bold text-green-900">{quizzes.filter(q => q.isActive).length}</p>
-        </Card>
-        <Card className="!p-3 bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-100">
-          <p className="text-[9px] font-bold text-blue-600 uppercase">Total Plays</p>
-          <p className="text-xl font-bold text-blue-900">{quizzes.reduce((sum, q) => sum + q.totalPlays, 0)}</p>
-        </Card>
-      </div>
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-6 h-6 text-purple-600 animate-spin" />
+          <span className="ml-2 text-sm text-gray-500">Memuat data quiz...</span>
+        </div>
+      )}
 
-      {/* Quiz List */}
+      {/* Error State */}
+      {error && (
+        <Card className="!p-4 bg-red-50 border-red-200">
+          <p className="text-xs text-red-600">Gagal memuat data: {error.message}</p>
+          <Button variant="outline" onClick={() => refetch()} className="text-xs py-1 px-3 mt-2">
+            Coba Lagi
+          </Button>
+        </Card>
+      )}
+
+      {/* Stats - only show when not loading */}
+      {!loading && !error && (
+        <div className="grid grid-cols-3 gap-3">
+          <Card className="!p-3 bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-100">
+            <p className="text-[9px] font-bold text-purple-600 uppercase">Total Quiz</p>
+            <p className="text-xl font-bold text-purple-900">{quizzes.length}</p>
+          </Card>
+          <Card className="!p-3 bg-gradient-to-br from-green-50 to-emerald-50 border-green-100">
+            <p className="text-[9px] font-bold text-green-600 uppercase">Quiz Aktif</p>
+            <p className="text-xl font-bold text-green-900">{quizzes.filter(q => q.isActive).length}</p>
+          </Card>
+          <Card className="!p-3 bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-100">
+            <p className="text-[9px] font-bold text-blue-600 uppercase">Total Plays</p>
+            <p className="text-xl font-bold text-blue-900">{quizzes.reduce((sum, q) => sum + q.totalPlays, 0)}</p>
+          </Card>
+        </div>
+      )}
+
+      {/* Quiz List - only show when not loading */}
+      {!loading && !error && (
       <Card className="!p-0 overflow-hidden">
         <table className="w-full text-left text-xs">
           <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
@@ -520,11 +551,11 @@ export const KahootManager: React.FC = () => {
                 </td>
                 <td className="px-4 py-2.5">
                   <button
-                    onClick={() => setViewingParticipants(quiz)}
+                    onClick={() => handleViewParticipants(quiz)}
                     className="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition-all"
                   >
                     <Users className="w-3 h-3" />
-                    <span>{quiz.participants?.length || 0}</span>
+                    <span>View</span>
                   </button>
                 </td>
                 <td className="px-4 py-2.5">
@@ -563,6 +594,7 @@ export const KahootManager: React.FC = () => {
           </tbody>
         </table>
       </Card>
+      )}
 
       {/* Participants Modal */}
       {viewingParticipants && (
@@ -575,7 +607,7 @@ export const KahootManager: React.FC = () => {
                   <Users className="w-4 h-4 text-purple-600" />
                   Participants: {viewingParticipants.title}
                 </h3>
-                <p className="text-[10px] text-gray-500">{viewingParticipants.participants?.length || 0} peserta telah mengikuti quiz ini</p>
+                <p className="text-[10px] text-gray-500">{participants.length} peserta telah mengikuti quiz ini</p>
               </div>
               <button
                 onClick={() => setViewingParticipants(null)}
@@ -589,36 +621,41 @@ export const KahootManager: React.FC = () => {
             <div className="grid grid-cols-3 gap-3 p-4 border-b border-gray-100">
               <div className="text-center p-3 bg-purple-50 rounded-xl">
                 <p className="text-[9px] font-bold text-purple-600 uppercase">Total Peserta</p>
-                <p className="text-lg font-bold text-purple-900">{viewingParticipants.participants?.length || 0}</p>
+                <p className="text-lg font-bold text-purple-900">{participants.length}</p>
               </div>
               <div className="text-center p-3 bg-green-50 rounded-xl">
                 <p className="text-[9px] font-bold text-green-600 uppercase">Rata-rata Skor</p>
                 <p className="text-lg font-bold text-green-900">
-                  {viewingParticipants.participants && viewingParticipants.participants.length > 0
-                    ? Math.round(viewingParticipants.participants.reduce((sum, p) => sum + p.score, 0) / viewingParticipants.participants.length)
-                    : 0}%
+                  {participants.length > 0
+                    ? Math.round(participants.reduce((sum, p) => sum + p.score, 0) / participants.length)
+                    : 0}
                 </p>
               </div>
               <div className="text-center p-3 bg-yellow-50 rounded-xl">
                 <p className="text-[9px] font-bold text-yellow-600 uppercase">Skor Tertinggi</p>
                 <p className="text-lg font-bold text-yellow-900">
-                  {viewingParticipants.participants && viewingParticipants.participants.length > 0
-                    ? Math.max(...viewingParticipants.participants.map(p => p.score))
-                    : 0}%
+                  {participants.length > 0
+                    ? Math.max(...participants.map(p => p.score))
+                    : 0}
                 </p>
               </div>
             </div>
 
             {/* Participants List */}
             <div className="flex-1 overflow-y-auto p-4">
-              {(!viewingParticipants.participants || viewingParticipants.participants.length === 0) ? (
+              {loadingParticipants ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 text-purple-600 animate-spin" />
+                  <span className="ml-2 text-sm text-gray-500">Memuat data peserta...</span>
+                </div>
+              ) : participants.length === 0 ? (
                 <div className="text-center py-8">
                   <Users className="w-10 h-10 text-gray-300 mx-auto mb-2" />
                   <p className="text-xs text-gray-500">Belum ada peserta yang mengikuti quiz ini.</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {viewingParticipants.participants
+                  {participants
                     .sort((a, b) => b.score - a.score)
                     .map((participant, index) => (
                       <div key={participant.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
@@ -635,29 +672,31 @@ export const KahootManager: React.FC = () => {
                         {/* Info */}
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-gray-900 truncate">{participant.name}</p>
-                          <p className="text-[10px] text-gray-500 truncate">{participant.email}</p>
+                          <p className="text-[10px] text-gray-500 truncate">
+                            {new Date(participant.completed_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </p>
                         </div>
 
                         {/* Score */}
                         <div className="text-right shrink-0">
                           <div className="flex items-center gap-1 justify-end">
                             <Target className="w-3 h-3 text-gray-400" />
-                            <span className="text-[10px] text-gray-500">{participant.correctAnswers}/{participant.totalQuestions}</span>
+                            <span className="text-[10px] text-gray-500">{participant.correct_answers}/{participant.total_questions}</span>
                           </div>
                           <p className={`text-sm font-bold ${
                             participant.score >= 80 ? 'text-green-600' :
                             participant.score >= 60 ? 'text-yellow-600' :
                             'text-red-600'
                           }`}>
-                            {participant.score}%
+                            {participant.score} pts
                           </p>
                         </div>
 
-                        {/* Time */}
+                        {/* Time Spent */}
                         <div className="text-right shrink-0">
                           <div className="flex items-center gap-1 text-[10px] text-gray-400">
-                            <Calendar className="w-3 h-3" />
-                            <span>{participant.completedAt}</span>
+                            <Clock className="w-3 h-3" />
+                            <span>{participant.time_spent}s</span>
                           </div>
                         </div>
                       </div>

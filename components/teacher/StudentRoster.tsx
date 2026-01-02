@@ -1,20 +1,57 @@
 
 import React, { useState } from 'react';
 import { Card } from '../Card';
-import { MOCK_USERS, LEVEL_COLORS, MOCK_SESSIONS, MOCK_SESSION_REPORTS, MOCK_MODULE_PROGRESS } from '../../constants';
-import { UserRole, User, SkillCategory } from '../../types';
-import { ChevronRight, Search, MapPin, Clock, CheckCircle, FileText, Upload, AlertTriangle } from 'lucide-react';
+import { LEVEL_COLORS } from '../../constants';
+import { useStudents } from '../../hooks/useProfiles';
+import { useSessions } from '../../hooks/useSessions';
+import { useReports } from '../../hooks/useReports';
+import { useModuleProgress } from '../../hooks/useModules';
+import { User, SkillCategory, DifficultyLevel } from '../../types';
+import { ChevronRight, Search, MapPin, Clock, CheckCircle, FileText, Upload, AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '../Button';
 import { SKILL_ICONS } from '../student/StudentView';
 
 export const StudentRoster: React.FC = () => {
+  const { profiles: studentsData, loading: studentsLoading, error: studentsError } = useStudents();
+
   const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
-  
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState<string>('All Locations');
 
-  const students = MOCK_USERS.filter(u => u.role === UserRole.STUDENT);
+  // Map database profiles to User format
+  const students: User[] = studentsData.map(s => ({
+    id: s.id,
+    name: s.name,
+    email: s.email,
+    phone: s.phone || undefined,
+    address: s.address || undefined,
+    role: s.role as any,
+    status: s.status as 'ACTIVE' | 'INACTIVE',
+    branch: s.branch || undefined,
+    teacherNotes: s.teacher_notes || undefined,
+    needsAttention: s.needs_attention,
+    schoolOrigin: s.school_origin || undefined,
+    skillLevels: (s.skill_levels as Partial<Record<SkillCategory, DifficultyLevel>>) || {},
+  }));
+
   const locations = ['All Locations', ...Array.from(new Set(students.map(s => s.branch).filter(Boolean)))];
+
+  if (studentsLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading students...</span>
+      </div>
+    );
+  }
+
+  if (studentsError) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+        Error loading students: {studentsError.message}
+      </div>
+    );
+  }
 
   const filteredStudents = students.filter(student => {
     const matchesSearch = student.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -121,7 +158,12 @@ export const StudentRoster: React.FC = () => {
 
 const StudentDetail: React.FC<{ student: User; onBack: () => void }> = ({ student, onBack }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'grades'>('overview');
-  
+
+  // Fetch data from Supabase
+  const { sessions: sessionsData, loading: sessionsLoading } = useSessions();
+  const { reports: reportsData, loading: reportsLoading } = useReports();
+  const { progress: progressData, loading: progressLoading } = useModuleProgress(student.id);
+
   // Grade Form State
   const [selectedSessionId, setSelectedSessionId] = useState('');
   const [gradeScore, setGradeScore] = useState('');
@@ -129,37 +171,52 @@ const StudentDetail: React.FC<{ student: User; onBack: () => void }> = ({ studen
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // --- DATA MOCKING ---
-  
-  // Mock Class History (Linked to Attendance)
-  const classHistory = MOCK_SESSIONS
-    .filter(s => new Date(s.dateTime) <= new Date()) // Only past classes
+  // Build reports by session ID
+  const sessionReportsMap: Record<string, any[]> = {};
+  reportsData.forEach(r => {
+    if (!sessionReportsMap[r.session_id]) {
+      sessionReportsMap[r.session_id] = [];
+    }
+    sessionReportsMap[r.session_id].push({
+      studentId: r.student_id,
+      attendanceStatus: 'PRESENT', // Default since we don't have this in the schema
+      examScore: r.written_score,
+      placementResult: r.cefr_level,
+    });
+  });
+
+  // Build class history from sessions and reports
+  const classHistory = sessionsData
+    .filter(s => new Date(s.date_time) <= new Date()) // Only past classes
     .map(session => {
-       const report = MOCK_SESSION_REPORTS[session.id]?.find(r => r.studentId === student.id);
+       const report = sessionReportsMap[session.id]?.find((r: any) => r.studentId === student.id);
        return {
           id: session.id,
-          date: session.dateTime,
+          date: session.date_time,
           topic: session.topic,
-          skill: session.skillCategory,
+          skill: session.skill_category as SkillCategory,
           status: report?.attendanceStatus || 'PENDING',
           location: session.location
        };
     }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  // Mock Exam Results
-  const examResults = MOCK_SESSIONS
+  // Build exam results from sessions and reports
+  const examResults = sessionsData
     .map(session => {
-       const report = MOCK_SESSION_REPORTS[session.id]?.find(r => r.studentId === student.id);
+       const report = sessionReportsMap[session.id]?.find((r: any) => r.studentId === student.id);
        if (!report || report.examScore === undefined) return null;
        return {
           id: session.id,
-          date: session.dateTime,
+          date: session.date_time,
           topic: session.topic,
           score: report.examScore,
           placement: report.placementResult,
-          feedback: "Great work on the essay section. Focus on prepositions next time." // Mock feedback
+          feedback: "Great work on the essay section. Focus on prepositions next time." // Placeholder feedback
        };
     }).filter(Boolean);
+
+  // Count completed modules for this student
+  const completedModulesCount = progressData.filter(p => p.status === 'COMPLETED').length;
 
   const handleSaveGrade = (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,7 +308,7 @@ const StudentDetail: React.FC<{ student: User; onBack: () => void }> = ({ studen
                      </div>
                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                         <span className="text-sm text-gray-600">Online Modules Completed</span>
-                        <span className="font-bold text-gray-900">{MOCK_MODULE_PROGRESS.filter(p => p.studentId === student.id && p.status === 'COMPLETED').length}</span>
+                        <span className="font-bold text-gray-900">{completedModulesCount}</span>
                      </div>
                   </div>
                </Card>
@@ -325,8 +382,8 @@ const StudentDetail: React.FC<{ student: User; onBack: () => void }> = ({ studen
                            onChange={(e) => setSelectedSessionId(e.target.value)}
                         >
                            <option value="">-- Select Class Session --</option>
-                           {MOCK_SESSIONS.map(s => (
-                              <option key={s.id} value={s.id}>{s.topic} ({new Date(s.dateTime).toLocaleDateString()})</option>
+                           {sessionsData.map(s => (
+                              <option key={s.id} value={s.id}>{s.topic} ({new Date(s.date_time).toLocaleDateString()})</option>
                            ))}
                         </select>
                      </div>

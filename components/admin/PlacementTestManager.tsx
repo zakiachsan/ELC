@@ -1,59 +1,87 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import {
   BookOpen, Users, Plus, Pencil, Trash2, CheckCircle, Search, Mail, Smartphone, Calendar, Eye, X, MapPin, School, GraduationCap, FileText, User as UserIcon, Cake,
-  Phone, Clock, MessageCircle, XCircle, Award, Mic
+  Phone, Clock, MessageCircle, XCircle, Award, Mic, Loader2
 } from 'lucide-react';
-import { MOCK_PLACEMENT_QUESTIONS, MOCK_PLACEMENT_RESULTS } from '../../constants';
-import { PlacementQuestion, PlacementSubmission, CEFRLevel } from '../../types';
-
-// Oral Test Slot Type
-interface OralTestSlot {
-  id: string;
-  date: string;
-  day: string;
-  times: string[];
-}
-
-// Mock Slots
-const INITIAL_SLOTS: OralTestSlot[] = [
-  { id: 'slot-1', date: '2025-01-06', day: 'Senin', times: ['09:00', '10:00', '14:00', '15:00'] },
-  { id: 'slot-2', date: '2025-01-07', day: 'Selasa', times: ['09:00', '10:00', '11:00', '14:00'] },
-  { id: 'slot-3', date: '2025-01-08', day: 'Rabu', times: ['10:00', '11:00', '15:00', '16:00'] },
-];
+import { CEFRLevel } from '../../types';
+import { usePlacementSubmissions, usePlacementQuestions, useOralTestSlots } from '../../hooks/usePlacement';
 
 export const PlacementTestManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'leads' | 'oral' | 'questions'>('leads');
-  const [questions, setQuestions] = useState<PlacementQuestion[]>(MOCK_PLACEMENT_QUESTIONS);
-  const [results, setResults] = useState<PlacementSubmission[]>(MOCK_PLACEMENT_RESULTS);
   const [isAddingQ, setIsAddingQ] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedLead, setSelectedLead] = useState<PlacementSubmission | null>(null);
+  const [selectedLead, setSelectedLead] = useState<any | null>(null);
+
+  // Supabase Data Hooks
+  const {
+    submissions: results,
+    loading: resultsLoading,
+    deleteSubmission,
+    completeOralTest,
+    refetch: refetchSubmissions
+  } = usePlacementSubmissions();
+
+  const {
+    questions,
+    loading: questionsLoading,
+    createQuestion,
+    toggleActive,
+    deleteQuestion,
+    refetch: refetchQuestions
+  } = usePlacementQuestions();
+
+  const {
+    slots: rawSlots,
+    loading: slotsLoading,
+    createSlots,
+    deleteSlot,
+    refetch: refetchSlots
+  } = useOralTestSlots();
+
+  // Group slots by date for display (only show available/unbooked slots)
+  const slots = useMemo(() => {
+    const grouped: Record<string, { id: string; date: string; day: string; times: string[] }> = {};
+    // Filter only unbooked slots for available slots display
+    rawSlots.filter(slot => !slot.is_booked).forEach(slot => {
+      if (!grouped[slot.date]) {
+        const dayName = new Date(slot.date).toLocaleDateString('id-ID', { weekday: 'long' });
+        grouped[slot.date] = { id: slot.id, date: slot.date, day: dayName, times: [] };
+      }
+      grouped[slot.date].times.push(slot.time);
+    });
+    return Object.values(grouped).sort((a, b) => a.date.localeCompare(b.date));
+  }, [rawSlots]);
 
   // Oral Test State
-  const [slots, setSlots] = useState<OralTestSlot[]>(INITIAL_SLOTS);
   const [showSlotModal, setShowSlotModal] = useState(false);
-  const [editingSlot, setEditingSlot] = useState<OralTestSlot | null>(null);
+  const [editingSlot, setEditingSlot] = useState<any | null>(null);
   const [newSlotDate, setNewSlotDate] = useState('');
   const [newSlotTimes, setNewSlotTimes] = useState<string[]>([]);
 
   // Oral Score Modal
-  const [scoringLead, setScoringLead] = useState<PlacementSubmission | null>(null);
+  const [scoringLead, setScoringLead] = useState<any | null>(null);
   const [selectedOralScore, setSelectedOralScore] = useState<CEFRLevel | ''>('');
 
   const filteredResults = results.filter(r =>
-    r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.email.toLowerCase().includes(searchQuery.toLowerCase())
+    r.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Get oral test bookings (leads with booked status)
-  const oralBookings = results.filter(r => r.oralTestStatus === 'booked' || r.oralTestStatus === 'completed');
+  // Get oral test bookings (leads with booked status) - using snake_case from Supabase
+  const oralBookings = results.filter(r => r.oral_test_status === 'booked' || r.oral_test_status === 'completed');
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
+  // Format time without seconds (HH:MM:SS -> HH:MM)
+  const formatTime = (timeStr?: string) => {
+    if (!timeStr) return '-';
+    return timeStr.slice(0, 5);
   };
 
   const getDayName = (dateStr: string) => {
@@ -68,34 +96,44 @@ export const PlacementTestManager: React.FC = () => {
     setShowSlotModal(true);
   };
 
-  const handleEditSlot = (slot: OralTestSlot) => {
+  const handleEditSlot = (slot: any) => {
     setEditingSlot(slot);
     setNewSlotDate(slot.date);
     setNewSlotTimes([...slot.times]);
     setShowSlotModal(true);
   };
 
-  const handleDeleteSlot = (id: string) => {
+  const handleDeleteSlot = async (date: string) => {
     if (window.confirm('Hapus slot ini?')) {
-      setSlots(slots.filter(s => s.id !== id));
+      // Delete all slots for this date
+      const slotsToDelete = rawSlots.filter(s => s.date === date);
+      for (const slot of slotsToDelete) {
+        await deleteSlot(slot.id);
+      }
+      refetchSlots();
     }
   };
 
-  const handleSaveSlot = () => {
+  const handleSaveSlot = async () => {
     if (!newSlotDate || newSlotTimes.length === 0) {
       alert('Pilih tanggal dan minimal 1 waktu!');
       return;
     }
-    const newSlot: OralTestSlot = {
-      id: editingSlot?.id || `slot-${Date.now()}`,
+
+    // Create slots in Supabase
+    const slotsToCreate = newSlotTimes.map(time => ({
       date: newSlotDate,
-      day: getDayName(newSlotDate),
-      times: newSlotTimes.sort()
-    };
-    if (editingSlot) {
-      setSlots(slots.map(s => s.id === editingSlot.id ? newSlot : s));
-    } else {
-      setSlots([...slots, newSlot].sort((a, b) => a.date.localeCompare(b.date)));
+      time: time,
+      is_booked: false,
+    }));
+
+    try {
+      await createSlots(slotsToCreate);
+      refetchSlots();
+    } catch (err) {
+      console.error('Error creating slots:', err);
+      alert('Gagal menyimpan slot. Silakan coba lagi.');
+      return;
     }
     setShowSlotModal(false);
   };
@@ -108,33 +146,37 @@ export const PlacementTestManager: React.FC = () => {
     }
   };
 
-  const handleMarkOralDone = (lead: PlacementSubmission) => {
+  const handleMarkOralDone = (lead: any) => {
     setScoringLead(lead);
     setSelectedOralScore('');
   };
 
-  const handleSaveOralScore = () => {
+  const handleSaveOralScore = async () => {
     if (!scoringLead || !selectedOralScore) return;
-    setResults(results.map(r =>
-      r.id === scoringLead.id
-        ? { ...r, oralTestStatus: 'completed' as const, oralTestScore: selectedOralScore }
-        : r
-    ));
+    try {
+      await completeOralTest(scoringLead.id, selectedOralScore);
+      refetchSubmissions();
+    } catch (err) {
+      console.error('Error saving oral score:', err);
+      alert('Gagal menyimpan skor oral test.');
+      return;
+    }
     setScoringLead(null);
     setSelectedOralScore('');
   };
 
-  const handleWhatsAppReminder = (lead: PlacementSubmission) => {
+  const handleWhatsAppReminder = (lead: any) => {
+    const cefrResult = lead.cefr_result || '';
     const message = encodeURIComponent(
       `Halo ${lead.name}!\n\n` +
       `Reminder Oral Test:\n` +
-      `📅 ${formatDate(lead.oralTestDate)}\n` +
-      `⏰ ${lead.oralTestTime} WIB\n` +
-      `📊 Written CEFR: ${lead.cefrResult.split(' - ')[0]}\n\n` +
+      `📅 ${formatDate(lead.oral_test_date)}\n` +
+      `⏰ ${formatTime(lead.oral_test_time)} WIB\n` +
+      `📊 Written CEFR: ${cefrResult.split(' - ')[0]}\n\n` +
       `Tim ELC`
     );
-    const wa = lead.parentWa || lead.personalWa || lead.wa;
-    window.open(`https://wa.me/${wa.replace(/\D/g,'')}?text=${message}`, '_blank');
+    const wa = lead.parent_wa || lead.personal_wa || lead.wa;
+    window.open(`https://wa.me/${wa?.replace(/\D/g,'') || ''}?text=${message}`, '_blank');
   };
 
   const getOralStatusBadge = (status?: string) => {
@@ -218,15 +260,15 @@ export const PlacementTestManager: React.FC = () => {
                              <div className="inline-flex items-center gap-2 bg-teal-50 px-2 py-1 rounded-lg border border-teal-100">
                                 <span className="font-black text-xs text-teal-700">{res.score}%</span>
                                 <span className="text-teal-300">|</span>
-                                <span className="text-[9px] font-bold text-teal-600">{res.cefrResult.split(' - ')[0]}</span>
+                                <span className="text-[9px] font-bold text-teal-600">{(res.cefr_result || '').split(' - ')[0]}</span>
                              </div>
                           </td>
                           <td className="px-3 py-2">
-                             {res.oralTestScore ? (
+                             {res.oral_test_score ? (
                                 <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded-lg text-[9px] font-bold border border-green-100">
-                                   {res.oralTestScore.split(' - ')[0]}
+                                   {res.oral_test_score.split(' - ')[0]}
                                 </span>
-                             ) : res.oralTestStatus === 'booked' ? (
+                             ) : res.oral_test_status === 'booked' ? (
                                 <span className="inline-flex items-center gap-1 bg-yellow-50 text-yellow-700 px-2 py-1 rounded-lg text-[9px] font-bold border border-yellow-100">Booked</span>
                              ) : (
                                 <span className="text-[10px] text-gray-400">—</span>
@@ -242,9 +284,11 @@ export const PlacementTestManager: React.FC = () => {
                           </td>
                        </tr>
                     ))}
-                    {filteredResults.length === 0 && (
+                    {resultsLoading ? (
+                       <tr><td colSpan={5} className="px-3 py-8 text-center"><Loader2 className="w-5 h-5 animate-spin text-teal-600 mx-auto" /></td></tr>
+                    ) : filteredResults.length === 0 ? (
                        <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400 italic text-xs">No leads found.</td></tr>
-                    )}
+                    ) : null}
                  </tbody>
               </table>
            </Card>
@@ -258,15 +302,15 @@ export const PlacementTestManager: React.FC = () => {
           <div className="grid grid-cols-4 gap-3">
             <Card className="!p-3 bg-gradient-to-br from-yellow-50 to-orange-50 border-yellow-100">
               <p className="text-[9px] font-bold text-yellow-600 uppercase">Booked</p>
-              <p className="text-xl font-bold text-yellow-900">{results.filter(r => r.oralTestStatus === 'booked').length}</p>
+              <p className="text-xl font-bold text-yellow-900">{results.filter(r => r.oral_test_status === 'booked').length}</p>
             </Card>
             <Card className="!p-3 bg-gradient-to-br from-green-50 to-emerald-50 border-green-100">
               <p className="text-[9px] font-bold text-green-600 uppercase">Done</p>
-              <p className="text-xl font-bold text-green-900">{results.filter(r => r.oralTestStatus === 'completed').length}</p>
+              <p className="text-xl font-bold text-green-900">{results.filter(r => r.oral_test_status === 'completed').length}</p>
             </Card>
             <Card className="!p-3 bg-gradient-to-br from-gray-50 to-slate-50 border-gray-100">
               <p className="text-[9px] font-bold text-gray-600 uppercase">No Booking</p>
-              <p className="text-xl font-bold text-gray-900">{results.filter(r => !r.oralTestStatus || r.oralTestStatus === 'none').length}</p>
+              <p className="text-xl font-bold text-gray-900">{results.filter(r => !r.oral_test_status || r.oral_test_status === 'none').length}</p>
             </Card>
             <Card className="!p-3 bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-100">
               <p className="text-[9px] font-bold text-purple-600 uppercase">Slots</p>
@@ -311,26 +355,26 @@ export const PlacementTestManager: React.FC = () => {
                     </td>
                     <td className="px-4 py-2">
                       <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[9px] font-bold border border-blue-100">
-                        {lead.cefrResult.split(' - ')[0]}
+                        {(lead.cefr_result || '').split(' - ')[0]}
                       </span>
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-1 text-xs text-gray-700">
                         <Calendar className="w-3 h-3 text-gray-400" />
-                        {formatDate(lead.oralTestDate)}
+                        {formatDate(lead.oral_test_date)}
                       </div>
                       <div className="flex items-center gap-1 text-[10px] text-gray-500">
                         <Clock className="w-2.5 h-2.5 text-gray-400" />
-                        {lead.oralTestTime} WIB
+                        {formatTime(lead.oral_test_time)} WIB
                       </div>
                     </td>
                     <td className="px-4 py-2">
-                      {getOralStatusBadge(lead.oralTestStatus)}
+                      {getOralStatusBadge(lead.oral_test_status)}
                     </td>
                     <td className="px-4 py-2">
-                      {lead.oralTestScore ? (
+                      {lead.oral_test_score ? (
                         <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded text-[9px] font-bold border border-green-100">
-                          {lead.oralTestScore.split(' - ')[0]}
+                          {lead.oral_test_score.split(' - ')[0]}
                         </span>
                       ) : (
                         <span className="text-[9px] text-gray-400 italic">Not scored</span>
@@ -338,7 +382,7 @@ export const PlacementTestManager: React.FC = () => {
                     </td>
                     <td className="px-4 py-2 text-right">
                       <div className="flex items-center justify-end gap-0.5">
-                        {lead.oralTestStatus === 'booked' && (
+                        {lead.oral_test_status === 'booked' && (
                           <button
                             onClick={() => handleMarkOralDone(lead)}
                             className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-all"
@@ -347,7 +391,7 @@ export const PlacementTestManager: React.FC = () => {
                             <Award className="w-3.5 h-3.5" />
                           </button>
                         )}
-                        {lead.oralTestStatus === 'completed' && !lead.oralTestScore && (
+                        {lead.oral_test_status === 'completed' && !lead.oral_test_score && (
                           <button
                             onClick={() => handleMarkOralDone(lead)}
                             className="p-1.5 text-orange-600 hover:bg-orange-50 rounded transition-all"
@@ -397,12 +441,12 @@ export const PlacementTestManager: React.FC = () => {
                     </div>
                     <div className="flex gap-0.5">
                       <button onClick={() => handleEditSlot(slot)} className="p-1 text-gray-400 hover:text-blue-600 rounded"><Pencil className="w-3 h-3" /></button>
-                      <button onClick={() => handleDeleteSlot(slot.id)} className="p-1 text-gray-400 hover:text-red-600 rounded"><Trash2 className="w-3 h-3" /></button>
+                      <button onClick={() => handleDeleteSlot(slot.date)} className="p-1 text-gray-400 hover:text-red-600 rounded"><Trash2 className="w-3 h-3" /></button>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {slot.times.map(time => (
-                      <span key={time} className="px-2 py-1 bg-teal-50 text-teal-700 text-[10px] font-medium rounded">{time}</span>
+                      <span key={time} className="px-2 py-1 bg-teal-50 text-teal-700 text-[10px] font-medium rounded">{formatTime(time)}</span>
                     ))}
                   </div>
                 </Card>
@@ -456,7 +500,7 @@ export const PlacementTestManager: React.FC = () => {
                        </div>
                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pl-7">
                           {q.options.map((opt, oIdx) => (
-                             <div key={oIdx} className={`px-2.5 py-1.5 rounded-lg text-[10px] font-medium border ${oIdx === q.correctAnswerIndex ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-gray-100 text-gray-500'}`}>
+                             <div key={oIdx} className={`px-2.5 py-1.5 rounded-lg text-[10px] font-medium border ${oIdx === q.correct_answer_index ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-gray-100 text-gray-500'}`}>
                                 {String.fromCharCode(65+oIdx)}. {opt}
                              </div>
                           ))}
@@ -498,21 +542,21 @@ export const PlacementTestManager: React.FC = () => {
                      <div className="p-2.5 bg-teal-50 rounded-xl border border-teal-100 text-center">
                         <p className="text-[8px] font-black text-teal-600 uppercase tracking-widest flex items-center justify-center gap-1"><FileText className="w-3 h-3" /> Written Test</p>
                         <p className="text-lg font-black text-teal-900">{selectedLead.score}%</p>
-                        <p className="text-[10px] font-bold text-teal-700">{selectedLead.cefrResult.split(' - ')[0]}</p>
+                        <p className="text-[10px] font-bold text-teal-700">{(selectedLead.cefr_result || '').split(' - ')[0]}</p>
                      </div>
-                     <div className={`p-2.5 rounded-xl border text-center ${selectedLead.oralTestScore ? 'bg-green-50 border-green-100' : 'bg-gray-50 border-gray-100'}`}>
-                        <p className={`text-[8px] font-black uppercase tracking-widest flex items-center justify-center gap-1 ${selectedLead.oralTestScore ? 'text-green-600' : 'text-gray-400'}`}>
+                     <div className={`p-2.5 rounded-xl border text-center ${selectedLead.oral_test_score ? 'bg-green-50 border-green-100' : 'bg-gray-50 border-gray-100'}`}>
+                        <p className={`text-[8px] font-black uppercase tracking-widest flex items-center justify-center gap-1 ${selectedLead.oral_test_score ? 'text-green-600' : 'text-gray-400'}`}>
                           <Mic className="w-3 h-3" /> Oral Test
                         </p>
-                        {selectedLead.oralTestScore ? (
+                        {selectedLead.oral_test_score ? (
                           <>
-                            <p className="text-lg font-black text-green-900">{selectedLead.oralTestScore.split(' - ')[0]}</p>
-                            <p className="text-[10px] font-bold text-green-700">{selectedLead.oralTestScore.split(' - ')[1]}</p>
+                            <p className="text-lg font-black text-green-900">{selectedLead.oral_test_score.split(' - ')[0]}</p>
+                            <p className="text-[10px] font-bold text-green-700">{selectedLead.oral_test_score.split(' - ')[1]}</p>
                           </>
-                        ) : selectedLead.oralTestStatus === 'booked' ? (
+                        ) : selectedLead.oral_test_status === 'booked' ? (
                           <>
                             <p className="text-sm font-bold text-yellow-600">Booked</p>
-                            <p className="text-[9px] text-gray-500">{formatDate(selectedLead.oralTestDate)} {selectedLead.oralTestTime}</p>
+                            <p className="text-[9px] text-gray-500">{formatDate(selectedLead.oral_test_date)} {formatTime(selectedLead.oral_test_time)}</p>
                           </>
                         ) : (
                           <p className="text-sm font-bold text-gray-400">Not Taken</p>
@@ -535,7 +579,7 @@ export const PlacementTestManager: React.FC = () => {
                            <Smartphone className="w-3.5 h-3.5 text-green-500 shrink-0" />
                            <div className="min-w-0">
                               <p className="text-[8px] text-gray-400 uppercase font-bold">WhatsApp</p>
-                              <p className="text-[10px] font-bold text-gray-800">{selectedLead.personalWa || selectedLead.wa}</p>
+                              <p className="text-[10px] font-bold text-gray-800">{selectedLead.personal_wa || selectedLead.wa}</p>
                            </div>
                         </div>
                         <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
@@ -557,7 +601,7 @@ export const PlacementTestManager: React.FC = () => {
                         <School className="w-3.5 h-3.5 text-teal-500 shrink-0" />
                         <div className="min-w-0 flex-1">
                            <p className="text-[8px] text-gray-400 uppercase font-bold">Asal Sekolah</p>
-                           <p className="text-[10px] font-bold text-gray-800">{selectedLead.schoolOrigin || '-'}</p>
+                           <p className="text-[10px] font-bold text-gray-800">{selectedLead.school_origin || '-'}</p>
                         </div>
                      </div>
                   </div>
@@ -570,14 +614,14 @@ export const PlacementTestManager: React.FC = () => {
                            <UserIcon className="w-3.5 h-3.5 text-orange-500 shrink-0" />
                            <div className="min-w-0">
                               <p className="text-[8px] text-orange-500 uppercase font-bold">Nama Ortu</p>
-                              <p className="text-[10px] font-bold text-gray-800">{selectedLead.parentName || '-'}</p>
+                              <p className="text-[10px] font-bold text-gray-800">{selectedLead.parent_name || '-'}</p>
                            </div>
                         </div>
                         <div className="flex items-center gap-2 p-2 bg-orange-50 rounded-lg border border-orange-100">
                            <Smartphone className="w-3.5 h-3.5 text-orange-500 shrink-0" />
                            <div className="min-w-0">
                               <p className="text-[8px] text-orange-500 uppercase font-bold">WA Ortu</p>
-                              <p className="text-[10px] font-bold text-gray-800">{selectedLead.parentWa || '-'}</p>
+                              <p className="text-[10px] font-bold text-gray-800">{selectedLead.parent_wa || '-'}</p>
                            </div>
                         </div>
                      </div>
@@ -587,9 +631,10 @@ export const PlacementTestManager: React.FC = () => {
                   <div className="pt-2 border-t border-gray-100 flex flex-col gap-2">
                      <Button
                         onClick={() => {
-                           const wa = selectedLead.parentWa || selectedLead.personalWa || selectedLead.wa;
-                           const msg = `Halo, kami dari ELC ingin mendiskusikan hasil CEFR Test ${selectedLead.name}.\n\nWritten: ${selectedLead.cefrResult}${selectedLead.oralTestScore ? `\nOral: ${selectedLead.oralTestScore}` : ''}`;
-                           window.open(`https://wa.me/${wa.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`, '_blank');
+                           const wa = selectedLead.parent_wa || selectedLead.personal_wa || selectedLead.wa;
+                           const cefrResult = selectedLead.cefr_result || '';
+                           const msg = `Halo, kami dari ELC ingin mendiskusikan hasil CEFR Test ${selectedLead.name}.\n\nWritten: ${cefrResult}${selectedLead.oral_test_score ? `\nOral: ${selectedLead.oral_test_score}` : ''}`;
+                           window.open(`https://wa.me/${wa?.replace(/\D/g,'') || ''}?text=${encodeURIComponent(msg)}`, '_blank');
                         }}
                         className="bg-green-600 hover:bg-green-700 text-white h-9 rounded-lg flex items-center justify-center gap-2 font-black uppercase text-[10px]"
                      >
@@ -619,7 +664,7 @@ export const PlacementTestManager: React.FC = () => {
 
             <div className="p-3 bg-gray-50 rounded-xl">
               <p className="text-xs font-bold text-gray-900">{scoringLead.name}</p>
-              <p className="text-[10px] text-gray-500">Written: {scoringLead.cefrResult.split(' - ')[0]} ({scoringLead.score}%)</p>
+              <p className="text-[10px] text-gray-500">Written: {(scoringLead.cefr_result || '').split(' - ')[0]} ({scoringLead.score}%)</p>
             </div>
 
             <div className="space-y-2">

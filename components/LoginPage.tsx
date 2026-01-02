@@ -3,8 +3,9 @@ import React, { useState } from 'react';
 import { Button } from './Button';
 import { UserRole } from '../types';
 import { MOCK_USERS } from '../constants';
-import { GraduationCap, Users, ArrowLeft, Lock, Mail, AlertCircle } from 'lucide-react';
+import { GraduationCap, Users, ArrowLeft, Lock, Mail, AlertCircle, BookOpen } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface LoginPageProps {
   onLogin: (role: UserRole, email?: string) => void;
@@ -13,32 +14,59 @@ interface LoginPageProps {
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
   const { t } = useLanguage();
-  const [activeTab, setActiveTab] = useState<'student' | 'parent'>('student');
+  const { signIn, isConfigured } = useAuth();
+  const [activeTab, setActiveTab] = useState<'student' | 'parent' | 'teacher'>('student');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
   // Pre-fill for demo purposes
-  const handleTabChange = (tab: 'student' | 'parent') => {
+  const handleTabChange = (tab: 'student' | 'parent' | 'teacher') => {
     setActiveTab(tab);
     setError('');
     if (tab === 'student') {
       setEmail('sarah@student.com');
       setPassword('password123');
-    } else {
+    } else if (tab === 'parent') {
       setEmail('kyle@parent.com');
       setPassword('password123');
+    } else {
+      // Teacher - clear for real authentication
+      setEmail('');
+      setPassword('');
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
+    // Teacher login uses real Supabase authentication
+    if (activeTab === 'teacher') {
+      if (!isConfigured) {
+        setError('Supabase not configured. Please set up environment variables.');
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const { error: signInError } = await signIn(email, password);
+        if (signInError) {
+          setError(signInError.message || 'Invalid email or password.');
+        }
+        // On success, AuthContext will handle navigation automatically
+      } catch (err) {
+        setError('An error occurred during sign in.');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // Student/Parent mock login
     setTimeout(() => {
-      // Simple mock validation
       const roleToFind = activeTab === 'student' ? UserRole.STUDENT : UserRole.PARENT;
       const user = MOCK_USERS.find(u => u.email === email && u.role === roleToFind);
 
@@ -79,10 +107,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-gray-100">
           
           {/* Role Tabs */}
-          <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="grid grid-cols-3 gap-3 mb-8">
             <button
               onClick={() => handleTabChange('student')}
-              className={`flex items-center justify-center gap-2 px-4 py-3 border rounded-lg text-sm font-medium transition-all ${
+              className={`flex items-center justify-center gap-2 px-3 py-3 border rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'student'
                   ? 'border-teal-500 bg-teal-50 text-teal-700 ring-1 ring-teal-500'
                   : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
@@ -93,7 +121,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
             </button>
             <button
               onClick={() => handleTabChange('parent')}
-              className={`flex items-center justify-center gap-2 px-4 py-3 border rounded-lg text-sm font-medium transition-all ${
+              className={`flex items-center justify-center gap-2 px-3 py-3 border rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'parent'
                   ? 'border-teal-500 bg-teal-50 text-teal-700 ring-1 ring-teal-500'
                   : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
@@ -101,6 +129,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
             >
               <Users className={`w-5 h-5 ${activeTab === 'parent' ? 'text-teal-600' : 'text-gray-400'}`} />
               Parent
+            </button>
+            <button
+              onClick={() => handleTabChange('teacher')}
+              className={`flex items-center justify-center gap-2 px-3 py-3 border rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'teacher'
+                  ? 'border-teal-500 bg-teal-50 text-teal-700 ring-1 ring-teal-500'
+                  : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              <BookOpen className={`w-5 h-5 ${activeTab === 'teacher' ? 'text-teal-600' : 'text-gray-400'}`} />
+              Teacher
             </button>
           </div>
 
@@ -168,7 +207,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
                 isLoading={isLoading}
                 className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
               >
-                Sign in as {activeTab === 'student' ? 'Student' : 'Parent'}
+                Sign in as {activeTab === 'student' ? 'Student' : activeTab === 'parent' ? 'Parent' : 'Teacher'}
               </Button>
             </div>
           </form>

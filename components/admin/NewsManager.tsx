@@ -1,55 +1,152 @@
-
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { 
-  Newspaper, Plus, Pencil, Trash2, Image as ImageIcon, 
-  Bold, Italic, Underline, Link, Type, Palette, 
-  ChevronLeft, Save, Eye, Upload, List, Video, MonitorPlay
+import { Toast, ToastType } from '../Toast';
+import {
+  Newspaper, Plus, Pencil, Trash2, Image as ImageIcon,
+  Bold, Italic, Underline, Link, Type, Palette,
+  ChevronLeft, Save, Eye, Upload, List, Video, MonitorPlay, Loader2
 } from 'lucide-react';
-import { MOCK_NEWS } from '../../constants';
+import { useNews } from '../../hooks/useContent';
 import { News } from '../../types';
+import { slugify } from '../../lib/utils';
 
 export const NewsManager: React.FC = () => {
-  const [newsList, setNewsList] = useState<News[]>(MOCK_NEWS);
-  const [view, setView] = useState<'list' | 'editor'>('list');
-  const [editingNews, setEditingNews] = useState<Partial<News> | null>(null);
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const action = searchParams.get('action'); // 'new' or 'edit'
+  const editSlug = searchParams.get('slug');
+
+  const { news: newsList, loading, error, createNews, updateNews, deleteNews: deleteNewsItem, refetch } = useNews();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+
+  // Determine if we're in editor view based on URL params
+  const isEditorView = action === 'new' || action === 'edit';
+
+  // Find article to edit based on slug
+  const editingNews = action === 'edit' && editSlug
+    ? newsList.find(n => slugify(n.title) === editSlug)
+    : action === 'new'
+    ? {
+        id: '',
+        title: '',
+        summary: '',
+        content: '',
+        featured_image: '',
+        video_url: '',
+        display_media: 'image' as const,
+        published_date: new Date().toISOString().split('T')[0],
+      }
+    : null;
 
   const handleCreate = () => {
-    setEditingNews({
-      title: '',
-      summary: '',
-      content: '',
-      featuredImage: '',
-      videoUrl: '',
-      displayMedia: 'image',
-      publishedDate: new Date().toISOString()
-    });
-    setView('editor');
+    navigate('/admin/news?action=new');
   };
 
-  const handleEdit = (news: News) => {
-    setEditingNews(news);
-    setView('editor');
+  const handleEdit = (news: any) => {
+    const slug = slugify(news.title);
+    navigate(`/admin/news?action=edit&slug=${slug}`);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Delete this article?')) {
-      setNewsList(newsList.filter(n => n.id !== id));
+      try {
+        await deleteNewsItem(id);
+        setToast({ message: 'Article deleted successfully!', type: 'success' });
+      } catch (err) {
+        console.error('Error deleting news:', err);
+        setToast({ message: 'Failed to delete article.', type: 'error' });
+      }
     }
   };
 
-  const handleSave = (news: News) => {
-    if (newsList.find(n => n.id === news.id)) {
-      setNewsList(newsList.map(n => n.id === news.id ? news : n));
-    } else {
-      setNewsList([news, ...newsList]);
+  const handleSave = async (news: News) => {
+    setIsSubmitting(true);
+    try {
+      const newsData = {
+        title: news.title,
+        content: news.content,
+        summary: news.summary || null,
+        featured_image: news.featuredImage,
+        video_url: news.videoUrl || null,
+        display_media: news.displayMedia,
+        published_date: news.publishedDate.split('T')[0],
+      };
+
+      // Check if it's an existing article
+      const existingArticle = newsList.find(n => n.id === news.id);
+
+      if (existingArticle) {
+        const result = await updateNews(news.id, newsData);
+        if (!result) {
+          console.warn('Update returned no rows, creating new article');
+          await createNews(newsData);
+        }
+      } else {
+        await createNews(newsData);
+      }
+
+      setToast({ message: 'Article saved successfully!', type: 'success' });
+      await refetch();
+
+      // Delay navigation to show toast
+      setTimeout(() => {
+        navigate('/admin/news');
+      }, 1000);
+    } catch (err) {
+      console.error('Error saving news:', err);
+      setToast({ message: 'Failed to save article: ' + (err as Error).message, type: 'error' });
+    } finally {
+      setIsSubmitting(false);
     }
-    setView('list');
   };
+
+  const handleCancel = () => {
+    navigate('/admin/news');
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading news...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+        Error loading news: {error.message}
+      </div>
+    );
+  }
+
+  // Map database format to component format
+  const mappedNewsList: News[] = newsList.map(n => ({
+    id: n.id,
+    title: n.title,
+    slug: n.slug || slugify(n.title),
+    featuredImage: n.featured_image,
+    videoUrl: n.video_url || '',
+    displayMedia: n.display_media as 'image' | 'video',
+    content: n.content,
+    publishedDate: n.published_date,
+    summary: n.summary || '',
+  }));
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -57,14 +154,14 @@ export const NewsManager: React.FC = () => {
           </h2>
           <p className="text-gray-500">Create and manage your articles.</p>
         </div>
-        {view === 'list' && (
+        {!isEditorView && (
           <Button onClick={handleCreate}>
             Create New Article
           </Button>
         )}
       </div>
 
-      {view === 'list' ? (
+      {!isEditorView ? (
         <Card className="p-0 overflow-hidden">
           <table className="w-full text-left">
             <thead className="bg-gray-50 border-b border-gray-200 text-[10px] font-black text-gray-400 uppercase tracking-widest">
@@ -76,7 +173,7 @@ export const NewsManager: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {newsList.map(news => (
+              {mappedNewsList.map(news => (
                 <tr key={news.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-4">
@@ -105,18 +202,37 @@ export const NewsManager: React.FC = () => {
             </tbody>
           </table>
         </Card>
-      ) : (
-        <NewsEditor 
-           news={editingNews as News} 
-           onSave={handleSave} 
-           onCancel={() => setView('list')} 
+      ) : editingNews ? (
+        <NewsEditor
+           news={{
+             id: (editingNews as any).id || 'n' + Date.now(),
+             title: (editingNews as any).title || '',
+             summary: (editingNews as any).summary || '',
+             content: (editingNews as any).content || '',
+             featuredImage: (editingNews as any).featured_image || '',
+             videoUrl: (editingNews as any).video_url || '',
+             displayMedia: ((editingNews as any).display_media || 'image') as 'image' | 'video',
+             publishedDate: (editingNews as any).published_date || new Date().toISOString().split('T')[0],
+           }}
+           onSave={handleSave}
+           onCancel={handleCancel}
+           isSubmitting={isSubmitting}
         />
+      ) : (
+        <div className="text-center py-8 text-gray-500">
+          Article not found. <button onClick={handleCancel} className="text-blue-600 underline">Go back</button>
+        </div>
       )}
     </div>
   );
 };
 
-const NewsEditor: React.FC<{ news: News, onSave: (n: News) => void, onCancel: () => void }> = ({ news, onSave, onCancel }) => {
+const NewsEditor: React.FC<{
+  news: News,
+  onSave: (n: News) => void,
+  onCancel: () => void,
+  isSubmitting?: boolean
+}> = ({ news, onSave, onCancel, isSubmitting }) => {
   const [formData, setFormData] = useState<News>({
     ...news,
     id: news.id || 'n' + Date.now()
@@ -194,29 +310,25 @@ const NewsEditor: React.FC<{ news: News, onSave: (n: News) => void, onCancel: ()
   };
 
   return (
-    <form onSubmit={submit} className="space-y-6 pb-20">
-       <div className="flex gap-3">
-          <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-          <Button type="submit">Save Article</Button>
-       </div>
-
+    <form onSubmit={submit} className="space-y-6 pb-24">
        <div className="space-y-6">
           <Card title="Core Information">
              <div className="space-y-4">
                 <div className="space-y-1">
                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Article Title</label>
-                   <input 
+                   <input
                       required
-                      type="text" 
+                      type="text"
                       className="w-full border-b-2 border-gray-100 focus:border-blue-500 outline-none text-2xl font-black py-2 bg-transparent"
                       placeholder="Title of your story..."
                       value={formData.title}
                       onChange={e => setFormData({...formData, title: e.target.value})}
                    />
+                   <p className="text-[9px] text-gray-400 mt-1">URL: /news/{slugify(formData.title) || 'your-article-title'}</p>
                 </div>
                 <div className="space-y-1">
                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Short Summary (Preview)</label>
-                   <textarea 
+                   <textarea
                       required
                       className="w-full border rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50/50"
                       rows={2}
@@ -234,14 +346,14 @@ const NewsEditor: React.FC<{ news: News, onSave: (n: News) => void, onCancel: ()
                    <div className="space-y-1">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Display Preference</label>
                       <div className="grid grid-cols-2 gap-2 mt-2">
-                         <button 
+                         <button
                            type="button"
                            onClick={() => setFormData({...formData, displayMedia: 'image'})}
                            className={`flex items-center justify-center gap-2 p-3 border rounded-xl text-sm font-bold transition-all ${formData.displayMedia === 'image' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-white border-gray-200 text-gray-400'}`}
                          >
                             <ImageIcon className="w-4 h-4" /> Show Image
                          </button>
-                         <button 
+                         <button
                            type="button"
                            onClick={() => setFormData({...formData, displayMedia: 'video'})}
                            className={`flex items-center justify-center gap-2 p-3 border rounded-xl text-sm font-bold transition-all ${formData.displayMedia === 'video' ? 'bg-purple-50 border-purple-500 text-purple-700' : 'bg-white border-gray-200 text-gray-400'}`}
@@ -250,10 +362,10 @@ const NewsEditor: React.FC<{ news: News, onSave: (n: News) => void, onCancel: ()
                          </button>
                       </div>
                    </div>
-                   
+
                    <div className="space-y-1">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Featured Image (Required)</label>
-                      <div 
+                      <div
                          onClick={() => fileInputRef.current?.click()}
                          className="mt-2 border-2 border-dashed border-gray-200 rounded-2xl aspect-video flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors relative overflow-hidden"
                       >
@@ -265,11 +377,11 @@ const NewsEditor: React.FC<{ news: News, onSave: (n: News) => void, onCancel: ()
                                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Upload Cover</span>
                             </>
                          )}
-                         <input 
+                         <input
                             ref={fileInputRef}
-                            type="file" 
+                            type="file"
                             accept="image/*"
-                            className="hidden" 
+                            className="hidden"
                             onChange={handleFeaturedImageUpload}
                          />
                       </div>
@@ -281,8 +393,8 @@ const NewsEditor: React.FC<{ news: News, onSave: (n: News) => void, onCancel: ()
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">YouTube Video URL</label>
                       <div className="relative mt-2">
                          <MonitorPlay className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                         <input 
-                           type="url" 
+                         <input
+                           type="url"
                            className="w-full border rounded-xl pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
                            placeholder="https://www.youtube.com/embed/..."
                            value={formData.videoUrl}
@@ -294,9 +406,9 @@ const NewsEditor: React.FC<{ news: News, onSave: (n: News) => void, onCancel: ()
 
                    <div className="space-y-1">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Published Date</label>
-                      <input 
-                         type="date" 
-                         className="w-full border rounded-xl px-4 py-3 text-sm mt-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                      <input
+                         type="date"
+                         className="w-full border rounded-xl px-4 py-3 text-sm mt-2 focus:ring-2 focus:ring-blue-500 outline-none"
                          value={formData.publishedDate.split('T')[0]}
                          onChange={e => setFormData({...formData, publishedDate: e.target.value})}
                       />
@@ -333,7 +445,7 @@ const NewsEditor: React.FC<{ news: News, onSave: (n: News) => void, onCancel: ()
 
              <div className="flex-1 p-8 space-y-6">
                 <h1 className="text-4xl font-black text-gray-900 border-b pb-4 border-gray-100">{formData.title || 'Article Preview'}</h1>
-                
+
                 {formData.displayMedia === 'video' && formData.videoUrl ? (
                    <div className="rounded-3xl overflow-hidden shadow-xl aspect-video bg-black">
                       <iframe className="w-full h-full" src={formData.videoUrl} title="Video Preview" allowFullScreen></iframe>
@@ -346,15 +458,38 @@ const NewsEditor: React.FC<{ news: News, onSave: (n: News) => void, onCancel: ()
                    )
                 )}
 
-                <div 
+                <div
                    ref={editorRef}
-                   contentEditable 
+                   contentEditable
                    onInput={updateContent}
                    className="min-h-[400px] outline-none prose prose-blue max-w-none focus:prose-p:text-gray-900"
                    placeholder="Start writing your story..."
                 />
              </div>
           </Card>
+       </div>
+
+       {/* Fixed Bottom Action Bar */}
+       <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg px-4 py-3 md:left-52">
+          <div className="max-w-5xl mx-auto flex items-center justify-between">
+             <div className="flex items-center gap-2">
+                <Newspaper className="w-4 h-4 text-blue-600" />
+                <span className="text-xs font-bold text-gray-600 truncate max-w-[200px]">{formData.title || 'New Article'}</span>
+             </div>
+             <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={onCancel} className="text-xs py-2 px-4">Cancel</Button>
+                <Button type="submit" className="text-xs py-2 px-4" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Article'
+                  )}
+                </Button>
+             </div>
+          </div>
        </div>
     </form>
   );

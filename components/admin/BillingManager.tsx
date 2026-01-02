@@ -2,24 +2,41 @@
 import React, { useState } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { CreditCard, Search, Filter, Download, CheckCircle, Clock, Smartphone, User, Calendar, Trash2, X, MessageCircle, Send } from 'lucide-react';
-import { MOCK_TUITION_INVOICES } from '../../constants';
+import { CreditCard, Search, Filter, Download, CheckCircle, Clock, Smartphone, User, Calendar, Trash2, X, MessageCircle, Send, Loader2 } from 'lucide-react';
+import { useInvoices } from '../../hooks/useBilling';
 import { TuitionInvoice } from '../../types';
 
 export const BillingManager: React.FC = () => {
-  const [invoices, setInvoices] = useState<TuitionInvoice[]>(MOCK_TUITION_INVOICES);
+  const { invoices: invoicesData, loading, error, markAsPaid: markInvoicePaid, recordReminder } = useInvoices();
   const [monthFilter, setMonthFilter] = useState('November 2024');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PAID' | 'UNPAID'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // WhatsApp Reminder State
   const [isReminderOpen, setIsReminderOpen] = useState(false);
   const [reminderTarget, setReminderTarget] = useState<TuitionInvoice | null>(null);
   const [reminderMessage, setReminderMessage] = useState('');
 
-  const handleMarkAsPaid = (id: string) => {
+  // Map database format to component format
+  const invoices: TuitionInvoice[] = invoicesData.map(inv => ({
+    id: inv.id,
+    studentId: inv.student_id,
+    studentName: inv.student_name || 'Unknown',
+    month: inv.month,
+    amount: inv.amount,
+    dueDate: inv.due_date,
+    status: inv.status as 'PAID' | 'UNPAID',
+    remindedAt: inv.reminded_at || undefined,
+  }));
+
+  const handleMarkAsPaid = async (id: string) => {
     if (window.confirm("Apakah Anda yakin ingin menandai tagihan ini sebagai LUNAS? Tindakan ini akan secara manual mengubah status transaksi dan dianggap pembayaran telah diterima via Midtrans/Transfer.")) {
-      setInvoices(invoices.map(inv => inv.id === id ? { ...inv, status: 'PAID' } : inv));
+      try {
+        await markInvoicePaid(id);
+      } catch (err) {
+        console.error('Error marking as paid:', err);
+        alert('Failed to update invoice status.');
+      }
     }
   };
 
@@ -31,20 +48,41 @@ export const BillingManager: React.FC = () => {
     setIsReminderOpen(true);
   };
 
-  const handleSendReminder = () => {
+  const handleSendReminder = async () => {
     if (!reminderTarget) return;
-    
-    // Simulate updating reminder timestamp
-    const id = reminderTarget.id;
-    setInvoices(invoices.map(inv => inv.id === id ? { ...inv, remindedAt: new Date().toISOString() } : inv));
-    
-    // Actually open WA (simulation)
-    const phoneNumber = "08123456789"; // In production, fetch linked parent's WA from User records
-    window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(reminderMessage)}`, '_blank');
-    
-    setIsReminderOpen(false);
-    setReminderTarget(null);
+
+    try {
+      // Record reminder timestamp in database
+      await recordReminder(reminderTarget.id);
+
+      // Actually open WA (simulation)
+      const phoneNumber = "08123456789"; // In production, fetch linked parent's WA from User records
+      window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(reminderMessage)}`, '_blank');
+
+      setIsReminderOpen(false);
+      setReminderTarget(null);
+    } catch (err) {
+      console.error('Error recording reminder:', err);
+      alert('Failed to record reminder.');
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading invoices...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+        Error loading invoices: {error.message}
+      </div>
+    );
+  }
 
   const filteredInvoices = invoices.filter(inv => {
     const matchesMonth = inv.month === monthFilter;

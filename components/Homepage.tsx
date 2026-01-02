@@ -1,16 +1,21 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from './Button';
 import {
   CheckCircle, Zap, Users, Trophy, Star, Globe,
-  Calendar, Award, ShieldCheck, Lock, Smartphone, Mail, X, ChevronRight, Brain, AlertCircle, Clock, Sparkles, XCircle, ArrowLeft, Newspaper, Medal, MonitorPlay, Video, Briefcase, Flag, UserPlus, FileText, Send, DollarSign, TrendingUp, Play, Target, Timer, Crown, Gamepad2, MapPin, GraduationCap, BadgeCheck, Quote
+  Calendar, Award, ShieldCheck, Lock, Smartphone, Mail, X, ChevronRight, Brain, AlertCircle, Clock, Sparkles, XCircle, ArrowLeft, Newspaper, Medal, MonitorPlay, Video, Briefcase, Flag, UserPlus, FileText, Send, DollarSign, TrendingUp, Play, Target, Timer, Crown, Gamepad2, MapPin, GraduationCap, BadgeCheck, Quote, Loader2, BookOpen
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { LoginModal } from './LoginModal';
 import { Card } from './Card';
 import { UserRole, Olympiad, OlympiadStatus, CEFRLevel, News } from '../types';
-import { MOCK_OLYMPIADS, MOCK_PLACEMENT_QUESTIONS, MOCK_NEWS, MOCK_STUDENTS_OF_THE_MONTH, MOCK_FEATURED_TEACHERS } from '../constants';
+import { useOlympiads, useKahootQuizzes } from '../hooks/useOlympiads';
+import { usePlacementQuestions, usePlacementSubmissions, useOralTestSlots } from '../hooks/usePlacement';
+import { useNews, useStudentsOfMonth, useFeaturedTeachers, useTeacherApplications } from '../hooks/useContent';
+import { olympiadService } from '../services/olympiad.service';
+import { slugify } from '../lib/utils';
 
 // Kahoot Types
 interface KahootQuestion {
@@ -119,12 +124,40 @@ const generateMockRankings = (): KahootRanking => {
 
 interface HomepageProps {
   onLoginSuccess: (role: UserRole, email?: string) => void;
+  initialSection?: 'quiz' | 'olympiad' | 'test' | 'hall-of-fame' | 'news';
+  articleSlug?: string; // For /news/:articleSlug route
+  placementStep?: 'form' | 'quiz' | 'result' | 'schedule' | 'scheduled'; // For /cefr/* routes
 }
 
-export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
+export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSection, articleSlug, placementStep }) => {
   const { t, language, setLanguage } = useLanguage();
   const { settings } = useSettings();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isLoginOpen, setIsLoginOpen] = useState(false);
+
+  // Supabase Data Hooks
+  const { olympiads, loading: olympiadsLoading } = useOlympiads(true); // activeOnly
+  const { questions: placementQuestions, loading: placementQuestionsLoading } = usePlacementQuestions(true); // activeOnly
+  const { createSubmission, bookOralTest } = usePlacementSubmissions(); // For saving placement test results
+  const { slots: oralTestSlots, loading: slotsLoading, bookSlot } = useOralTestSlots(true); // availableOnly
+  const { news: newsData, loading: newsLoading } = useNews(true); // publishedOnly
+  const { students: studentsOfMonth, loading: studentsLoading } = useStudentsOfMonth();
+  const { teachers: featuredTeachers, loading: teachersLoading } = useFeaturedTeachers(true); // activeOnly
+  const { quizzes: kahootQuizzes, loading: quizzesLoading } = useKahootQuizzes();
+  const { createApplication } = useTeacherApplications();
+
+  // Get featured olympiad (first open one)
+  const featuredOlympiad = useMemo(() =>
+    olympiads.find(o => o.status === 'OPEN'),
+    [olympiads]
+  );
+
+  // Get active kahoot quiz
+  const activeKahootQuiz = useMemo(() =>
+    kahootQuizzes.find(q => q.is_active),
+    [kahootQuizzes]
+  );
 
   // General navigation state
   const [currentHomeView, setCurrentHomeView] = useState<'main' | 'news-archive' | 'news-detail'>('main');
@@ -157,23 +190,42 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
   });
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
-  // Placement Test States
-  const [placementFlow, setPlacementFlow] = useState<'none' | 'form' | 'quiz' | 'result' | 'schedule' | 'scheduled'>('none');
+  // Placement Test States - use URL-based step if provided
+  const [placementFlow, setPlacementFlowState] = useState<'none' | 'form' | 'quiz' | 'result' | 'schedule' | 'scheduled'>(
+    placementStep || 'none'
+  );
   const [sessionID, setSessionID] = useState<string>('');
+  const [currentSubmissionId, setCurrentSubmissionId] = useState<string>(''); // Track saved submission
   const [currentPQIndex, setCurrentPQIndex] = useState(0);
   const [placementAnswers, setPlacementAnswers] = useState<Record<string, number>>({});
   const [placementResult, setPlacementResult] = useState<{score: number, cefr: CEFRLevel} | null>(null);
+  const [placementSubmitError, setPlacementSubmitError] = useState<string | null>(null);
   const [selectedOralDate, setSelectedOralDate] = useState<string>('');
   const [selectedOralTime, setSelectedOralTime] = useState<string>('');
+  const [selectedSlotId, setSelectedSlotId] = useState<string>('');
 
-  // Mock available oral test slots (dari admin)
-  const ORAL_TEST_SLOTS = [
-    { date: '2025-01-06', day: 'Senin', slots: ['09:00', '10:00', '14:00', '15:00'] },
-    { date: '2025-01-07', day: 'Selasa', slots: ['09:00', '10:00', '11:00', '14:00'] },
-    { date: '2025-01-08', day: 'Rabu', slots: ['10:00', '11:00', '15:00', '16:00'] },
-    { date: '2025-01-09', day: 'Kamis', slots: ['09:00', '14:00', '15:00'] },
-    { date: '2025-01-10', day: 'Jumat', slots: ['09:00', '10:00', '11:00'] },
-  ];
+  // Helper to update placement flow with URL navigation
+  const setPlacementFlow = (step: 'none' | 'form' | 'quiz' | 'result' | 'schedule' | 'scheduled') => {
+    setPlacementFlowState(step);
+    if (step === 'none') {
+      navigate('/', { replace: true }); // Go back to homepage
+    } else {
+      navigate(`/cefr/${step}`, { replace: true });
+    }
+  };
+
+  // Group oral test slots by date from Supabase data
+  const groupedOralSlots = useMemo(() => {
+    const grouped: Record<string, { date: string; day: string; slots: { id: string; time: string }[] }> = {};
+    oralTestSlots.forEach(slot => {
+      if (!grouped[slot.date]) {
+        const dayName = new Date(slot.date).toLocaleDateString('id-ID', { weekday: 'long' });
+        grouped[slot.date] = { date: slot.date, day: dayName, slots: [] };
+      }
+      grouped[slot.date].slots.push({ id: slot.id, time: slot.time });
+    });
+    return Object.values(grouped).sort((a, b) => a.date.localeCompare(b.date));
+  }, [oralTestSlots]);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -201,8 +253,15 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
   const [kahootAnswered, setKahootAnswered] = useState(false);
   const [showRankingTab, setShowRankingTab] = useState<'daily' | 'allTime'>('daily');
 
-  // Video Popup State - shows on first visit
-  const [showVideoPopup, setShowVideoPopup] = useState(true);
+  // Video Popup State - shows on first visit, but NOT on article detail page or test pages
+  const [showVideoPopup, setShowVideoPopup] = useState(!articleSlug && !placementStep && !initialSection);
+
+  // Sync placementFlow with URL prop when navigating directly
+  useEffect(() => {
+    if (placementStep && placementStep !== placementFlow) {
+      setPlacementFlowState(placementStep);
+    }
+  }, [placementStep]);
 
   // School list for dropdown
   const SCHOOL_LIST = [
@@ -223,11 +282,24 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
   const openLogin = () => setIsLoginOpen(true);
   const closeLogin = () => setIsLoginOpen(false);
 
-  const featuredOlympiad = MOCK_OLYMPIADS.find(o => o.status === OlympiadStatus.OPEN);
+  // featuredOlympiad is now computed above from hooks
 
   const startRegistration = (ol: Olympiad) => {
     setSelectedOlympiad(ol);
     setRegStep('info');
+    // Navigate to /olympiad URL when opening registration
+    if (location.pathname !== '/olympiad') {
+      navigate('/olympiad', { replace: true });
+    }
+  };
+
+  const closeOlympiadRegistration = () => {
+    setSelectedOlympiad(null);
+    setIsOtherSchool(false);
+    // Navigate back to homepage when closing registration
+    if (location.pathname === '/olympiad') {
+      navigate('/', { replace: true });
+    }
   };
 
   const handlePay = () => {
@@ -281,35 +353,97 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
     return CEFRLevel.A1;
   };
 
+  // State for showing confirmation popup before quiz
+  const [showQuizConfirmation, setShowQuizConfirmation] = useState(false);
+
   const handleStartPlacementSession = () => {
     const uniqueID = `FT-${formData.name.substring(0, 3).toUpperCase()}-${Date.now().toString().slice(-6)}`;
     setSessionID(uniqueID);
-    setPlacementFlow('quiz');
+    setShowQuizConfirmation(true); // Show confirmation popup instead of starting directly
+  };
+
+  const handleConfirmStartQuiz = () => {
+    setShowQuizConfirmation(false);
+    setPlacementFlow('quiz'); // This will navigate to /cefr/quiz
     window.scrollTo(0, 0);
   };
 
-  const handleFinishPlacement = () => {
+  const handleFinishPlacement = async () => {
     let totalScore = 0;
     let maxScore = 0;
-    MOCK_PLACEMENT_QUESTIONS.forEach(q => {
-      if (placementAnswers[q.id] === q.correctAnswerIndex) totalScore += q.weight;
+    placementQuestions.forEach(q => {
+      if (placementAnswers[q.id] === q.correct_answer_index) totalScore += q.weight;
       maxScore += q.weight;
     });
     const finalScore = Math.round((totalScore / maxScore) * 100);
-    setPlacementResult({ score: finalScore, cefr: calculateCEFR(finalScore) });
+    const cefrLevel = calculateCEFR(finalScore);
+    setPlacementResult({ score: finalScore, cefr: cefrLevel });
+
+    // Save submission to database
+    setPlacementSubmitError(null); // Clear any previous error
+    try {
+      const submission = await createSubmission({
+        name: formData.name,
+        email: formData.email,
+        grade: formData.grade,
+        wa: formData.parentWa || formData.personalWa, // Use parent WA or personal WA
+        personal_wa: formData.personalWa || null,
+        dob: formData.dob || null, // Convert empty string to null for date field
+        parent_name: formData.parentName || null,
+        parent_wa: formData.parentWa || null,
+        address: formData.address || null,
+        school_origin: formData.schoolOrigin || null,
+        score: finalScore,
+        cefr_result: cefrLevel,
+        oral_test_status: 'none',
+      });
+      setCurrentSubmissionId(submission.id);
+      console.log('Placement submission saved successfully:', submission.id);
+    } catch (err: any) {
+      console.error('Error saving placement submission:', err);
+      const errorMessage = err?.message || err?.error?.message || 'Unknown error occurred';
+      setPlacementSubmitError(`Gagal menyimpan hasil test: ${errorMessage}`);
+    }
+
     setPlacementFlow('result');
     window.scrollTo(0, 0);
+  };
+
+  const closePlacementTest = () => {
+    setPlacementFlow('none'); // This will navigate to homepage
   };
 
   const openNewsDetail = (news: News) => {
     setSelectedNews(news);
     setCurrentHomeView('news-detail');
     window.scrollTo(0, 0);
+    // Navigate to article URL using slug
+    navigate(`/news/${slugify(news.title)}`, { replace: true });
   };
 
   const openNewsArchive = () => {
     setCurrentHomeView('news-archive');
     window.scrollTo(0, 0);
+    // Navigate to /news URL
+    if (location.pathname !== '/news') {
+      navigate('/news', { replace: true });
+    }
+  };
+
+  const closeNewsDetail = () => {
+    setSelectedNews(null);
+    setCurrentHomeView('news-archive');
+    window.scrollTo(0, 0);
+    // Navigate back to news archive
+    navigate('/news', { replace: true });
+  };
+
+  const closeNewsToHome = () => {
+    setSelectedNews(null);
+    setCurrentHomeView('main');
+    window.scrollTo(0, 0);
+    // Navigate back to homepage
+    navigate('/', { replace: true });
   };
 
   const handleSchoolChange = (value: string) => {
@@ -330,6 +464,10 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
     setKahootAnswers([]);
     setKahootScore(0);
     setKahootAnswered(false);
+    // Navigate to /live-quiz URL when starting quiz
+    if (location.pathname !== '/live-quiz') {
+      navigate('/live-quiz', { replace: true });
+    }
   };
 
   const beginKahootGame = () => {
@@ -376,7 +514,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
     }, 1500);
   };
 
-  const finishKahootQuiz = (finalScore: number) => {
+  const finishKahootQuiz = async (finalScore: number) => {
     // Add player to rankings
     const correctCount = kahootAnswers.filter(a => a.isCorrect).length + (kahootAnswers.length < (currentQuiz?.questions.length || 0) ? 1 : 0);
     const totalTime = kahootAnswers.reduce((sum, a) => sum + a.timeSpent, 0);
@@ -394,6 +532,25 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
       allTime: [...prev.allTime, newPlayer].sort((a, b) => b.score - a.score).slice(0, 10)
     }));
 
+    // Save participant to database
+    if (currentQuiz) {
+      try {
+        await olympiadService.saveKahootParticipant({
+          quiz_id: currentQuiz.id,
+          name: kahootPlayerName,
+          score: finalScore,
+          correct_answers: correctCount,
+          total_questions: currentQuiz.questions.length,
+          time_spent: totalTime,
+        });
+        // Also increment play count
+        await olympiadService.incrementKahootPlayCount(currentQuiz.id);
+      } catch (err) {
+        console.error('Failed to save quiz result:', err);
+        // Don't block the UI if save fails
+      }
+    }
+
     setKahootFlow('result');
   };
 
@@ -405,6 +562,10 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
     setKahootAnswers([]);
     setKahootScore(0);
     setKahootAnswered(false);
+    // Navigate back to homepage when closing quiz
+    if (location.pathname === '/live-quiz') {
+      navigate('/', { replace: true });
+    }
   };
 
   // Kahoot Timer Effect
@@ -424,6 +585,80 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
 
     return () => clearInterval(timer);
   }, [kahootFlow, kahootAnswered, kahootTimeLeft, kahootQuestionIndex]);
+
+  // Handle initial section from URL route
+  useEffect(() => {
+    if (!initialSection) return;
+
+    // Wait for data to load
+    const timeout = setTimeout(() => {
+      switch (initialSection) {
+        case 'quiz':
+          // Auto-start the active quiz if available
+          if (activeKahootQuiz) {
+            startKahootQuiz({
+              ...activeKahootQuiz,
+              questions: activeKahootQuiz.questions as KahootQuestion[],
+              createdBy: activeKahootQuiz.created_by || 'ELC'
+            });
+          } else {
+            // Scroll to quiz section if no active quiz
+            document.getElementById('kahoot-quiz')?.scrollIntoView({ behavior: 'smooth' });
+          }
+          break;
+        case 'olympiad':
+          // Auto-open registration for featured olympiad if available
+          if (featuredOlympiad) {
+            startRegistration(featuredOlympiad);
+          } else {
+            document.getElementById('featured-event')?.scrollIntoView({ behavior: 'smooth' });
+          }
+          break;
+        case 'test':
+          // Auto-open placement test form
+          setPlacementFlow('form');
+          break;
+        case 'hall-of-fame':
+          document.getElementById('hall-of-fame')?.scrollIntoView({ behavior: 'smooth' });
+          break;
+        case 'news':
+          // Skip if articleSlug is present (handled by separate useEffect)
+          if (!articleSlug) {
+            // Open news archive full page view
+            setCurrentHomeView('news-archive');
+          }
+          break;
+      }
+    }, 500); // Wait for page to render
+
+    return () => clearTimeout(timeout);
+  }, [initialSection, activeKahootQuiz, featuredOlympiad, articleSlug]);
+
+  // Handle articleSlug prop - load article when navigating directly to /news/:articleSlug
+  useEffect(() => {
+    if (!articleSlug) return;
+
+    // Wait for news data to load
+    if (newsLoading) return;
+
+    // Find the article by slug (generated from title)
+    const article = newsData.find(n => slugify(n.title) === articleSlug);
+    if (article) {
+      setSelectedNews({
+        ...article,
+        featuredImage: article.featured_image || '',
+        summary: article.summary || '',
+        videoUrl: article.video_url || '',
+        displayMedia: article.display_media || 'image',
+        publishedDate: article.published_date || ''
+      } as News);
+      setCurrentHomeView('news-detail');
+      window.scrollTo(0, 0);
+    } else if (newsData.length > 0) {
+      // Article not found but data loaded - redirect to news archive
+      navigate('/news', { replace: true });
+    }
+  }, [articleSlug, newsData, newsLoading, navigate]);
 
   // Grade options with detailed class levels
   const GRADE_OPTIONS = [
@@ -455,6 +690,10 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
             <input type="tel" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all" value={formData.personalWa} onChange={e => setFormData({...formData, personalWa: e.target.value})} placeholder="08xxxxxxxxxx" />
           </div>
           <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block">Tanggal Lahir</label>
+            <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all" value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})} />
+          </div>
+          <div className="space-y-1">
             <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block">Kelas</label>
             <select className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all bg-white" value={formData.grade} onChange={e => setFormData({...formData, grade: e.target.value})}>
               <option value="">Pilih Kelas</option>
@@ -467,7 +706,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
               ))}
             </select>
           </div>
-          <div className="space-y-1 sm:col-span-2">
+          <div className="space-y-1">
             <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block">Asal Sekolah</label>
             {isOtherSchool ? (
               <div className="flex gap-2">
@@ -905,31 +1144,31 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
                     <p className="text-[9px] md:text-[10px] text-gray-400 font-bold mt-1">ID: <span className="text-blue-600">{sessionID}</span></p>
                   </div>
                </div>
-               <button onClick={() => setPlacementFlow('none')} className="p-2 text-gray-400 hover:text-red-500 rounded-full transition-colors">
+               <button onClick={closePlacementTest} className="p-2 text-gray-400 hover:text-red-500 rounded-full transition-colors">
                   <XCircle className="w-6 h-6" />
                </button>
             </div>
          </nav>
-         <main className="max-w-4xl mx-auto px-4 py-12">
+         <main className="max-w-3xl mx-auto px-4 py-4 md:py-6">
             {placementFlow === 'quiz' ? (
-               <div className="space-y-8">
-                  <div className="bg-white rounded-[40px] shadow-xl p-10 border border-gray-200">
-                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Question {currentPQIndex + 1} of {MOCK_PLACEMENT_QUESTIONS.length}</p>
-                     <h3 className="text-3xl font-bold text-gray-900 mb-8">{MOCK_PLACEMENT_QUESTIONS[currentPQIndex].text}</h3>
-                     <div className="grid grid-cols-1 gap-4">
-                        {MOCK_PLACEMENT_QUESTIONS[currentPQIndex].options.map((opt, i) => (
-                           <button key={i} onClick={() => setPlacementAnswers({...placementAnswers, [MOCK_PLACEMENT_QUESTIONS[currentPQIndex].id]: i})} className={`w-full p-6 text-left rounded-2xl border-2 transition-all flex items-center gap-4 ${placementAnswers[MOCK_PLACEMENT_QUESTIONS[currentPQIndex].id] === i ? 'border-blue-600 bg-blue-50' : 'border-gray-100 hover:bg-gray-50'}`}>
-                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${placementAnswers[MOCK_PLACEMENT_QUESTIONS[currentPQIndex].id] === i ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>{String.fromCharCode(65+i)}</div>
-                              <span className="text-lg font-bold text-gray-700">{opt}</span>
+               <div className="space-y-4">
+                  <div className="bg-white rounded-2xl md:rounded-3xl shadow-xl p-5 md:p-8 border border-gray-200">
+                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Question {currentPQIndex + 1} of {placementQuestions.length}</p>
+                     <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-4 md:mb-5">{placementQuestions[currentPQIndex]?.text}</h3>
+                     <div className="grid grid-cols-1 gap-2 md:gap-3">
+                        {placementQuestions[currentPQIndex]?.options?.map((opt, i) => (
+                           <button key={i} onClick={() => setPlacementAnswers({...placementAnswers, [placementQuestions[currentPQIndex].id]: i})} className={`w-full p-3 md:p-4 text-left rounded-xl border-2 transition-all flex items-center gap-3 ${placementAnswers[placementQuestions[currentPQIndex]?.id] === i ? 'border-blue-600 bg-blue-50' : 'border-gray-100 hover:bg-gray-50'}`}>
+                              <div className={`w-8 h-8 md:w-9 md:h-9 rounded-lg flex items-center justify-center font-bold text-sm ${placementAnswers[placementQuestions[currentPQIndex]?.id] === i ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>{String.fromCharCode(65+i)}</div>
+                              <span className="text-sm md:text-base font-semibold text-gray-700">{opt}</span>
                            </button>
                         ))}
                      </div>
-                     <div className="mt-10 flex justify-between">
-                        <button onClick={() => setCurrentPQIndex(prev => Math.max(0, prev - 1))} className="text-sm font-bold text-gray-400">Previous</button>
-                        {currentPQIndex < MOCK_PLACEMENT_QUESTIONS.length - 1 ? (
-                           <Button onClick={() => setCurrentPQIndex(prev => prev + 1)} disabled={placementAnswers[MOCK_PLACEMENT_QUESTIONS[currentPQIndex].id] === undefined}>Next Question</Button>
+                     <div className="mt-5 md:mt-6 flex justify-between items-center">
+                        <button onClick={() => setCurrentPQIndex(prev => Math.max(0, prev - 1))} className="text-sm font-bold text-gray-400 hover:text-gray-600">Previous</button>
+                        {currentPQIndex < placementQuestions.length - 1 ? (
+                           <Button onClick={() => setCurrentPQIndex(prev => prev + 1)} disabled={placementAnswers[placementQuestions[currentPQIndex]?.id] === undefined} className="h-10 px-6">Next Question</Button>
                         ) : (
-                           <Button onClick={handleFinishPlacement} className="bg-green-600 hover:bg-green-700">Finish Test</Button>
+                           <Button onClick={handleFinishPlacement} className="bg-green-600 hover:bg-green-700 h-10 px-6">Finish Test</Button>
                         )}
                      </div>
                   </div>
@@ -939,6 +1178,20 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
                   <div className="w-20 h-20 bg-teal-100 text-teal-600 rounded-full flex items-center justify-center mx-auto shadow-inner"><Award className="w-10 h-10" /></div>
                   <h2 className="text-4xl md:text-5xl font-black text-gray-900">Your CEFR Level: {placementResult?.cefr.split(' - ')[0]}</h2>
                   <p className="text-base md:text-lg text-gray-500 max-w-lg mx-auto">Selamat! Anda berada di level <b>{placementResult?.cefr.split(' - ')[1]}</b>.</p>
+
+                  {/* Error Display */}
+                  {placementSubmitError && (
+                     <div className="bg-red-50 border border-red-200 rounded-xl p-4 max-w-xl mx-auto">
+                        <div className="flex items-start gap-3">
+                           <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+                           <div className="text-left">
+                              <p className="text-sm font-medium text-red-800">Terjadi kesalahan saat menyimpan data</p>
+                              <p className="text-sm text-red-600 mt-1">{placementSubmitError}</p>
+                              <p className="text-xs text-red-500 mt-2">Silakan screenshot halaman ini dan hubungi admin.</p>
+                           </div>
+                        </div>
+                     </div>
+                  )}
 
                   {/* Next Step - Oral Test */}
                   <div className="bg-white rounded-2xl shadow-lg p-6 md:p-8 max-w-xl mx-auto border border-gray-100 text-left space-y-4">
@@ -972,7 +1225,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
                      </Button>
                   </div>
 
-                  <button onClick={() => setPlacementFlow('none')} className="text-sm text-gray-400 hover:text-gray-600 font-medium">
+                  <button onClick={closePlacementTest} className="text-sm text-gray-400 hover:text-gray-600 font-medium">
                      Lewati untuk saat ini
                   </button>
                </div>
@@ -984,75 +1237,102 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
                   </div>
 
                   <div className="bg-white rounded-2xl shadow-lg p-6 max-w-2xl mx-auto border border-gray-100 space-y-6">
-                     {/* Date Selection */}
-                     <div className="space-y-3">
-                        <label className="text-sm font-semibold text-gray-700 block">Pilih Tanggal</label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                           {ORAL_TEST_SLOTS.map((slot) => (
-                              <button
-                                 key={slot.date}
-                                 onClick={() => { setSelectedOralDate(slot.date); setSelectedOralTime(''); }}
-                                 className={`p-3 rounded-xl border-2 transition-all text-center ${
-                                    selectedOralDate === slot.date
-                                       ? 'border-blue-600 bg-blue-50'
-                                       : 'border-gray-200 hover:border-gray-300'
-                                 }`}
-                              >
-                                 <p className="text-xs text-gray-500 font-medium">{slot.day}</p>
-                                 <p className="text-sm font-bold text-gray-900">
-                                    {new Date(slot.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
-                                 </p>
-                              </button>
-                           ))}
+                     {/* Loading State */}
+                     {slotsLoading ? (
+                        <div className="text-center py-8">
+                           <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+                           <p className="text-gray-500 mt-2">Memuat jadwal tersedia...</p>
                         </div>
-                     </div>
-
-                     {/* Time Selection */}
-                     {selectedOralDate && (
-                        <div className="space-y-3 animate-in fade-in duration-300">
-                           <label className="text-sm font-semibold text-gray-700 block">Pilih Waktu</label>
-                           <div className="flex flex-wrap gap-2">
-                              {ORAL_TEST_SLOTS.find(s => s.date === selectedOralDate)?.slots.map((time) => (
-                                 <button
-                                    key={time}
-                                    onClick={() => setSelectedOralTime(time)}
-                                    className={`px-4 py-2 rounded-lg border-2 text-sm font-semibold transition-all ${
-                                       selectedOralTime === time
-                                          ? 'border-blue-600 bg-blue-600 text-white'
-                                          : 'border-gray-200 text-gray-700 hover:border-gray-300'
-                                    }`}
-                                 >
-                                    {time} WIB
-                                 </button>
-                              ))}
+                     ) : groupedOralSlots.length === 0 ? (
+                        <div className="text-center py-8">
+                           <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto" />
+                           <p className="text-gray-600 mt-2 font-medium">Belum ada jadwal tersedia</p>
+                           <p className="text-gray-400 text-sm">Silakan hubungi admin untuk informasi lebih lanjut</p>
+                        </div>
+                     ) : (
+                        <>
+                           {/* Date Selection */}
+                           <div className="space-y-3">
+                              <label className="text-sm font-semibold text-gray-700 block">Pilih Tanggal</label>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                                 {groupedOralSlots.map((slot) => (
+                                    <button
+                                       key={slot.date}
+                                       onClick={() => { setSelectedOralDate(slot.date); setSelectedOralTime(''); setSelectedSlotId(''); }}
+                                       className={`p-3 rounded-xl border-2 transition-all text-center ${
+                                          selectedOralDate === slot.date
+                                             ? 'border-blue-600 bg-blue-50'
+                                             : 'border-gray-200 hover:border-gray-300'
+                                       }`}
+                                    >
+                                       <p className="text-xs text-gray-500 font-medium">{slot.day}</p>
+                                       <p className="text-sm font-bold text-gray-900">
+                                          {new Date(slot.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                                       </p>
+                                    </button>
+                                 ))}
+                              </div>
                            </div>
-                        </div>
-                     )}
 
-                     {/* Confirmation */}
-                     {selectedOralDate && selectedOralTime && (
-                        <div className="bg-green-50 border border-green-200 rounded-xl p-4 animate-in fade-in duration-300">
-                           <p className="text-sm text-green-800">
-                              <span className="font-semibold">Jadwal dipilih:</span>{' '}
-                              {ORAL_TEST_SLOTS.find(s => s.date === selectedOralDate)?.day},{' '}
-                              {new Date(selectedOralDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}{' '}
-                              pukul {selectedOralTime} WIB
-                           </p>
-                        </div>
-                     )}
+                           {/* Time Selection */}
+                           {selectedOralDate && (
+                              <div className="space-y-3 animate-in fade-in duration-300">
+                                 <label className="text-sm font-semibold text-gray-700 block">Pilih Waktu</label>
+                                 <div className="flex flex-wrap gap-2">
+                                    {groupedOralSlots.find(s => s.date === selectedOralDate)?.slots.map((slot) => (
+                                       <button
+                                          key={slot.id}
+                                          onClick={() => { setSelectedOralTime(slot.time); setSelectedSlotId(slot.id); }}
+                                          className={`px-4 py-2 rounded-lg border-2 text-sm font-semibold transition-all ${
+                                             selectedOralTime === slot.time
+                                                ? 'border-blue-600 bg-blue-600 text-white'
+                                                : 'border-gray-200 text-gray-700 hover:border-gray-300'
+                                          }`}
+                                       >
+                                          {slot.time.slice(0, 5)} WIB
+                                       </button>
+                                    ))}
+                                 </div>
+                              </div>
+                           )}
 
-                     <div className="flex gap-3">
-                        <button onClick={() => setPlacementFlow('result')} className="px-6 py-3 text-sm font-semibold text-gray-500 hover:text-gray-700">
-                           Kembali
-                        </button>
-                        <Button
-                           onClick={() => setPlacementFlow('scheduled')}
-                           disabled={!selectedOralDate || !selectedOralTime}
-                           className="flex-1 h-12 rounded-xl font-semibold"
-                        >
-                           Konfirmasi Jadwal
-                        </Button>
-                     </div>
+                           {/* Confirmation */}
+                           {selectedOralDate && selectedOralTime && (
+                              <div className="bg-green-50 border border-green-200 rounded-xl p-4 animate-in fade-in duration-300">
+                                 <p className="text-sm text-green-800">
+                                    <span className="font-semibold">Jadwal dipilih:</span>{' '}
+                                    {groupedOralSlots.find(s => s.date === selectedOralDate)?.day},{' '}
+                                    {new Date(selectedOralDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}{' '}
+                                    pukul {selectedOralTime.slice(0, 5)} WIB
+                                 </p>
+                              </div>
+                           )}
+
+                           <div className="flex gap-3">
+                              <button onClick={() => setPlacementFlow('result')} className="px-6 py-3 text-sm font-semibold text-gray-500 hover:text-gray-700">
+                                 Kembali
+                              </button>
+                              <Button
+                                 onClick={async () => {
+                                    // Save oral test booking to database
+                                    if (currentSubmissionId && selectedSlotId) {
+                                       try {
+                                          await bookOralTest(currentSubmissionId, selectedOralDate, selectedOralTime, selectedSlotId);
+                                          await bookSlot(selectedSlotId, currentSubmissionId);
+                                       } catch (err) {
+                                          console.error('Error booking oral test:', err);
+                                       }
+                                    }
+                                    setPlacementFlow('scheduled');
+                                 }}
+                                 disabled={!selectedOralDate || !selectedOralTime}
+                                 className="flex-1 h-12 rounded-xl font-semibold"
+                              >
+                                 Konfirmasi Jadwal
+                              </Button>
+                           </div>
+                        </>
+                     )}
                   </div>
                </div>
             ) : (
@@ -1066,10 +1346,10 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-left">
                         <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1">Jadwal Anda</p>
                         <p className="text-lg font-bold text-gray-900">
-                           {ORAL_TEST_SLOTS.find(s => s.date === selectedOralDate)?.day},{' '}
+                           {groupedOralSlots.find(s => s.date === selectedOralDate)?.day || new Date(selectedOralDate).toLocaleDateString('id-ID', { weekday: 'long' })},{' '}
                            {new Date(selectedOralDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                         </p>
-                        <p className="text-gray-600">Pukul {selectedOralTime} WIB</p>
+                        <p className="text-gray-600">Pukul {selectedOralTime.slice(0, 5)} WIB</p>
                      </div>
 
                      <div className="flex items-start gap-3 text-left bg-yellow-50 border border-yellow-200 rounded-xl p-4">
@@ -1091,7 +1371,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
                      </div>
                   </div>
 
-                  <Button onClick={() => setPlacementFlow('none')} className="h-12 px-8 rounded-xl font-semibold">
+                  <Button onClick={closePlacementTest} className="h-12 px-8 rounded-xl font-semibold">
                      Kembali ke Beranda
                   </Button>
                </div>
@@ -1105,8 +1385,8 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
      return (
         <div className="min-h-screen bg-gray-50 font-sans">
            <nav className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-40 flex justify-between items-center shadow-sm">
-              <button onClick={() => setCurrentHomeView('main')} className="flex items-center gap-2 text-gray-500 font-bold hover:text-blue-600"><ArrowLeft className="w-5 h-5" /> Kembali</button>
-              <div className="flex items-center gap-2"><div className="w-8 h-8 theme-bg-primary rounded-lg flex items-center justify-center text-white font-bold">E</div><span className="font-black text-gray-900 tracking-tight uppercase">ELC Hub</span></div>
+              <button onClick={() => { setCurrentHomeView('main'); navigate('/', { replace: true }); }} className="flex items-center gap-2 text-gray-500 font-bold hover:text-blue-600"><ArrowLeft className="w-5 h-5" /> Kembali</button>
+              <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity"><div className="w-8 h-8 theme-bg-primary rounded-lg flex items-center justify-center text-white font-bold">E</div><span className="font-black text-gray-900 tracking-tight uppercase">ELC Hub</span></Link>
               <div className="w-20"></div>
            </nav>
            <main className="max-w-7xl mx-auto px-4 py-16 space-y-12">
@@ -1115,12 +1395,12 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
                  <p className="text-lg text-gray-500 max-w-2xl mx-auto font-medium">Temukan kabar terbaru seputar prestasi dan kegiatan ELC.</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                 {MOCK_NEWS.map(news => (
-                    <Card key={news.id} className="overflow-hidden hover:shadow-2xl transition-all border-none group cursor-pointer" onClick={() => openNewsDetail(news)}>
-                       <div className="aspect-video relative"><img src={news.featuredImage} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="" /></div>
+                 {newsData.map(news => (
+                    <Card key={news.id} className="overflow-hidden hover:shadow-2xl transition-all border-none group cursor-pointer" onClick={() => openNewsDetail({...news, featuredImage: news.featured_image || '', summary: news.summary || ''} as News)}>
+                       <div className="aspect-video relative"><img src={news.featured_image || ''} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="" /></div>
                        <div className="p-8 space-y-4">
                           <h3 className="text-xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors leading-tight">{news.title}</h3>
-                          <p className="text-gray-500 text-sm line-clamp-3 leading-relaxed">{news.summary}</p>
+                          <p className="text-gray-500 text-sm line-clamp-3 leading-relaxed">{news.summary || ''}</p>
                           <div className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1">Baca Artikel <ChevronRight className="w-4 h-4" /></div>
                        </div>
                     </Card>
@@ -1135,8 +1415,8 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
      return (
         <div className="min-h-screen bg-white font-sans animate-in fade-in duration-500">
            <nav className="bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 sticky top-0 z-40 flex justify-between items-center">
-              <button onClick={() => setCurrentHomeView('news-archive')} className="text-xs font-black uppercase text-gray-400 hover:text-blue-600 flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> Tutup Berita</button>
-              <div className="font-black text-gray-900 text-xs uppercase tracking-widest">ELC Article</div>
+              <button onClick={closeNewsDetail} className="text-xs font-black uppercase text-gray-400 hover:text-blue-600 flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> Tutup Berita</button>
+              <Link to="/" className="font-black text-gray-900 text-xs uppercase tracking-widest hover:opacity-80 transition-opacity">ELC Article</Link>
               <div className="w-20"></div>
            </nav>
            <article className="max-w-2xl mx-auto px-4 py-16 space-y-10">
@@ -1153,7 +1433,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
                  )}
               </div>
               <div className="prose prose-slate max-w-none prose-headings:font-black prose-p:text-gray-600 prose-p:leading-loose text-lg" dangerouslySetInnerHTML={{ __html: selectedNews.content }} />
-              <div className="pt-10 border-t border-gray-100 flex justify-center"><Button onClick={() => setCurrentHomeView('main')} variant="outline" className="h-14 px-10 rounded-2xl font-bold">Kembali ke Beranda</Button></div>
+              <div className="pt-10 border-t border-gray-100 flex justify-center"><Button onClick={closeNewsToHome} variant="outline" className="h-14 px-10 rounded-2xl font-bold">Kembali ke Beranda</Button></div>
            </article>
         </div>
      );
@@ -1201,18 +1481,19 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
       {/* Navbar */}
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 md:h-20 flex items-center justify-between sticky top-0 bg-white/90 backdrop-blur-md z-40 border-b border-gray-100">
         {/* Logo */}
-        <div className="flex items-center gap-2">
+        <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
            <div className="w-8 h-8 md:w-10 md:h-10 theme-bg-primary rounded-full flex items-center justify-center text-white font-bold text-lg md:text-xl shadow-lg">E</div>
            <span className="text-xl md:text-2xl font-bold text-gray-800 tracking-tight">ELC<span className="theme-text-accent">{t.app_name}</span></span>
-        </div>
+        </Link>
 
         {/* Desktop Nav Links */}
         <div className="hidden md:flex items-center gap-8 text-gray-600 font-medium text-sm">
           <a href="#why-elc" className="hover:theme-text-primary transition-colors">Keunggulan</a>
-          <a href="#featured-event" className="hover:theme-text-primary transition-colors">Olimpiade</a>
-          <a href="#cefr-test" className="hover:theme-text-primary transition-colors">Free Test</a>
-          <a href="#hall-of-fame" className="hover:theme-text-primary transition-colors">Hall of Fame</a>
-          <a href="#news" className="hover:theme-text-primary transition-colors">News</a>
+          <Link to="/olympiad" className="hover:theme-text-primary transition-colors">Olimpiade</Link>
+          <Link to="/cefr" className="hover:theme-text-primary transition-colors">Free Test</Link>
+          <Link to="/hall-of-fame" className="hover:theme-text-primary transition-colors">Hall of Fame</Link>
+          <Link to="/live-quiz" className="hover:theme-text-primary transition-colors">Quiz</Link>
+          <Link to="/news" className="hover:theme-text-primary transition-colors">News</Link>
         </div>
 
         {/* Right Actions */}
@@ -1310,19 +1591,19 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
                   Meet Our Star Teachers
                </h3>
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {MOCK_FEATURED_TEACHERS.map((teacher) => (
+                  {featuredTeachers.map((teacher) => (
                      <div key={teacher.id} className="group bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300">
                         {/* Photo */}
                         <div className="relative h-48 overflow-hidden">
                            <img
-                              src={teacher.photoUrl}
+                              src={teacher.photo_url || ''}
                               alt={teacher.name}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                            />
                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                            {/* Country Flag */}
                            <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
-                              <span className="text-base">{teacher.countryFlag}</span>
+                              <span className="text-base">{teacher.country_flag}</span>
                               <span className="text-gray-700">{teacher.country}</span>
                            </div>
                            {/* Type Badge */}
@@ -1344,7 +1625,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
 
                            {/* Certifications */}
                            <div className="flex flex-wrap gap-1">
-                              {teacher.certifications.map((cert, i) => (
+                              {(teacher.certifications as string[] || []).map((cert, i) => (
                                  <span key={i} className="text-[9px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">
                                     {cert}
                                  </span>
@@ -1588,13 +1869,13 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
             <div className="md:hidden">
                {/* Mobile Carousel */}
                <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide pl-4 pr-8 pb-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                  {MOCK_STUDENTS_OF_THE_MONTH.map((student, idx) => (
+                  {studentsOfMonth.map((student, idx) => (
                      <div key={student.id} className="snap-start shrink-0 w-[75%]">
                         <Card className="h-full bg-white border border-gray-100 rounded-2xl p-6 flex flex-col items-center text-center shadow-sm">
                            {/* Avatar */}
                            <div className="relative mb-4">
                               <div className="w-20 h-20 rounded-full overflow-hidden border-3 border-white shadow-md">
-                                 <img src={student.image} className="w-full h-full object-cover" alt={student.name} />
+                                 <img src={student.image || ''} className="w-full h-full object-cover" alt={student.name} />
                               </div>
                               <div className="absolute -bottom-1 -right-1 bg-yellow-400 text-white p-1.5 rounded-lg shadow-md">
                                  <Medal className="w-4 h-4" />
@@ -1603,7 +1884,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
 
                            {/* Info */}
                            <div className="space-y-2">
-                              <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">{student.monthYear}</p>
+                              <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">{student.month_year}</p>
                               <h3 className="text-base font-bold text-gray-900">{student.name}</h3>
                               <p className="text-gray-500 text-sm leading-relaxed italic line-clamp-2">"{student.achievement}"</p>
                            </div>
@@ -1617,13 +1898,13 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
 
             {/* Desktop Grid */}
             <div className="hidden md:grid md:grid-cols-3 gap-5 px-4 sm:px-0">
-               {MOCK_STUDENTS_OF_THE_MONTH.map((student) => (
+               {studentsOfMonth.map((student) => (
                   <div key={student.id} className="group">
                      <Card className="h-full bg-white border border-gray-100 rounded-2xl p-6 flex flex-col items-center text-center transition-all hover:shadow-lg hover:-translate-y-1 duration-300">
                         {/* Avatar */}
                         <div className="relative mb-4">
                            <div className="w-20 h-20 rounded-full overflow-hidden border-3 border-white shadow-md">
-                              <img src={student.image} className="w-full h-full object-cover" alt={student.name} />
+                              <img src={student.image || ''} className="w-full h-full object-cover" alt={student.name} />
                            </div>
                            <div className="absolute -bottom-1 -right-1 bg-yellow-400 text-white p-1.5 rounded-lg shadow-md">
                               <Medal className="w-4 h-4" />
@@ -1632,7 +1913,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
 
                         {/* Info */}
                         <div className="space-y-2">
-                           <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">{student.monthYear}</p>
+                           <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">{student.month_year}</p>
                            <h3 className="text-base font-bold text-gray-900">{student.name}</h3>
                            <p className="text-gray-500 text-sm leading-relaxed italic line-clamp-2">"{student.achievement}"</p>
                         </div>
@@ -1679,19 +1960,19 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
                      ))}
                   </div>
 
-                  {/* Available Quizzes */}
+                  {/* Available Quizzes - Only show active quizzes */}
                   <div className="space-y-3 pt-2">
-                     {MOCK_KAHOOT_QUIZZES.map((quiz) => (
+                     {kahootQuizzes.filter(q => q.is_active).map((quiz) => (
                         <div key={quiz.id} className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4 flex flex-col sm:flex-row items-center gap-4 hover:bg-white/20 transition-all">
                            <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-purple-600 rounded-lg flex items-center justify-center shrink-0">
                               <Brain className="w-6 h-6 text-white" />
                            </div>
                            <div className="flex-1 text-center sm:text-left">
                               <h4 className="text-white font-bold text-base">{quiz.title}</h4>
-                              <p className="text-blue-300 text-sm">{quiz.questions.length} questions • By {quiz.createdBy}</p>
+                              <p className="text-blue-300 text-sm">{(quiz.questions as any[])?.length || 0} questions • By {quiz.created_by || 'ELC'}</p>
                            </div>
                            <button
-                              onClick={() => startKahootQuiz(quiz)}
+                              onClick={() => startKahootQuiz({...quiz, questions: quiz.questions as KahootQuestion[], createdBy: quiz.created_by || 'ELC'})}
                               className="px-5 py-2.5 bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 font-bold text-sm rounded-lg hover:from-yellow-300 hover:to-orange-400 transition-all shadow-md hover:shadow-lg active:scale-[0.98] flex items-center gap-2"
                            >
                               <Play className="w-4 h-4" />
@@ -1770,23 +2051,23 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
             {/* News Grid - All in one unified container */}
             <div className="bg-gray-50 rounded-xl p-3 md:p-4 space-y-3">
                {/* Featured Article */}
-               {MOCK_NEWS.slice(0, 1).map((news) => (
+               {newsData.slice(0, 1).map((news) => (
                   <div
                      key={news.id}
                      className="bg-white rounded-lg overflow-hidden group border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col md:flex-row"
-                     onClick={() => openNewsDetail(news)}
+                     onClick={() => openNewsDetail({...news, featuredImage: news.featured_image || '', summary: news.summary || ''} as News)}
                   >
                      {/* Image */}
                      <div className="md:w-1/3 aspect-[16/10] md:aspect-auto relative overflow-hidden">
-                        {news.displayMedia === 'video' ? (
+                        {news.display_media === 'video' ? (
                            <div className="w-full h-full bg-gray-900 flex items-center justify-center min-h-[120px]">
                               <MonitorPlay className="w-10 h-10 text-white/40 group-hover:scale-110 transition-transform" />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
                            </div>
                         ) : (
-                           <img src={news.featuredImage} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 min-h-[120px]" alt={news.title} />
+                           <img src={news.featured_image || ''} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 min-h-[120px]" alt={news.title} />
                         )}
-                        {news.displayMedia === 'video' && (
+                        {news.display_media === 'video' && (
                            <div className="absolute bottom-2 left-2 flex items-center gap-1.5 bg-purple-600 text-white px-2 py-1 rounded-full text-[10px] font-semibold">
                               <Video className="w-3 h-3" />
                               <span>Video</span>
@@ -1803,7 +2084,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
                            {news.title}
                         </h3>
                         <p className="text-gray-500 text-xs leading-relaxed line-clamp-2 mb-2">
-                           {news.summary}
+                           {news.summary || ''}
                         </p>
                         <div className="flex items-center gap-1 text-xs font-semibold text-blue-600 group-hover:gap-1.5 transition-all">
                            <span>Baca Selengkapnya</span>
@@ -1815,23 +2096,23 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
 
                {/* Other Articles - 2 columns */}
                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {MOCK_NEWS.slice(1, 3).map((news) => (
+                  {newsData.slice(1, 3).map((news) => (
                      <div
                         key={news.id}
                         className="bg-white rounded-lg overflow-hidden group border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-row"
-                        onClick={() => openNewsDetail(news)}
+                        onClick={() => openNewsDetail({...news, featuredImage: news.featured_image || '', summary: news.summary || ''} as News)}
                      >
                         {/* Image */}
                         <div className="w-24 h-20 relative overflow-hidden shrink-0">
-                           {news.displayMedia === 'video' ? (
+                           {news.display_media === 'video' ? (
                               <div className="w-full h-full bg-gray-900 flex items-center justify-center">
                                  <MonitorPlay className="w-6 h-6 text-white/40 group-hover:scale-110 transition-transform" />
                                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
                               </div>
                            ) : (
-                              <img src={news.featuredImage} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={news.title} />
+                              <img src={news.featured_image || ''} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={news.title} />
                            )}
-                           {news.displayMedia === 'video' && (
+                           {news.display_media === 'video' && (
                               <div className="absolute bottom-1 left-1 flex items-center gap-0.5 bg-purple-600 text-white px-1.5 py-0.5 rounded-full text-[8px] font-semibold">
                                  <Video className="w-2.5 h-2.5" />
                                  <span>Video</span>
@@ -1887,7 +2168,10 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
       {(placementFlow === 'form' || selectedOlympiad) && placementFlow !== 'quiz' && placementFlow !== 'result' && (
          <div className="fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden relative">
-               <button onClick={() => { setPlacementFlow('none'); setSelectedOlympiad(null); setIsOtherSchool(false); }} className="absolute top-4 right-4 p-1.5 bg-gray-100 rounded-full text-gray-400 hover:text-red-500 transition-colors z-10">
+               <button onClick={() => {
+                  if (placementFlow === 'form') closePlacementTest();
+                  if (selectedOlympiad) closeOlympiadRegistration();
+               }} className="absolute top-4 right-4 p-1.5 bg-gray-100 rounded-full text-gray-400 hover:text-red-500 transition-colors z-10">
                   <X className="w-5 h-5" />
                </button>
                <div className="p-6 space-y-5">
@@ -1966,6 +2250,72 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess }) => {
                            </Button>
                         </div>
                      )}
+                  </div>
+               </div>
+            </div>
+         </div>
+      )}
+
+      {/* CEFR Quiz Confirmation Popup */}
+      {showQuizConfirmation && (
+         <div className="fixed inset-0 z-[60] bg-gray-900/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+               <div className="bg-gradient-to-r from-teal-600 to-cyan-600 p-6 text-white text-center">
+                  <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                     <FileText className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-xl font-bold">Siap Memulai CEFR Test?</h3>
+                  <p className="text-sm text-white/80 mt-2">Pastikan Anda siap sebelum memulai</p>
+               </div>
+               <div className="p-6 space-y-4">
+                  <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                     <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+                           <BookOpen className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                           <p className="font-bold text-gray-900">Jumlah Soal</p>
+                           <p className="text-sm text-gray-500">{placementQuestions.length} pertanyaan pilihan ganda</p>
+                        </div>
+                     </div>
+                     <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center shrink-0">
+                           <Clock className="w-5 h-5 text-orange-600" />
+                        </div>
+                        <div>
+                           <p className="font-bold text-gray-900">Estimasi Waktu</p>
+                           <p className="text-sm text-gray-500">~{Math.ceil(placementQuestions.length * 0.5)} menit</p>
+                        </div>
+                     </div>
+                     <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center shrink-0">
+                           <CheckCircle className="w-5 h-5 text-green-600" />
+                        </div>
+                        <div>
+                           <p className="font-bold text-gray-900">Tips</p>
+                           <p className="text-sm text-gray-500">Baca setiap soal dengan teliti</p>
+                        </div>
+                     </div>
+                  </div>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+                     <p className="text-xs text-yellow-800 text-center">
+                        <strong>Perhatian:</strong> Setelah memulai, Anda harus menyelesaikan semua soal.
+                     </p>
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                     <Button
+                        variant="outline"
+                        onClick={() => setShowQuizConfirmation(false)}
+                        className="flex-1 h-11 rounded-xl font-semibold text-sm"
+                     >
+                        Kembali
+                     </Button>
+                     <Button
+                        onClick={handleConfirmStartQuiz}
+                        className="flex-1 h-11 rounded-xl font-semibold text-sm bg-teal-600 hover:bg-teal-700"
+                     >
+                        Mulai Sekarang
+                     </Button>
                   </div>
                </div>
             </div>

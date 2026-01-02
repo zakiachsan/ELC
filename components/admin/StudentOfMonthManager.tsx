@@ -2,14 +2,24 @@
 import React, { useState, useRef } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { Award, Plus, Pencil, Trash2, Upload, ChevronLeft, Save, User as UserIcon } from 'lucide-react';
-import { MOCK_STUDENTS_OF_THE_MONTH } from '../../constants';
+import { Award, Plus, Pencil, Trash2, Upload, ChevronLeft, Save, User as UserIcon, Loader2 } from 'lucide-react';
+import { useStudentsOfMonth } from '../../hooks/useContent';
 import { StudentOfTheMonth } from '../../types';
 
 export const StudentOfMonthManager: React.FC = () => {
-  const [students, setStudents] = useState<StudentOfTheMonth[]>(MOCK_STUDENTS_OF_THE_MONTH);
+  const { students: studentsData, loading, error, createStudent, deleteStudent } = useStudentsOfMonth();
   const [view, setView] = useState<'list' | 'editor'>('list');
   const [editingItem, setEditingItem] = useState<Partial<StudentOfTheMonth> | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Map database format to component format
+  const students: StudentOfTheMonth[] = studentsData.map(s => ({
+    id: s.id,
+    name: s.name,
+    achievement: s.achievement,
+    monthYear: s.month_year,
+    image: s.image || '',
+  }));
 
   const handleCreate = () => {
     setEditingItem({
@@ -26,20 +36,56 @@ export const StudentOfMonthManager: React.FC = () => {
     setView('editor');
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Remove this student from the Hall of Fame?')) {
-      setStudents(students.filter(s => s.id !== id));
+      try {
+        await deleteStudent(id);
+      } catch (err) {
+        console.error('Error deleting student:', err);
+        alert('Failed to delete student.');
+      }
     }
   };
 
-  const handleSave = (item: StudentOfTheMonth) => {
-    if (students.find(s => s.id === item.id)) {
-      setStudents(students.map(s => s.id === item.id ? item : s));
-    } else {
-      setStudents([item, ...students]);
+  const handleSave = async (item: StudentOfTheMonth) => {
+    setIsSubmitting(true);
+    try {
+      const existing = studentsData.find(s => s.id === item.id);
+      if (existing) {
+        // For editing, we'd need updateStudent - for now just delete and create
+        await deleteStudent(item.id);
+      }
+      await createStudent({
+        name: item.name,
+        achievement: item.achievement,
+        month_year: item.monthYear,
+        image: item.image,
+      });
+      setView('list');
+    } catch (err) {
+      console.error('Error saving student:', err);
+      alert('Failed to save student.');
+    } finally {
+      setIsSubmitting(false);
     }
-    setView('list');
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading students...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+        Error loading students: {error.message}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">

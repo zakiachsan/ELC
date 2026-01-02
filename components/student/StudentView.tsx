@@ -1,9 +1,11 @@
 
 import React, { useState } from 'react';
-import { User, SkillCategory, DifficultyLevel } from '../../types';
+import { User, SkillCategory, DifficultyLevel, ClassSession } from '../../types';
 import { Card } from '../Card';
-import { MOCK_SESSIONS, MOCK_SESSION_REPORTS, LEVEL_COLORS, MOCK_MODULE_PROGRESS, MOCK_ONLINE_MODULES } from '../../constants';
-import { Calendar, Clock, MapPin, Headphones, BookOpen, PenTool, Mic, AlignLeft, Book, Info, ChevronDown, ChevronUp, History, MonitorPlay, School } from 'lucide-react';
+import { LEVEL_COLORS } from '../../constants';
+import { useTodaySessions, useUpcomingSessions, useSessions } from '../../hooks/useSessions';
+import { useModuleProgress, useModules } from '../../hooks/useModules';
+import { Calendar, Clock, MapPin, Headphones, BookOpen, PenTool, Mic, AlignLeft, Book, Info, ChevronDown, ChevronUp, History, MonitorPlay, School, Loader2 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 
 // Icon Mapper for Skills
@@ -18,34 +20,58 @@ export const SKILL_ICONS: Record<SkillCategory, React.ElementType> = {
 
 export const StudentView: React.FC<{ student: User }> = ({ student }) => {
   const { t } = useLanguage();
+  const { sessions: todaySessionsData, loading: todayLoading } = useTodaySessions();
+  const { sessions: upcomingSessionsData, loading: upcomingLoading } = useUpcomingSessions();
+  const { sessions: allSessionsData, loading: sessionsLoading } = useSessions({ past: true });
+  const { progress: progressData, loading: progressLoading } = useModuleProgress(student.id);
+  const { modules: modulesData, loading: modulesLoading } = useModules();
+
   const now = new Date();
   const [isSkillsExpanded, setIsSkillsExpanded] = useState(false);
 
-  // Class Logic
-  const todaySession = MOCK_SESSIONS.find(s => {
-    const d = new Date(s.dateTime);
-    return d.getDate() === now.getDate() &&
-           d.getMonth() === now.getMonth() &&
-           d.getFullYear() === now.getFullYear();
+  // Map sessions from database
+  const mapSession = (s: any): ClassSession => ({
+    id: s.id,
+    teacherId: s.teacher_id,
+    topic: s.topic,
+    description: s.description || '',
+    dateTime: s.date_time,
+    location: s.location,
+    skillCategory: s.skill_category as SkillCategory,
+    difficultyLevel: s.difficulty_level as DifficultyLevel,
+    materials: s.materials || [],
   });
 
-  const upcomingSession = MOCK_SESSIONS
-    .filter(s => new Date(s.dateTime) > now)
-    .sort((a,b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime())[0];
+  // Class Logic
+  const todaySession = todaySessionsData.map(mapSession)[0];
+
+  const upcomingSession = upcomingSessionsData
+    .map(mapSession)
+    .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime())[0];
 
   // Recent Offline Activity (Last class attended)
-  const lastOfflineSession = MOCK_SESSIONS
+  const lastOfflineSession = allSessionsData
+    .map(mapSession)
     .filter(s => new Date(s.dateTime) < now)
-    .sort((a,b) => (b.dateTime ? new Date(b.dateTime).getTime() : 0) - (a.dateTime ? new Date(a.dateTime).getTime() : 0))[0];
+    .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime())[0];
 
   // Recent Online Activity (Last module started/completed)
-  const lastOnlineProgress = MOCK_MODULE_PROGRESS
-    .filter(p => p.studentId === student.id)
-    .sort((a,b) => (b.completedDate ? new Date(b.completedDate).getTime() : 0) - (a.completedDate ? new Date(a.completedDate).getTime() : 0))[0];
+  const lastOnlineProgress = progressData
+    .filter(p => p.student_id === student.id)
+    .sort((a, b) => (b.completed_at ? new Date(b.completed_at).getTime() : 0) - (a.completed_at ? new Date(a.completed_at).getTime() : 0))[0];
 
   const lastOnlineModule = lastOnlineProgress
-    ? MOCK_ONLINE_MODULES.find(m => m.id === lastOnlineProgress.moduleId)
+    ? modulesData.find(m => m.id === lastOnlineProgress.module_id)
     : null;
+
+  if (todayLoading || upcomingLoading || sessionsLoading || progressLoading || modulesLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading dashboard...</span>
+      </div>
+    );
+  }
 
   // Skill logic
   const allSkills = Object.values(SkillCategory);

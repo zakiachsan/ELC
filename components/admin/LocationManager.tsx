@@ -2,41 +2,72 @@
 import React, { useState } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { MapPin, Plus, Trash2, Building, ShieldAlert } from 'lucide-react';
-import { MOCK_LOCATIONS } from '../../constants';
-import { Location } from '../../types';
+import { MapPin, Plus, Trash2, Building, ShieldAlert, Loader2 } from 'lucide-react';
+import { useLocations } from '../../hooks/useProfiles';
 
 export const LocationManager: React.FC = () => {
-  const [locations, setLocations] = useState<Location[]>(MOCK_LOCATIONS);
+  const { locations, loading, error, createLocation, deleteLocation } = useLocations();
   const [isAdding, setIsAdding] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, id: string, name: string }>({
     isOpen: false,
     id: '',
     name: ''
   });
-  
+
   // Form State
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [capacity, setCapacity] = useState('');
 
-  const handleAdd = (e: React.FormEvent) => {
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newLoc: Location = {
-        id: `loc${Date.now()}`,
+    setIsSubmitting(true);
+    try {
+      await createLocation({
         name,
         address,
         capacity: Number(capacity)
-    };
-    setLocations([...locations, newLoc]);
-    setIsAdding(false);
-    setName(''); setAddress(''); setCapacity('');
+      });
+      setIsAdding(false);
+      setName(''); setAddress(''); setCapacity('');
+    } catch (err) {
+      console.error('Error creating location:', err);
+      alert('Failed to create location. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const confirmDelete = () => {
-    setLocations(locations.filter(l => l.id !== deleteConfirm.id));
-    setDeleteConfirm({ isOpen: false, id: '', name: '' });
+  const confirmDelete = async () => {
+    setIsSubmitting(true);
+    try {
+      await deleteLocation(deleteConfirm.id);
+      setDeleteConfirm({ isOpen: false, id: '', name: '' });
+    } catch (err) {
+      console.error('Error deleting location:', err);
+      alert('Failed to delete location. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading locations...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+        Error loading locations: {error.message}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

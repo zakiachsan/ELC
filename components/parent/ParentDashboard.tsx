@@ -1,88 +1,113 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card } from '../Card';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { User, SkillCategory, DifficultyLevel, CEFRLevel, Homework } from '../../types';
-import { MOCK_SESSIONS, MOCK_SESSION_REPORTS, MOCK_MODULE_PROGRESS, MOCK_ONLINE_MODULES, LEVEL_COLORS, MOCK_HOMEWORKS } from '../../constants';
-import { SKILL_ICONS } from '../student/StudentView';
-import { TrendingUp, Calendar, CheckCircle, Clock, MapPin, AlertTriangle, BookOpen, Brain, List, Activity, History, Award, FileText, PenLine, Mic, ClipboardCheck, Play, X } from 'lucide-react';
+import { User } from '../../types';
+import { LEVEL_COLORS } from '../../constants';
+import { TrendingUp, Calendar, CheckCircle, Clock, MapPin, AlertTriangle, BookOpen, Brain, List, Activity, History, Award, FileText, PenLine, Mic, ClipboardCheck, Play, X, Loader2 } from 'lucide-react';
 import { useSettings } from '../../contexts/SettingsContext';
+import { useSessions } from '../../hooks/useSessions';
+import { useReports, useStudentStats } from '../../hooks/useReports';
+import { useHomeworks } from '../../hooks/useHomeworks';
 
-// --- SHARED DATA HOOK ---
+// --- SHARED DATA HOOK (using real Supabase data) ---
 const useParentData = (student: User) => {
-  // 1. Attendance Logic
-  const attendanceRecords = MOCK_SESSIONS
-    .filter(s => new Date(s.dateTime) <= new Date())
-    .map(s => {
-       const report = MOCK_SESSION_REPORTS[s.id]?.find(r => r.studentId === student.id);
-       return report ? report.attendanceStatus : 'PENDING';
-    });
+  // Fetch all sessions
+  const { sessions: allSessions, loading: sessionsLoading } = useSessions();
+  // Fetch reports for this student
+  const { reports: studentReports, loading: reportsLoading } = useReports({ studentId: student.id });
+  // Fetch homeworks for this student
+  const { homeworks: studentHomeworks, loading: homeworksLoading } = useHomeworks({ studentId: student.id });
+  // Fetch student stats
+  const { stats, loading: statsLoading } = useStudentStats(student.id);
 
-  const totalClasses = attendanceRecords.length;
-  const presentCount = attendanceRecords.filter(s => s === 'PRESENT').length;
-  const lateCount = attendanceRecords.filter(s => s === 'LATE').length;
-  const absentCount = attendanceRecords.filter(s => s === 'ABSENT').length;
-  const attendanceRate = totalClasses > 0 ? Math.round(((presentCount + (lateCount * 0.5)) / totalClasses) * 100) : 0;
+  const loading = sessionsLoading || reportsLoading || homeworksLoading || statsLoading;
+
+  // Create a map of reports by session_id for quick lookup
+  const reportsBySession = useMemo(() => {
+    const map: Record<string, typeof studentReports[0]> = {};
+    studentReports.forEach(r => {
+      map[r.session_id] = r;
+    });
+    return map;
+  }, [studentReports]);
+
+  // 1. Attendance Logic (from stats)
+  const attendanceRate = stats?.attendance.attendanceRate ?? 0;
+  const presentCount = stats?.attendance.present ?? 0;
+  const lateCount = stats?.attendance.late ?? 0;
+  const absentCount = stats?.attendance.absent ?? 0;
 
   // 2. Get all session reports for this student with scores
-  const sessionGrades = MOCK_SESSIONS.map(s => {
-    const report = MOCK_SESSION_REPORTS[s.id]?.find(r => r.studentId === student.id);
-    if (!report) return null;
-    return {
-      sessionId: s.id,
-      date: s.dateTime,
-      topic: s.topic,
-      skillCategory: s.skillCategory,
-      writtenScore: report.writtenScore,
-      oralScore: report.oralScore,
-      cefrLevel: report.cefrLevel,
-      teacherNotes: report.teacherNotes
-    };
-  }).filter(Boolean);
+  const sessionGrades = useMemo(() => {
+    return allSessions
+      .filter(s => new Date(s.date_time) <= new Date())
+      .map(s => {
+        const report = reportsBySession[s.id];
+        if (!report) return null;
+        return {
+          sessionId: s.id,
+          date: s.date_time,
+          topic: s.topic,
+          skillCategory: s.skill_category,
+          writtenScore: report.written_score,
+          oralScore: report.oral_score,
+          cefrLevel: report.cefr_level,
+          teacherNotes: report.teacher_notes
+        };
+      })
+      .filter(Boolean);
+  }, [allSessions, reportsBySession]);
 
   // 3. CEFR progression chart data
-  const cefrChartData = sessionGrades
-    .filter(g => g?.cefrLevel)
-    .map(g => {
-      const cefrOrder: Record<string, number> = {
-        'A1 - Beginner': 1,
-        'A2 - Elementary': 2,
-        'B1 - Intermediate': 3,
-        'B2 - Upper Intermediate': 4,
-        'C1 - Advanced': 5,
-        'C2 - Proficient': 6
-      };
-      return {
-        name: new Date(g!.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
-        level: cefrOrder[g!.cefrLevel!] || 0,
-        label: g!.cefrLevel?.split(' - ')[0]
-      };
-    });
+  const cefrChartData = useMemo(() => {
+    return sessionGrades
+      .filter(g => g?.cefrLevel)
+      .map(g => {
+        const cefrOrder: Record<string, number> = {
+          'A1 - Beginner': 1,
+          'A2 - Elementary': 2,
+          'B1 - Intermediate': 3,
+          'B2 - Upper Intermediate': 4,
+          'C1 - Advanced': 5,
+          'C2 - Proficient': 6
+        };
+        return {
+          name: new Date(g!.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+          level: cefrOrder[g!.cefrLevel!] || 0,
+          label: g!.cefrLevel?.split(' - ')[0]
+        };
+      });
+  }, [sessionGrades]);
 
   // 4. Homework for this student
-  const studentHomeworks = MOCK_HOMEWORKS.filter(h => h.studentId === student.id);
-  const pendingHomeworks = studentHomeworks.filter(h => h.status === 'PENDING');
-  const completedHomeworks = studentHomeworks.filter(h => h.status !== 'PENDING');
+  const pendingHomeworks = useMemo(() =>
+    studentHomeworks.filter(h => h.status === 'PENDING'), [studentHomeworks]);
+  const completedHomeworks = useMemo(() =>
+    studentHomeworks.filter(h => h.status !== 'PENDING'), [studentHomeworks]);
 
   // 5. Schedule Logic
-  const upcomingClasses = MOCK_SESSIONS
-    .filter(s => new Date(s.dateTime) > new Date())
-    .sort((a,b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+  const upcomingClasses = useMemo(() =>
+    allSessions
+      .filter(s => new Date(s.date_time) > new Date())
+      .sort((a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime()),
+    [allSessions]);
 
-  const pastClasses = MOCK_SESSIONS
-    .filter(s => new Date(s.dateTime) <= new Date())
-    .sort((a,b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
+  const pastClasses = useMemo(() =>
+    allSessions
+      .filter(s => new Date(s.date_time) <= new Date())
+      .sort((a, b) => new Date(b.date_time).getTime() - new Date(a.date_time).getTime()),
+    [allSessions]);
 
   // 6. Latest CEFR level
   const latestCefr = sessionGrades.filter(g => g?.cefrLevel).pop()?.cefrLevel;
 
-  // 7. Average scores
-  const writtenScores = sessionGrades.filter(g => g?.writtenScore !== undefined).map(g => g!.writtenScore!);
-  const oralScores = sessionGrades.filter(g => g?.oralScore !== undefined).map(g => g!.oralScore!);
-  const avgWritten = writtenScores.length > 0 ? Math.round(writtenScores.reduce((a, b) => a + b, 0) / writtenScores.length) : null;
-  const avgOral = oralScores.length > 0 ? Math.round(oralScores.reduce((a, b) => a + b, 0) / oralScores.length) : null;
+  // 7. Average scores (from stats)
+  const avgWritten = stats?.scores.averageWritten ?? null;
+  const avgOral = stats?.scores.averageOral ?? null;
 
   return {
+    loading,
     attendanceRate, presentCount, lateCount, absentCount,
     sessionGrades, cefrChartData, studentHomeworks, pendingHomeworks, completedHomeworks,
     upcomingClasses, pastClasses, latestCefr, avgWritten, avgOral
@@ -91,11 +116,20 @@ const useParentData = (student: User) => {
 
 // --- COMPONENT 1: OVERVIEW ---
 export const ParentOverview: React.FC<{ student: User }> = ({ student }) => {
-  const { attendanceRate, cefrChartData, pendingHomeworks, latestCefr, avgWritten, avgOral, upcomingClasses } = useParentData(student);
+  const { loading, attendanceRate, cefrChartData, pendingHomeworks, latestCefr, avgWritten, avgOral, upcomingClasses } = useParentData(student);
   const { settings } = useSettings();
   const [showVideoModal, setShowVideoModal] = useState(false);
 
   const isPortrait = settings.videoOrientation === 'portrait';
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <span className="ml-2 text-gray-600">Loading data...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 animate-in fade-in">
@@ -248,7 +282,7 @@ export const ParentOverview: React.FC<{ student: User }> = ({ student }) => {
                     <p className="text-[10px] text-gray-500 line-clamp-2">{hw.description}</p>
                     <div className="flex items-center gap-1 mt-1 text-[9px] text-orange-600 font-bold">
                       <Clock className="w-3 h-3" />
-                      Due: {new Date(hw.dueDate).toLocaleDateString()}
+                      Due: {new Date(hw.due_date).toLocaleDateString()}
                     </div>
                   </div>
                 ))}
@@ -271,11 +305,11 @@ export const ParentOverview: React.FC<{ student: User }> = ({ student }) => {
                 <div className="flex items-center gap-2 mt-1 text-[10px] text-blue-600">
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3" />
-                    {new Date(upcomingClasses[0].dateTime).toLocaleDateString()}
+                    {new Date(upcomingClasses[0].date_time).toLocaleDateString()}
                   </span>
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
-                    {new Date(upcomingClasses[0].dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(upcomingClasses[0].date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
               </div>
@@ -291,8 +325,17 @@ export const ParentOverview: React.FC<{ student: User }> = ({ student }) => {
 
 // --- COMPONENT 2: ACTIVITY LOG (Grades History) ---
 export const ParentActivityLog: React.FC<{ student: User }> = ({ student }) => {
-  const { sessionGrades, completedHomeworks } = useParentData(student);
+  const { loading, sessionGrades, completedHomeworks } = useParentData(student);
   const [activeTab, setActiveTab] = useState<'grades' | 'homework'>('grades');
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <span className="ml-2 text-gray-600">Loading data...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 animate-in fade-in">
@@ -407,7 +450,7 @@ export const ParentActivityLog: React.FC<{ student: User }> = ({ student }) => {
                     )}
                   </td>
                   <td className="px-4 py-2 text-[10px] text-gray-500">
-                    {new Date(hw.dueDate).toLocaleDateString()}
+                    {new Date(hw.due_date).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-2">
                     <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
@@ -439,8 +482,17 @@ export const ParentActivityLog: React.FC<{ student: User }> = ({ student }) => {
 
 // --- COMPONENT 3: SCHEDULE ---
 export const ParentSchedule: React.FC<{ student: User }> = ({ student }) => {
-  const { upcomingClasses, pastClasses } = useParentData(student);
+  const { loading, upcomingClasses, pastClasses } = useParentData(student);
   const [view, setView] = useState<'upcoming' | 'history'>('upcoming');
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <span className="ml-2 text-gray-600">Loading data...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 animate-in fade-in">
@@ -487,15 +539,15 @@ export const ParentSchedule: React.FC<{ student: User }> = ({ student }) => {
             {(view === 'upcoming' ? upcomingClasses : pastClasses).map(session => (
               <tr key={session.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2">
-                  <div className="text-xs font-medium text-gray-900">{new Date(session.dateTime).toLocaleDateString()}</div>
-                  <div className="text-[10px] text-gray-500">{new Date(session.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                  <div className="text-xs font-medium text-gray-900">{new Date(session.date_time).toLocaleDateString()}</div>
+                  <div className="text-[10px] text-gray-500">{new Date(session.date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                 </td>
                 <td className="px-4 py-2">
                   <div className="text-xs font-bold text-gray-900">{session.topic}</div>
                 </td>
                 <td className="px-4 py-2">
                   <span className="text-[9px] font-bold text-gray-600 uppercase bg-gray-100 px-1.5 py-0.5 rounded">
-                    {session.skillCategory}
+                    {session.skill_category}
                   </span>
                 </td>
                 <td className="px-4 py-2">

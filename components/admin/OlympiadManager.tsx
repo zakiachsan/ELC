@@ -2,16 +2,56 @@
 import React, { useState } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { Trophy, Plus, Trash2, CheckCircle, DollarSign, Sparkles, Mail, Smartphone, X, ToggleLeft, ToggleRight, MapPin, Clock, Calendar, User, Home, Users, Eye, GraduationCap } from 'lucide-react';
-import { MOCK_OLYMPIADS, MOCK_OLYMPIAD_REGISTRATIONS } from '../../constants';
+import { Trophy, Plus, Trash2, CheckCircle, DollarSign, Sparkles, Mail, Smartphone, X, ToggleLeft, ToggleRight, MapPin, Clock, Calendar, User, Home, Users, Eye, GraduationCap, Loader2 } from 'lucide-react';
+import { useOlympiads, useOlympiadRegistrations } from '../../hooks/useOlympiads';
 import { Olympiad, OlympiadStatus, OlympiadQuestion, OlympiadBenefit, OlympiadRegistration } from '../../types';
 
 export const OlympiadManager: React.FC = () => {
+  const { olympiads: olympiadsData, loading, error, createOlympiad, updateOlympiad } = useOlympiads();
+  const { registrations: registrationsData } = useOlympiadRegistrations();
+
   const [view, setView] = useState<'list' | 'edit'>('list');
-  const [olympiads, setOlympiads] = useState<Olympiad[]>(MOCK_OLYMPIADS.map((o, i) => ({ ...o, isActive: i === 0 })));
   const [selectedOlympiad, setSelectedOlympiad] = useState<Olympiad | null>(null);
   const [activeTab, setActiveTab] = useState<'setup' | 'participants'>('setup');
   const [selectedParticipant, setSelectedParticipant] = useState<OlympiadRegistration | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Map database format to component format
+  const olympiads: Olympiad[] = olympiadsData.map(o => ({
+    id: o.id,
+    title: o.title,
+    description: o.description || '',
+    status: o.status as OlympiadStatus,
+    startDate: o.start_date,
+    endDate: o.end_date,
+    eventDate: o.event_date || undefined,
+    eventTime: o.event_time || undefined,
+    eventLocation: o.event_location || undefined,
+    price: o.price || 0,
+    terms: o.terms || '',
+    benefits: (o.benefits as OlympiadBenefit[]) || [],
+    questions: (o.questions as OlympiadQuestion[]) || [],
+    participantCount: registrationsData.filter(r => r.olympiad_id === o.id && r.status === 'SUCCESS').length,
+    isActive: o.is_active,
+  }));
+
+  const allRegistrations: OlympiadRegistration[] = registrationsData.map(r => ({
+    id: r.id,
+    olympiadId: r.olympiad_id,
+    name: r.name,
+    email: r.email,
+    school: r.school,
+    schoolOrigin: r.school,
+    grade: r.grade,
+    dob: r.dob || undefined,
+    wa: r.whatsapp || '',
+    personalWa: r.whatsapp || undefined,
+    parentName: r.parent_name || undefined,
+    parentWa: r.parent_whatsapp || undefined,
+    address: r.address || undefined,
+    timestamp: r.created_at,
+    status: r.status as 'PENDING' | 'SUCCESS',
+  }));
 
   // Form State
   const [title, setTitle] = useState('');
@@ -30,11 +70,19 @@ export const OlympiadManager: React.FC = () => {
   // New Benefit Input State
   const [newBenefitTitle, setNewBenefitTitle] = useState('');
 
-  const handleToggleActive = (olympiadId: string) => {
-    setOlympiads(olympiads.map(o => ({
-      ...o,
-      isActive: o.id === olympiadId ? !o.isActive : false
-    })));
+  const handleToggleActive = async (olympiadId: string) => {
+    try {
+      // First set all to inactive, then set the target one to active
+      for (const o of olympiadsData) {
+        if (o.id === olympiadId) {
+          await updateOlympiad(o.id, { is_active: !o.is_active });
+        } else if (o.is_active) {
+          await updateOlympiad(o.id, { is_active: false });
+        }
+      }
+    } catch (err) {
+      console.error('Error toggling active:', err);
+    }
   };
 
   const handleEdit = (ol: Olympiad) => {
@@ -65,33 +113,57 @@ export const OlympiadManager: React.FC = () => {
     setBenefits(benefits.filter((_, i) => i !== index));
   };
 
-  const handleSave = () => {
-    const newOl: Olympiad = {
-      id: selectedOlympiad?.id || 'ol' + Date.now(),
-      title,
-      description,
-      status,
-      startDate,
-      endDate,
-      eventDate,
-      eventTime,
-      eventLocation,
-      price,
-      terms,
-      benefits,
-      questions,
-      participantCount: selectedOlympiad?.participantCount || 0,
-      isActive: selectedOlympiad?.isActive
-    };
-    if (selectedOlympiad?.id) {
-      setOlympiads(olympiads.map(o => o.id === newOl.id ? newOl : o));
-    } else {
-      setOlympiads([...olympiads, newOl]);
+  const handleSave = async () => {
+    setIsSubmitting(true);
+    try {
+      const olympiadData = {
+        title,
+        description,
+        status,
+        start_date: startDate,
+        end_date: endDate,
+        event_date: eventDate || null,
+        event_time: eventTime || null,
+        event_location: eventLocation || null,
+        price,
+        terms,
+        benefits,
+        questions,
+        is_active: selectedOlympiad?.isActive || false,
+      };
+
+      if (selectedOlympiad?.id && olympiadsData.find(o => o.id === selectedOlympiad.id)) {
+        await updateOlympiad(selectedOlympiad.id, olympiadData);
+      } else {
+        await createOlympiad(olympiadData);
+      }
+      setView('list');
+    } catch (err) {
+      console.error('Error saving olympiad:', err);
+      alert('Failed to save olympiad.');
+    } finally {
+      setIsSubmitting(false);
     }
-    setView('list');
   };
 
-  const verifiedParticipants = MOCK_OLYMPIAD_REGISTRATIONS.filter(r => r.olympiadId === selectedOlympiad?.id && r.status === 'SUCCESS');
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">Loading olympiads...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+        Error loading olympiads: {error.message}
+      </div>
+    );
+  }
+
+  const verifiedParticipants = allRegistrations.filter(r => r.olympiadId === selectedOlympiad?.id && r.status === 'SUCCESS');
 
   return (
     <div className="space-y-4">
@@ -233,7 +305,7 @@ export const OlympiadManager: React.FC = () => {
                 <tr key={ol.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-2.5">
                     <div className="font-bold text-gray-900 text-xs">{ol.title}</div>
-                    <div className="text-[10px] text-gray-400">{ol.questions.length} Soal • {MOCK_OLYMPIAD_REGISTRATIONS.filter(r => r.olympiadId === ol.id).length} Peserta</div>
+                    <div className="text-[10px] text-gray-400">{ol.questions.length} Soal • {allRegistrations.filter(r => r.olympiadId === ol.id).length} Peserta</div>
                   </td>
                   <td className="px-4 py-2.5">
                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${ol.status === OlympiadStatus.OPEN ? 'bg-green-100 text-green-700' : ol.status === OlympiadStatus.CLOSED ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>

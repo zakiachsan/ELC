@@ -109,6 +109,7 @@ export interface TuitionInvoice {
 export interface News {
   id: string;
   title: string;
+  slug?: string;
   featuredImage: string;
   videoUrl?: string;
   displayMedia: 'image' | 'video';
