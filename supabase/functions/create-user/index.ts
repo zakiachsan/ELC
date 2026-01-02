@@ -25,8 +25,16 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Debug: Log environment variables (not the actual values, just whether they exist)
+    const supabaseUrlEnv = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKeyEnv = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    console.log("ENV Check - SUPABASE_URL exists:", !!supabaseUrlEnv, "URL:", supabaseUrlEnv?.substring(0, 30) + "...");
+    console.log("ENV Check - SERVICE_ROLE_KEY exists:", !!serviceRoleKeyEnv, "Key length:", serviceRoleKeyEnv?.length);
+
     // Get the authorization header to verify admin
     const authHeader = req.headers.get("Authorization");
+    console.log("Auth header exists:", !!authHeader);
+
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: "Missing authorization header" }),
@@ -34,10 +42,26 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Extract token from Bearer header
+    const token = authHeader.replace("Bearer ", "");
+    console.log("Token length:", token.length);
+    console.log("Token prefix:", token.substring(0, 50) + "...");
+
+    // Decode JWT to see what project it's from (without verifying)
+    try {
+      const [, payloadBase64] = token.split(".");
+      const payload = JSON.parse(atob(payloadBase64));
+      console.log("JWT payload ref (project):", payload.ref);
+      console.log("JWT payload sub (user id):", payload.sub);
+      console.log("JWT payload exp:", payload.exp, "now:", Math.floor(Date.now() / 1000));
+    } catch (e) {
+      console.log("Could not decode JWT:", e);
+    }
+
     // Create Supabase client with service role for admin operations
     const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      supabaseUrlEnv ?? "",
+      serviceRoleKeyEnv ?? "",
       {
         auth: {
           autoRefreshToken: false,
@@ -46,22 +70,22 @@ Deno.serve(async (req) => {
       }
     );
 
-    // Create client with user's token to verify they're admin
-    const supabaseUser = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
-    );
+    // Verify JWT token and get user using admin client
+    console.log("About to verify token...");
+    const { data: { user: requestingUser }, error: userError } = await supabaseAdmin.auth.getUser(token);
+    console.log("Verification result - user:", !!requestingUser, "error:", userError?.message);
 
-    // Get the requesting user
-    const { data: { user: requestingUser }, error: userError } = await supabaseUser.auth.getUser();
-    if (userError || !requestingUser) {
+    if (userError) {
+      console.error("Auth error:", userError);
       return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
+        JSON.stringify({ error: `Unauthorized: ${userError.message}`, debug: { tokenLength: token.length, hasUrl: !!supabaseUrlEnv, hasKey: !!serviceRoleKeyEnv } }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!requestingUser) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: No user found" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -73,9 +97,17 @@ Deno.serve(async (req) => {
       .eq("id", requestingUser.id)
       .single();
 
-    if (profileError || profile?.role !== "ADMIN") {
+    if (profileError) {
+      console.error("Profile error:", profileError);
       return new Response(
-        JSON.stringify({ error: "Only admins can create users" }),
+        JSON.stringify({ error: `Failed to get profile: ${profileError.message}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (profile?.role !== "ADMIN") {
+      return new Response(
+        JSON.stringify({ error: `Only admins can create users. Your role: ${profile?.role}` }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

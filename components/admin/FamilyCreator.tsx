@@ -243,9 +243,31 @@ export const AccountManager: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      // Verify user is logged in
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Anda harus login untuk membuat user baru');
+      }
+
+      console.log('Session found, user:', session.user.email);
+      console.log('Access token (first 50 chars):', session.access_token.substring(0, 50));
+
+      // Get Supabase URL from env
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
       // Step 1: Create Student first
-      const { data: studentResult, error: studentError } = await supabase.functions.invoke('create-user', {
-        body: {
+      console.log('Creating student with:', { email: studentEmail, name: studentName, role: 'STUDENT' });
+
+      // Use fetch directly with explicit headers for better debugging
+      const studentResponse = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify({
           email: studentEmail,
           password: studentPassword,
           name: studentName,
@@ -254,22 +276,35 @@ export const AccountManager: React.FC = () => {
           assigned_location_id: studentLocationId || undefined,
           school_origin: studentSchool || undefined,
           status: studentStatus,
-        },
+        }),
       });
 
-      if (studentError) {
-        throw new Error(`Gagal membuat akun student: ${studentError.message}`);
+      const studentResult = await studentResponse.json();
+      console.log('Student response status:', studentResponse.status);
+      console.log('Student result:', studentResult);
+
+      if (!studentResponse.ok) {
+        throw new Error(`Gagal membuat akun student: ${studentResult.error || studentResponse.statusText}`);
       }
 
       if (!studentResult?.success) {
-        throw new Error(studentResult?.error || 'Gagal membuat akun student');
+        throw new Error(studentResult?.error || 'Gagal membuat akun student - response tidak valid');
       }
 
       const newStudentId = studentResult.user.id;
+      console.log('Student created with ID:', newStudentId);
 
       // Step 2: Create Parent linked to student
-      const { data: parentResult, error: parentError } = await supabase.functions.invoke('create-user', {
-        body: {
+      console.log('Creating parent with:', { email: parentEmail, name: parentName, role: 'PARENT', linked_student_id: newStudentId });
+
+      const parentResponse = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify({
           email: parentEmail,
           password: parentPassword,
           name: parentName,
@@ -277,15 +312,19 @@ export const AccountManager: React.FC = () => {
           phone: parentPhone || undefined,
           address: parentAddress || undefined,
           linked_student_id: newStudentId,
-        },
+        }),
       });
 
-      if (parentError) {
-        throw new Error(`Gagal membuat akun parent: ${parentError.message}`);
+      const parentResult = await parentResponse.json();
+      console.log('Parent response status:', parentResponse.status);
+      console.log('Parent result:', parentResult);
+
+      if (!parentResponse.ok) {
+        throw new Error(`Gagal membuat akun parent: ${parentResult.error || parentResponse.statusText}`);
       }
 
       if (!parentResult?.success) {
-        throw new Error(parentResult?.error || 'Gagal membuat akun parent');
+        throw new Error(parentResult?.error || 'Gagal membuat akun parent - response tidak valid');
       }
 
       // Refetch data to update the list
@@ -360,7 +399,13 @@ export const AccountManager: React.FC = () => {
           resetForm();
         }, 1500);
       } else {
-        // Create new teacher via Edge Function
+        // Verify user is logged in
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          throw new Error('Anda harus login untuk membuat user baru');
+        }
+
+        // Create new teacher via Edge Function - let supabase client handle auth
         const { data: teacherResult, error: teacherError } = await supabase.functions.invoke('create-user', {
           body: {
             email: teacherEmail,
