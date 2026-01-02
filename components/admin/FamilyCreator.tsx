@@ -5,7 +5,8 @@ import { Button } from '../Button';
 import { Users, Link as LinkIcon, Lock, Mail, GraduationCap, Briefcase, Trash2, Pencil, MapPin, School, TrendingUp, UserCheck, Activity, ToggleLeft, ToggleRight, Camera, X as XIcon, Upload, ShieldAlert, Smartphone, Globe, Loader2 } from 'lucide-react';
 import { MOCK_USERS, MOCK_SCHOOLS, MOCK_SESSIONS, MOCK_SESSION_REPORTS } from '../../constants';
 import { UserRole, User } from '../../types';
-import { useTeachers, useLocations } from '../../hooks/useProfiles';
+import { useTeachers, useLocations, useParents, useStudents } from '../../hooks/useProfiles';
+import { supabase } from '../../lib/supabase';
 
 export const AccountManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'families' | 'teachers'>('families');
@@ -14,6 +15,8 @@ export const AccountManager: React.FC = () => {
 
   // Supabase hooks for real data
   const { profiles: teachersData, loading: teachersLoading, updateProfile, refetch: refetchTeachers } = useTeachers();
+  const { profiles: parentsData, loading: parentsLoading, refetch: refetchParents } = useParents();
+  const { profiles: studentsData, loading: studentsLoading, refetch: refetchStudents } = useStudents();
   const { locations, loading: locationsLoading } = useLocations();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -107,10 +110,35 @@ export const AccountManager: React.FC = () => {
     };
   };
 
-  const families = mockUsers.filter(u => u.role === UserRole.PARENT).map(parent => {
-    const student = mockUsers.find(s => s.id === parent.linkedStudentId);
-    return { parent, student };
-  });
+  // Use real Supabase data for families, fallback to mock if empty
+  const familiesLoading = parentsLoading || studentsLoading;
+  const families = parentsData.length > 0
+    ? parentsData.map(parent => {
+        const student = studentsData.find(s => s.id === parent.linked_student_id);
+        return {
+          parent: {
+            id: parent.id,
+            name: parent.name,
+            email: parent.email,
+            phone: parent.phone,
+            address: parent.address,
+            linkedStudentId: parent.linked_student_id,
+          },
+          student: student ? {
+            id: student.id,
+            name: student.name,
+            email: student.email,
+            phone: student.phone,
+            status: student.status,
+            assignedLocationId: student.assigned_location_id,
+            schoolOrigin: student.school_origin,
+          } : undefined
+        };
+      })
+    : mockUsers.filter(u => u.role === UserRole.PARENT).map(parent => {
+        const student = mockUsers.find(s => s.id === parent.linkedStudentId);
+        return { parent, student };
+      });
 
   // Use real Supabase data for teachers, fallback to mock if empty
   const teachers = teachersData.length > 0
@@ -209,14 +237,72 @@ export const AccountManager: React.FC = () => {
     }
   };
 
-  const handleFamilySubmit = (e: React.FormEvent) => {
+  const handleFamilySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSuccess(true);
-    setTimeout(() => {
-      setSuccess(false);
-      setView('list');
-      resetForm();
-    }, 1500);
+    setSubmitError(null);
+    setIsSubmitting(true);
+
+    try {
+      // Step 1: Create Student first
+      const { data: studentResult, error: studentError } = await supabase.functions.invoke('create-user', {
+        body: {
+          email: studentEmail,
+          password: studentPassword,
+          name: studentName,
+          role: 'STUDENT',
+          phone: studentPhone || undefined,
+          assigned_location_id: studentLocationId || undefined,
+          school_origin: studentSchool || undefined,
+          status: studentStatus,
+        },
+      });
+
+      if (studentError) {
+        throw new Error(`Gagal membuat akun student: ${studentError.message}`);
+      }
+
+      if (!studentResult?.success) {
+        throw new Error(studentResult?.error || 'Gagal membuat akun student');
+      }
+
+      const newStudentId = studentResult.user.id;
+
+      // Step 2: Create Parent linked to student
+      const { data: parentResult, error: parentError } = await supabase.functions.invoke('create-user', {
+        body: {
+          email: parentEmail,
+          password: parentPassword,
+          name: parentName,
+          role: 'PARENT',
+          phone: parentPhone || undefined,
+          address: parentAddress || undefined,
+          linked_student_id: newStudentId,
+        },
+      });
+
+      if (parentError) {
+        throw new Error(`Gagal membuat akun parent: ${parentError.message}`);
+      }
+
+      if (!parentResult?.success) {
+        throw new Error(parentResult?.error || 'Gagal membuat akun parent');
+      }
+
+      // Refetch data to update the list
+      await Promise.all([refetchParents(), refetchStudents()]);
+
+      setSuccess(true);
+      setTimeout(() => {
+        setSuccess(false);
+        setView('list');
+        resetForm();
+      }, 1500);
+    } catch (error) {
+      console.error('Failed to create family:', error);
+      setSubmitError(error instanceof Error ? error.message : 'Gagal membuat family unit');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Helper to check if string is valid UUID
@@ -274,9 +360,42 @@ export const AccountManager: React.FC = () => {
           resetForm();
         }, 1500);
       } else {
-        // Create new teacher - for now just show success (needs auth integration)
-        console.log('Creating new teacher - requires auth user creation first');
-        setSubmitError('Fitur create teacher baru memerlukan integrasi dengan Supabase Auth');
+        // Create new teacher via Edge Function
+        const { data: teacherResult, error: teacherError } = await supabase.functions.invoke('create-user', {
+          body: {
+            email: teacherEmail,
+            password: teacherPassword,
+            name: teacherName,
+            role: 'TEACHER',
+            assigned_location_id: teacherLocationId || undefined,
+            status: teacherStatus,
+          },
+        });
+
+        if (teacherError) {
+          throw new Error(`Gagal membuat akun teacher: ${teacherError.message}`);
+        }
+
+        if (!teacherResult?.success) {
+          throw new Error(teacherResult?.error || 'Gagal membuat akun teacher');
+        }
+
+        // Update with subjects if selected (profile already created, just update)
+        if (teacherSubjects.length > 0) {
+          await updateProfile(teacherResult.user.id, {
+            assigned_subjects: teacherSubjects,
+          });
+        }
+
+        // Refetch to update the list
+        await refetchTeachers();
+
+        setSuccess(true);
+        setTimeout(() => {
+          setSuccess(false);
+          setView('list');
+          resetForm();
+        }, 1500);
       }
     } catch (error) {
       console.error('Failed to save teacher:', error);
@@ -332,6 +451,12 @@ export const AccountManager: React.FC = () => {
         <>
             {view === 'list' ? (
                 <Card className="!p-0">
+                    {familiesLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                        <span className="ml-2 text-sm text-gray-500">Loading families...</span>
+                      </div>
+                    ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-xs">
                           <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
@@ -393,6 +518,7 @@ export const AccountManager: React.FC = () => {
                           </tbody>
                       </table>
                     </div>
+                    )}
                 </Card>
             ) : (
                 <Card title={isEditing ? "Edit Family Unit" : "Register New Family Unit"} className="!p-4">
@@ -480,17 +606,29 @@ export const AccountManager: React.FC = () => {
                                     <label className="text-[9px] font-bold text-gray-500 uppercase">Sekolah</label>
                                     <select value={studentLocationId} onChange={(e) => setStudentLocationId(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none bg-white text-xs">
                                       <option value="">Pilih Sekolah</option>
-                                      {MOCK_SCHOOLS.map(school => <option key={school.id} value={school.id}>{school.name}</option>)}
+                                      {locations.length > 0
+                                        ? locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)
+                                        : MOCK_SCHOOLS.map(school => <option key={school.id} value={school.id}>{school.name}</option>)
+                                      }
                                     </select>
                                 </div>
                             </div>
                         </div>
+                        {submitError && (
+                          <div className="p-3 bg-red-50 text-red-700 rounded-lg border border-red-100 text-xs">
+                            {submitError}
+                          </div>
+                        )}
+
                         <div className="flex justify-between items-center pt-2">
-                            <Button type="button" variant="outline" onClick={() => setView('list')} className="text-xs py-1.5 px-3">Cancel</Button>
-                            <Button type="submit" className="px-6 shadow-md text-xs py-1.5">{isEditing ? "Update" : "Create"}</Button>
+                            <Button type="button" variant="outline" onClick={() => setView('list')} className="text-xs py-1.5 px-3" disabled={isSubmitting}>Cancel</Button>
+                            <Button type="submit" className="px-6 shadow-md text-xs py-1.5 flex items-center gap-2" disabled={isSubmitting}>
+                              {isSubmitting && <Loader2 className="w-3 h-3 animate-spin" />}
+                              {isSubmitting ? "Menyimpan..." : (isEditing ? "Update" : "Create")}
+                            </Button>
                         </div>
                     </form>
-                    {success && <div className="mt-3 p-3 bg-green-50 text-green-700 rounded-lg border border-green-100 font-bold text-center text-xs">Success!</div>}
+                    {success && <div className="mt-3 p-3 bg-green-50 text-green-700 rounded-lg border border-green-100 font-bold text-center text-xs">Family unit berhasil dibuat!</div>}
                 </Card>
             )}
         </>

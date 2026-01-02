@@ -73,48 +73,6 @@
     }
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-      
-      /* Dynamic Theme Variables - Defaults to Blue/Yellow */
-      :root {
-        --primary-color: #2563eb; /* blue-600 */
-        --primary-hover: #1d4ed8; /* blue-700 */
-        --primary-light: #eff6ff; /* blue-50 */
-        --accent-color: #facc15; /* yellow-400 */
-        --accent-hover: #eab308; /* yellow-500 */
-        --accent-text: #1e3a8a; /* blue-900 (Text on accent) */
-      }
-
-      body {
-        font-family: 'Inter', sans-serif;
-        background-color: #f3f4f6;
-      }
-
-      /* Utility Classes that use the variables */
-      .theme-bg-primary { background-color: var(--primary-color) !important; }
-      .theme-bg-primary-hover:hover { background-color: var(--primary-hover) !important; }
-      .theme-bg-primary-light { background-color: var(--primary-light) !important; }
-      
-      .theme-text-primary { color: var(--primary-color) !important; }
-      .theme-border-primary { border-color: var(--primary-color) !important; }
-
-      .theme-bg-accent { background-color: var(--accent-color) !important; }
-      .theme-bg-accent-hover:hover { background-color: var(--accent-hover) !important; }
-      .theme-text-accent { color: var(--accent-color) !important; }
-      .theme-border-accent { border-color: var(--accent-color) !important; }
-      
-      /* Special case for text on top of accent button */
-      .theme-text-on-accent { color: var(--accent-text) !important; }
-      
-      /* Gradient Helper */
-      .theme-gradient-text {
-        background-clip: text;
-        -webkit-background-clip: text;
-        color: transparent;
-        background-image: linear-gradient(to right, var(--primary-color), var(--accent-color));
-      }
-    </style>
   <script type="importmap">
 {
   "imports": {
