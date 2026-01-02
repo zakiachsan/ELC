@@ -1,0 +1,6 @@
+# Robots.txt untuk English Learning Center
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://elcenormous1.com/sitemap.xml
