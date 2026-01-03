@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { useStudents } from '../../hooks/useProfiles';
+import { useStudents, useLocations } from '../../hooks/useProfiles';
 import { useSessions } from '../../hooks/useSessions';
 import { useReports } from '../../hooks/useReports';
 import type { Database } from '../../lib/database.types';
@@ -31,6 +31,16 @@ export const StudentList: React.FC = () => {
   const { profiles: students, loading: studentsLoading } = useStudents();
   const { sessions, loading: sessionsLoading } = useSessions();
   const { reports, loading: reportsLoading } = useReports();
+  const { locations, loading: locationsLoading } = useLocations();
+
+  // Helper to get school name from assigned_location_id or school_origin
+  const getSchoolName = (student: Profile): string => {
+    if (student.assigned_location_id) {
+      const location = locations.find(loc => loc.id === student.assigned_location_id);
+      if (location) return location.name;
+    }
+    return student.school_origin || '';
+  };
 
   // UI State
   const [activeSubTab, setActiveSubTab] = useState<'directory' | 'statistics'>('directory');
@@ -44,10 +54,10 @@ export const StudentList: React.FC = () => {
   // Calculate unique schools from students
   const uniqueSchools = useMemo(() => {
     const schools = students
-      .map(s => s.school_origin)
+      .map(s => getSchoolName(s))
       .filter((school): school is string => !!school);
     return [...new Set(schools)].sort();
-  }, [students]);
+  }, [students, locations]);
 
   // Calculate student statistics
   const studentStats = useMemo(() => {
@@ -131,7 +141,7 @@ export const StudentList: React.FC = () => {
     }> = {};
 
     students.forEach(student => {
-      const school = student.school_origin || 'Tidak Diketahui';
+      const school = getSchoolName(student) || 'Tidak Diketahui';
       if (!stats[school]) {
         stats[school] = {
           studentCount: 0,
@@ -178,7 +188,7 @@ export const StudentList: React.FC = () => {
     });
 
     return stats;
-  }, [students, studentStats]);
+  }, [students, studentStats, locations]);
 
   // Statistics by level
   const levelStats = useMemo(() => {
@@ -242,17 +252,17 @@ export const StudentList: React.FC = () => {
         student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         student.email.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesSchool = !schoolFilter || student.school_origin === schoolFilter;
+      const matchesSchool = !schoolFilter || getSchoolName(student) === schoolFilter;
 
       const studentLevel = studentStats[student.id]?.level || '';
       const matchesLevel = !levelFilter || studentLevel === levelFilter;
 
       return matchesSearch && matchesSchool && matchesLevel;
     });
-  }, [students, searchQuery, schoolFilter, levelFilter, studentStats]);
+  }, [students, searchQuery, schoolFilter, levelFilter, studentStats, locations]);
 
   // Loading state
-  const isLoading = studentsLoading || sessionsLoading || reportsLoading;
+  const isLoading = studentsLoading || sessionsLoading || reportsLoading || locationsLoading;
 
   const getAttendanceRate = (studentId: string) => {
     const stats = studentStats[studentId];
@@ -443,7 +453,7 @@ export const StudentList: React.FC = () => {
                           </span>
                           <div>
                             <p className="text-xs font-bold text-gray-900">{student.name}</p>
-                            <p className="text-[10px] text-gray-500">{student.school_origin || 'N/A'}</p>
+                            <p className="text-[10px] text-gray-500">{getSchoolName(student) || 'N/A'}</p>
                           </div>
                         </div>
                         <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-[10px] font-bold">
@@ -578,7 +588,7 @@ export const StudentList: React.FC = () => {
                           </td>
                           <td className="px-4 py-3">
                             <span className="text-xs font-medium text-gray-700 bg-gray-100 px-2 py-1 rounded-md">
-                              {student.school_origin || 'N/A'}
+                              {getSchoolName(student) || 'N/A'}
                             </span>
                           </td>
                           <td className="px-4 py-3">
@@ -704,7 +714,7 @@ export const StudentList: React.FC = () => {
                     </div>
                     <div className="flex justify-between text-sm items-center">
                       <span className="text-gray-500">Sekolah</span>
-                      <span className="text-gray-900 font-medium">{selectedStudent.school_origin || '-'}</span>
+                      <span className="text-gray-900 font-medium">{getSchoolName(selectedStudent) || '-'}</span>
                     </div>
                     <div className="flex justify-between text-sm items-center">
                       <span className="text-gray-500">Level</span>

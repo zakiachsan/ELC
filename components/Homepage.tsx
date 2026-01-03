@@ -1652,10 +1652,10 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
          </div>
       </section>
 
-      {/* Olympiad Section */}
+      {/* Olympiad Section - Only show when there's an active olympiad */}
+      {featuredOlympiad && (
       <section id="featured-event" className="py-12 lg:py-16 bg-gray-50 border-y border-gray-100 scroll-mt-20 overflow-hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-           {featuredOlympiad ? (
               <div className="space-y-6">
                  {/* Header */}
                  <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
@@ -1777,15 +1777,9 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
                     </div>
                  </div>
               </div>
-           ) : (
-              <div className="text-center py-20 bg-white rounded-[60px] border-4 border-dashed border-gray-100 max-w-4xl mx-auto">
-                 <AlertCircle className="w-20 h-20 text-gray-200 mx-auto mb-6" />
-                 <h3 className="text-3xl font-black text-gray-900 tracking-tight">Stay Tuned for Next Events</h3>
-                 <p className="text-gray-400 mt-2 font-medium">New competitions are announced every quarter.</p>
-              </div>
-           )}
         </div>
       </section>
+      )}
 
       {/* CEFR Test Promo */}
       <section id="cefr-test" className="py-10 lg:py-14 bg-white">

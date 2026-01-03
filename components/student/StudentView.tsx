@@ -5,6 +5,7 @@ import { Card } from '../Card';
 import { LEVEL_COLORS } from '../../constants';
 import { useTodaySessions, useUpcomingSessions, useSessions } from '../../hooks/useSessions';
 import { useModuleProgress, useModules } from '../../hooks/useModules';
+import { useLocations } from '../../hooks/useProfiles';
 import { Calendar, Clock, MapPin, Headphones, BookOpen, PenTool, Mic, AlignLeft, Book, Info, ChevronDown, ChevronUp, History, MonitorPlay, School, Loader2 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 
@@ -25,6 +26,12 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
   const { sessions: allSessionsData, loading: sessionsLoading } = useSessions({ past: true });
   const { progress: progressData, loading: progressLoading } = useModuleProgress(student.id);
   const { modules: modulesData, loading: modulesLoading } = useModules();
+  const { locations, loading: locationsLoading } = useLocations();
+
+  // Get school name from assignedLocationId
+  const schoolName = student.assignedLocationId
+    ? locations.find(loc => loc.id === student.assignedLocationId)?.name
+    : student.schoolOrigin || null;
 
   const now = new Date();
   const [isSkillsExpanded, setIsSkillsExpanded] = useState(false);
@@ -64,7 +71,7 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
     ? modulesData.find(m => m.id === lastOnlineProgress.module_id)
     : null;
 
-  if (todayLoading || upcomingLoading || sessionsLoading || progressLoading || modulesLoading) {
+  if (todayLoading || upcomingLoading || sessionsLoading || progressLoading || modulesLoading || locationsLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -99,6 +106,19 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
 
   return (
     <div className="space-y-4">
+
+      {/* SCHOOL INFO BANNER */}
+      {schoolName && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-3 flex items-center gap-3">
+          <div className="p-2 bg-white rounded-lg shadow-sm">
+            <School className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest">Sekolah</p>
+            <h3 className="text-sm font-bold text-gray-900">{schoolName}</h3>
+          </div>
+        </div>
+      )}
 
       {/* SECTION 1: TODAY'S CLASSES */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

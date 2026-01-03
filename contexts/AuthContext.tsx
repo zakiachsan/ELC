@@ -176,7 +176,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signIn = async (email: string, password: string) => {
     setError(null);
-    setLoading(true);
+    // Don't set global loading here - it causes the app to show loading screen
+    // which unmounts the login modal. The modal has its own local loading state.
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -190,7 +191,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (data.user) {
+        // Only set loading when fetching profile after successful auth
+        setLoading(true);
         await fetchUserProfile(data.user.id);
+        setLoading(false);
       }
 
       return { error: null };
@@ -198,8 +202,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const error = err as AuthError;
       setError(error.message);
       return { error };
-    } finally {
-      setLoading(false);
     }
   };
 

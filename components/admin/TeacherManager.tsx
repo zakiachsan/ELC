@@ -4,10 +4,9 @@ import { Button } from '../Button';
 import {
   Users, Search, Calendar, Clock, MapPin, BookOpen, FileText,
   ChevronRight, BarChart3, User, Mail, Phone, Loader2,
-  GraduationCap, TrendingUp, TrendingDown, Minus, Eye, X,
-  Download, Filter, CalendarDays
+  GraduationCap, Eye, X, Download, Filter, CalendarDays
 } from 'lucide-react';
-import { useTeachers } from '../../hooks/useProfiles';
+import { useTeachers, useLocations } from '../../hooks/useProfiles';
 import { useSessions } from '../../hooks/useSessions';
 
 type TabType = 'list' | 'schedule' | 'analytics';
@@ -15,6 +14,14 @@ type TabType = 'list' | 'schedule' | 'analytics';
 export const TeacherManager: React.FC = () => {
   const { profiles: teachers, loading: teachersLoading } = useTeachers();
   const { sessions: allSessions, loading: sessionsLoading } = useSessions();
+  const { locations, loading: locationsLoading } = useLocations();
+
+  // Helper to get location name
+  const getLocationName = (locationId: string | null): string => {
+    if (!locationId) return 'Flexible';
+    const location = locations.find(loc => loc.id === locationId);
+    return location?.name || 'Assigned';
+  };
 
   const [activeTab, setActiveTab] = useState<TabType>('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -125,7 +132,7 @@ export const TeacherManager: React.FC = () => {
     setActiveTab('schedule');
   };
 
-  if (teachersLoading || sessionsLoading) {
+  if (teachersLoading || sessionsLoading || locationsLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -267,7 +274,7 @@ export const TeacherManager: React.FC = () => {
                       <td className="px-4 py-3">
                         <span className="flex items-center gap-1 text-[10px] text-gray-600">
                           <MapPin className="w-3 h-3 text-orange-500" />
-                          {teacher.assigned_location_id ? 'Assigned' : 'Flexible'}
+                          {getLocationName(teacher.assigned_location_id)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -280,21 +287,7 @@ export const TeacherManager: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <span className={`font-bold ${
-                            sessionCount >= 10 ? 'text-green-600' :
-                            sessionCount >= 5 ? 'text-yellow-600' : 'text-red-500'
-                          }`}>
-                            {sessionCount}
-                          </span>
-                          {sessionCount >= 10 ? (
-                            <TrendingUp className="w-3 h-3 text-green-500" />
-                          ) : sessionCount >= 5 ? (
-                            <Minus className="w-3 h-3 text-yellow-500" />
-                          ) : (
-                            <TrendingDown className="w-3 h-3 text-red-500" />
-                          )}
-                        </div>
+                        <span className="font-bold text-gray-900">{sessionCount}</span>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button

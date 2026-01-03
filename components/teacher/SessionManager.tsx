@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { LEVEL_COLORS, MOCK_USERS } from '../../constants';
@@ -8,11 +8,14 @@ import { useLocations } from '../../hooks/useProfiles';
 import { useReports } from '../../hooks/useReports';
 import { useHomeworks } from '../../hooks/useHomeworks';
 import { useStudents } from '../../hooks/useProfiles';
+import { useAuth } from '../../contexts/AuthContext';
 import { ClassSession, StudentSessionReport, CEFRLevel, Homework, SkillCategory, DifficultyLevel, UserRole } from '../../types';
-import { Clock, MapPin, Calendar, CheckCircle, FileText, Upload, Trash2, Download, ShieldCheck, ShieldAlert, UserCheck, PenLine, Save, X, BookOpen, ClipboardList, Award, Mic, FileEdit, Plus, School, ChevronRight, GraduationCap, Loader2 } from 'lucide-react';
+import { Clock, MapPin, Calendar, CheckCircle, FileText, Upload, Trash2, Download, ShieldCheck, ShieldAlert, UserCheck, PenLine, Save, X, BookOpen, ClipboardList, Award, Mic, FileEdit, Plus, School, ChevronRight, GraduationCap, Loader2, File } from 'lucide-react';
+import { uploadFile, isAllowedFileType, formatFileSize, UploadResult } from '../../lib/storage';
 import { SKILL_ICONS } from '../student/StudentView';
 
 export const SessionManager: React.FC = () => {
+  const { user: currentTeacher } = useAuth();
   const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError, createSession } = useSessions();
   const { locations: locationsData, loading: locationsLoading } = useLocations();
   const { reports: reportsData, loading: reportsLoading, createReport, updateReport } = useReports();
@@ -86,11 +89,27 @@ export const SessionManager: React.FC = () => {
     materials: s.materials || [],
   }));
 
-  // Map schools/locations
-  const schools = locationsData.map(l => ({
-    id: l.id,
-    name: l.name,
-  }));
+  // Map schools/locations - filter to only show teacher's assigned school
+  const schools = locationsData
+    .filter(l => {
+      // If teacher has assigned location, only show that school
+      if (currentTeacher?.assignedLocationId) {
+        return l.id === currentTeacher.assignedLocationId;
+      }
+      // If no assignment, show all schools (flexible teacher)
+      return true;
+    })
+    .map(l => ({
+      id: l.id,
+      name: l.name,
+    }));
+
+  // Auto-select school if teacher has only one assigned school
+  useEffect(() => {
+    if (schools.length === 1 && !selectedSchool && !locationsLoading) {
+      setSelectedSchool(schools[0].name);
+    }
+  }, [schools, selectedSchool, locationsLoading]);
 
   // Form states for student scores
   const [editForm, setEditForm] = useState<{
@@ -115,6 +134,12 @@ export const SessionManager: React.FC = () => {
     materials: [] as string[]
   });
   const [newDate, setNewDate] = useState('');
+
+  // File upload states
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadResult[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const now = new Date();
 
@@ -239,6 +264,51 @@ export const SessionManager: React.FC = () => {
     return duration > 0 ? duration : null;
   };
 
+  // Handle file selection and upload
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploadError(null);
+    setIsUploading(true);
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+
+        // Check file type
+        if (!isAllowedFileType(file)) {
+          setUploadError(`File "${file.name}" tidak didukung. Gunakan PDF, DOC, DOCX, PPT, PPTX, atau gambar.`);
+          continue;
+        }
+
+        // Check file size (max 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+          setUploadError(`File "${file.name}" terlalu besar. Maksimal 10MB.`);
+          continue;
+        }
+
+        // Upload file
+        const result = await uploadFile(file, 'sessions');
+        setUploadedFiles(prev => [...prev, result]);
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      setUploadError('Gagal mengupload file. Silakan coba lagi.');
+    } finally {
+      setIsUploading(false);
+      // Reset input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Remove uploaded file
+  const handleRemoveFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleCreateSchedule = async () => {
     if (scheduleForm.dates.length === 0 || !scheduleForm.startTime || !scheduleForm.endTime || !scheduleForm.topic || !selectedSchool) {
       alert('Silakan lengkapi semua field yang wajib diisi!');
@@ -254,18 +324,21 @@ export const SessionManager: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      // Collect material URLs from uploaded files
+      const materialUrls = uploadedFiles.map(f => f.url);
+
       // Create a session for each selected date
       for (const date of scheduleForm.dates) {
         const dateTime = `${date}T${scheduleForm.startTime}:00`;
         await createSession({
-          teacher_id: MOCK_USERS.find(u => u.role === UserRole.TEACHER)?.id || '',
+          teacher_id: currentTeacher?.id || '',
           topic: scheduleForm.topic,
           date_time: dateTime,
           location: selectedSchool,
           skill_category: scheduleForm.skillCategory as any || 'Grammar',
           difficulty_level: scheduleForm.difficultyLevel as any || 'Elementary',
           description: scheduleForm.description || null,
-          materials: scheduleForm.materials,
+          materials: materialUrls,
         });
       }
 
@@ -281,12 +354,30 @@ export const SessionManager: React.FC = () => {
         description: '',
         materials: []
       });
+      setUploadedFiles([]);
+      setUploadError(null);
     } catch (error) {
       console.error('Error creating sessions:', error);
       alert('Gagal menyimpan jadwal. Silakan coba lagi.');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleCloseCreateModal = () => {
+    setShowCreateModal(false);
+    setScheduleForm({
+      dates: [],
+      startTime: '',
+      endTime: '',
+      topic: '',
+      skillCategory: '',
+      difficultyLevel: '',
+      description: '',
+      materials: []
+    });
+    setUploadedFiles([]);
+    setUploadError(null);
   };
 
   // --- SCHOOL SELECTION VIEW ---
@@ -792,7 +883,7 @@ export const SessionManager: React.FC = () => {
               <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-blue-600" /> Tambah Jadwal Baru
               </h3>
-              <button onClick={() => setShowCreateModal(false)} className="p-1 text-gray-400 hover:text-gray-600">
+              <button onClick={handleCloseCreateModal} className="p-1 text-gray-400 hover:text-gray-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -914,6 +1005,79 @@ export const SessionManager: React.FC = () => {
               />
             </div>
 
+            {/* File Upload Section */}
+            <div className="space-y-2">
+              <label className="text-[9px] font-black text-gray-400 uppercase">
+                Upload Materi (PDF, DOC, PPT, Gambar)
+              </label>
+
+              {/* Upload Zone */}
+              <div
+                onClick={() => !isUploading && fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
+                  isUploading
+                    ? 'border-gray-300 bg-gray-50 cursor-not-allowed'
+                    : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50'
+                }`}
+              >
+                {isUploading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                    <span className="text-xs text-gray-500">Mengupload...</span>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="w-6 h-6 text-gray-300 mx-auto mb-2" />
+                    <p className="text-[10px] text-gray-400">
+                      Klik untuk pilih file atau drag & drop
+                    </p>
+                    <p className="text-[9px] text-gray-300 mt-1">
+                      Maks. 10MB per file
+                    </p>
+                  </>
+                )}
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.gif"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+
+              {/* Upload Error */}
+              {uploadError && (
+                <div className="text-[10px] text-red-600 bg-red-50 p-2 rounded border border-red-100">
+                  {uploadError}
+                </div>
+              )}
+
+              {/* Uploaded Files List */}
+              {uploadedFiles.length > 0 && (
+                <div className="space-y-1.5">
+                  {uploadedFiles.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg border border-gray-100"
+                    >
+                      <File className="w-4 h-4 text-blue-500 shrink-0" />
+                      <span className="text-xs text-gray-700 truncate flex-1">
+                        {file.fileName}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveFile(idx)}
+                        className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="bg-gray-50 p-3 rounded-lg">
               <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Lokasi Terpilih</p>
               <p className="text-xs font-bold text-gray-900 flex items-center gap-1">
@@ -930,21 +1094,24 @@ export const SessionManager: React.FC = () => {
                   {calculateDuration() && (
                     <span> • Total <span className="font-bold">{(scheduleForm.dates.length * (calculateDuration() || 0)).toFixed(1)}</span> jam</span>
                   )}
+                  {uploadedFiles.length > 0 && (
+                    <span> • <span className="font-bold">{uploadedFiles.length}</span> file materi</span>
+                  )}
                 </p>
               </div>
             )}
 
             <div className="flex gap-2 pt-2">
               <button
-                onClick={() => setShowCreateModal(false)}
-                disabled={isSubmitting}
+                onClick={handleCloseCreateModal}
+                disabled={isSubmitting || isUploading}
                 className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50"
               >
                 Batal
               </button>
               <Button
                 onClick={handleCreateSchedule}
-                disabled={isSubmitting || scheduleForm.dates.length === 0}
+                disabled={isSubmitting || isUploading || scheduleForm.dates.length === 0}
                 className="flex-1 text-xs py-2 disabled:opacity-50"
               >
                 {isSubmitting ? (
