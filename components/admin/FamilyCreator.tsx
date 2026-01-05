@@ -4,7 +4,7 @@ import { Card } from '../Card';
 import { Button } from '../Button';
 import { Users, Link as LinkIcon, Lock, Mail, GraduationCap, Briefcase, Trash2, Pencil, MapPin, School, TrendingUp, UserCheck, Activity, ToggleLeft, ToggleRight, Camera, X as XIcon, Upload, ShieldAlert, Smartphone, Globe, Loader2 } from 'lucide-react';
 import { MOCK_USERS, MOCK_SCHOOLS, MOCK_SESSIONS, MOCK_SESSION_REPORTS } from '../../constants';
-import { UserRole, User } from '../../types';
+import { UserRole, User, ClassType } from '../../types';
 import { useTeachers, useLocations, useParents, useStudents } from '../../hooks/useProfiles';
 import { supabase } from '../../lib/supabase';
 
@@ -44,16 +44,127 @@ export const AccountManager: React.FC = () => {
   const [studentPhone, setStudentPhone] = useState('');
   const [studentLocationId, setStudentLocationId] = useState('');
   const [studentSchool, setStudentSchool] = useState('');
+  const [studentGrade, setStudentGrade] = useState('');
   const [studentStatus, setStudentStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [studentPhoto, setStudentPhoto] = useState<string | null>(null);
+  const [studentClassType, setStudentClassType] = useState<ClassType | ''>('');
+
+  // Get selected student school's level for grade options
+  const selectedStudentSchoolLevel = studentLocationId
+    ? locations.find(l => l.id === studentLocationId)?.level || null
+    : null;
+
+  // Get grade options for student based on school level
+  const getStudentGradeOptions = (): string[] => {
+    const classes: string[] = [];
+    switch (selectedStudentSchoolLevel?.toUpperCase()) {
+      case 'KINDERGARTEN':
+        ['TK-A', 'TK-B'].forEach(c => {
+          for (let i = 1; i <= 3; i++) classes.push(`${c}.${i}`);
+        });
+        break;
+      case 'PRIMARY':
+        for (let grade = 1; grade <= 6; grade++) {
+          for (let section = 1; section <= 3; section++) {
+            classes.push(`${grade}.${section}`);
+          }
+        }
+        break;
+      case 'JUNIOR':
+        for (let grade = 7; grade <= 9; grade++) {
+          for (let section = 1; section <= 3; section++) {
+            classes.push(`${grade}.${section}`);
+          }
+        }
+        break;
+      case 'SENIOR':
+        for (let grade = 10; grade <= 12; grade++) {
+          for (let section = 1; section <= 3; section++) {
+            classes.push(`${grade}.${section}`);
+          }
+        }
+        break;
+      default:
+        // General - show all
+        for (let grade = 1; grade <= 12; grade++) {
+          for (let section = 1; section <= 3; section++) {
+            classes.push(`${grade}.${section}`);
+          }
+        }
+    }
+    return classes;
+  };
+
+  const studentGradeOptions = getStudentGradeOptions();
 
   const [teacherName, setTeacherName] = useState('');
   const [teacherEmail, setTeacherEmail] = useState('');
   const [teacherPassword, setTeacherPassword] = useState('');
   const [teacherLocationId, setTeacherLocationId] = useState('');
   const [teacherStatus, setTeacherStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
-  const [teacherType, setTeacherType] = useState<'bilingual' | 'regular' | ''>('');
+  const [teacherClassTypes, setTeacherClassTypes] = useState<ClassType[]>([]);
   const [teacherSubjects, setTeacherSubjects] = useState<string[]>([]);
+  const [teacherClasses, setTeacherClasses] = useState<string[]>([]);
+
+  // Helper to generate class options based on school level
+  const getClassOptionsForLevel = (level: string | null): string[] => {
+    const classes: string[] = [];
+    switch (level?.toUpperCase()) {
+      case 'KINDERGARTEN':
+        ['TK-A', 'TK-B'].forEach(c => {
+          for (let i = 1; i <= 3; i++) classes.push(`${c}.${i}`);
+        });
+        break;
+      case 'PRIMARY':
+        for (let grade = 1; grade <= 6; grade++) {
+          for (let section = 1; section <= 3; section++) {
+            classes.push(`${grade}.${section}`);
+          }
+        }
+        break;
+      case 'JUNIOR':
+        for (let grade = 7; grade <= 9; grade++) {
+          for (let section = 1; section <= 3; section++) {
+            classes.push(`${grade}.${section}`);
+          }
+        }
+        break;
+      case 'SENIOR':
+        for (let grade = 10; grade <= 12; grade++) {
+          for (let section = 1; section <= 3; section++) {
+            classes.push(`${grade}.${section}`);
+          }
+        }
+        break;
+      default:
+        // General - show all classes
+        ['TK-A', 'TK-B'].forEach(c => {
+          for (let i = 1; i <= 3; i++) classes.push(`${c}.${i}`);
+        });
+        for (let grade = 1; grade <= 12; grade++) {
+          for (let section = 1; section <= 3; section++) {
+            classes.push(`${grade}.${section}`);
+          }
+        }
+    }
+    return classes;
+  };
+
+  // Get selected school's level
+  const selectedSchoolLevel = teacherLocationId
+    ? locations.find(l => l.id === teacherLocationId)?.level || null
+    : null;
+
+  // Available classes for selected school
+  const availableClasses = getClassOptionsForLevel(selectedSchoolLevel);
+
+  const toggleClass = (className: string) => {
+    setTeacherClasses(prev =>
+      prev.includes(className)
+        ? prev.filter(c => c !== className)
+        : [...prev, className]
+    );
+  };
 
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -73,9 +184,13 @@ export const AccountManager: React.FC = () => {
     { id: 'conversational', label: 'Conversational', category: 'Main' },
   ];
 
-  const handleTeacherTypeChange = (type: 'bilingual' | 'regular') => {
-    setTeacherType(type);
-    setTeacherSubjects([]);
+  // Toggle teacher class type (multi-select)
+  const toggleTeacherClassType = (type: ClassType) => {
+    setTeacherClassTypes(prev =>
+      prev.includes(type)
+        ? prev.filter(t => t !== type)
+        : [...prev, type]
+    );
   };
 
   const toggleSubject = (subjectId: string) => {
@@ -132,6 +247,7 @@ export const AccountManager: React.FC = () => {
             status: student.status,
             assignedLocationId: student.assigned_location_id,
             schoolOrigin: student.school_origin,
+            branch: student.branch,
           } : undefined
         };
       })
@@ -149,18 +265,22 @@ export const AccountManager: React.FC = () => {
         assignedLocationId: t.assigned_location_id,
         status: t.status,
         assignedSubjects: t.assigned_subjects || [],
+        assignedClasses: (t as any).assigned_classes || [],
       }))
     : mockUsers.filter(u => u.role === UserRole.TEACHER);
 
   const resetForm = () => {
     setParentName(''); setParentEmail(''); setParentPassword(''); setParentPhone(''); setParentAddress('');
     setStudentName(''); setStudentEmail(''); setStudentPassword(''); setStudentPhone(''); setStudentLocationId(''); setStudentSchool('');
+    setStudentGrade('');
     setStudentStatus('ACTIVE');
     setStudentPhoto(null);
+    setStudentClassType('');
     setTeacherName(''); setTeacherEmail(''); setTeacherPassword(''); setTeacherLocationId('');
     setTeacherStatus('ACTIVE');
-    setTeacherType('');
+    setTeacherClassTypes([]);
     setTeacherSubjects([]);
+    setTeacherClasses([]);
     setIsEditing(false);
     setEditParentId(null); setEditStudentId(null); setEditTeacherId(null);
   };
@@ -193,8 +313,10 @@ export const AccountManager: React.FC = () => {
       setStudentPhone(student.phone || '');
       setStudentLocationId(student.assignedLocationId || '');
       setStudentSchool(student.schoolOrigin || '');
+      setStudentGrade(student.branch || '');
       setStudentStatus(student.status || 'ACTIVE');
       setStudentPhoto(`https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=random`);
+      setStudentClassType((student as any).classType || '');
     }
     setView('form');
   };
@@ -214,14 +336,13 @@ export const AccountManager: React.FC = () => {
     const subjects = teacher.assignedSubjects || [];
     setTeacherSubjects(subjects);
 
-    // Determine teacher type based on subjects
-    if (subjects.some((s: string) => s.startsWith('english-') || s.startsWith('conversation-'))) {
-      setTeacherType('bilingual');
-    } else if (subjects.includes('conversational')) {
-      setTeacherType('regular');
-    } else {
-      setTeacherType('');
-    }
+    // Load assigned classes if available
+    const classes = teacher.assignedClasses || [];
+    setTeacherClasses(classes);
+
+    // Load class types if available
+    const classTypes = teacher.classTypes || [];
+    setTeacherClassTypes(classTypes);
 
     setView('form');
   };
@@ -243,6 +364,44 @@ export const AccountManager: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      // Check if we're editing existing records
+      if (isEditing && editParentId && editStudentId) {
+        // UPDATE MODE - Update existing profiles
+        console.log('Updating family - Parent ID:', editParentId, 'Student ID:', editStudentId);
+
+        // Update student profile
+        await updateProfile(editStudentId, {
+          name: studentName,
+          email: studentEmail,
+          phone: studentPhone || null,
+          assigned_location_id: studentLocationId || null,
+          school_origin: studentSchool || null,
+          branch: studentGrade || null,
+          status: studentStatus,
+          class_type: studentClassType || null,
+        });
+
+        // Update parent profile
+        await updateProfile(editParentId, {
+          name: parentName,
+          email: parentEmail,
+          phone: parentPhone || null,
+          address: parentAddress || null,
+        });
+
+        // Refetch data to update the list
+        await Promise.all([refetchParents(), refetchStudents()]);
+
+        setSuccess(true);
+        setTimeout(() => {
+          setSuccess(false);
+          setView('list');
+          resetForm();
+        }, 1500);
+        return;
+      }
+
+      // CREATE MODE - Create new users
       // Verify user is logged in
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -275,7 +434,9 @@ export const AccountManager: React.FC = () => {
           phone: studentPhone || undefined,
           assigned_location_id: studentLocationId || undefined,
           school_origin: studentSchool || undefined,
+          branch: studentGrade || undefined,
           status: studentStatus,
+          class_type: studentClassType || undefined,
         }),
       });
 
@@ -337,8 +498,8 @@ export const AccountManager: React.FC = () => {
         resetForm();
       }, 1500);
     } catch (error) {
-      console.error('Failed to create family:', error);
-      setSubmitError(error instanceof Error ? error.message : 'Gagal membuat family unit');
+      console.error('Failed to save family:', error);
+      setSubmitError(error instanceof Error ? error.message : 'Gagal menyimpan family unit');
     } finally {
       setIsSubmitting(false);
     }
@@ -379,6 +540,8 @@ export const AccountManager: React.FC = () => {
           assigned_location_id: teacherLocationId || null,
           status: teacherStatus,
           assigned_subjects: teacherSubjects,
+          assigned_classes: teacherClasses,
+          class_types: teacherClassTypes,
         });
 
         await updateProfile(editTeacherId, {
@@ -387,6 +550,8 @@ export const AccountManager: React.FC = () => {
           assigned_location_id: teacherLocationId || null,
           status: teacherStatus,
           assigned_subjects: teacherSubjects,
+          assigned_classes: teacherClasses,
+          class_types: teacherClassTypes,
         });
 
         // Refetch to update the list
@@ -425,10 +590,12 @@ export const AccountManager: React.FC = () => {
           throw new Error(teacherResult?.error || 'Gagal membuat akun teacher');
         }
 
-        // Update with subjects if selected (profile already created, just update)
-        if (teacherSubjects.length > 0) {
+        // Update with subjects, classes, and class types if selected (profile already created, just update)
+        if (teacherSubjects.length > 0 || teacherClasses.length > 0 || teacherClassTypes.length > 0) {
           await updateProfile(teacherResult.user.id, {
             assigned_subjects: teacherSubjects,
+            assigned_classes: teacherClasses,
+            class_types: teacherClassTypes,
           });
         }
 
@@ -529,7 +696,14 @@ export const AccountManager: React.FC = () => {
                                                   />
                                                   <div>
                                                       <div className="font-bold text-gray-900 text-xs">{fam.student.name}</div>
-                                                      <div className="text-[10px] text-gray-400">{fam.student.email}</div>
+                                                      <div className="text-[10px] text-gray-400 flex items-center gap-1">
+                                                        {fam.student.email}
+                                                        {fam.student.branch && (
+                                                          <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-[8px] font-bold">
+                                                            Kelas {fam.student.branch}
+                                                          </span>
+                                                        )}
+                                                      </div>
                                                   </div>
                                               </div>
                                           ) : <span className="text-red-500 text-[9px] font-bold uppercase">Unlinked</span>}
@@ -593,8 +767,10 @@ export const AccountManager: React.FC = () => {
                                     <textarea rows={2} required value={parentAddress} onChange={(e) => setParentAddress(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs resize-none" />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[9px] font-bold text-gray-500 uppercase">Password</label>
-                                    <input type="text" required placeholder="Set password" value={parentPassword} onChange={(e) => setParentPassword(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" />
+                                    <label className="text-[9px] font-bold text-gray-500 uppercase">
+                                      Password {isEditing && <span className="text-gray-400 font-normal">(kosongkan jika tidak ingin mengubah)</span>}
+                                    </label>
+                                    <input type="text" required={!isEditing} placeholder={isEditing ? "Kosongkan jika tidak ingin mengubah password" : "Set password"} value={parentPassword} onChange={(e) => setParentPassword(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" />
                                 </div>
                             </div>
                             {/* Student Section */}
@@ -644,18 +820,72 @@ export const AccountManager: React.FC = () => {
                                   </div>
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[9px] font-bold text-gray-500 uppercase">Password</label>
-                                    <input type="text" required placeholder="Set password" value={studentPassword} onChange={(e) => setStudentPassword(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" />
+                                    <label className="text-[9px] font-bold text-gray-500 uppercase">
+                                      Password {isEditing && <span className="text-gray-400 font-normal">(kosongkan jika tidak ingin mengubah)</span>}
+                                    </label>
+                                    <input type="text" required={!isEditing} placeholder={isEditing ? "Kosongkan jika tidak ingin mengubah password" : "Set password"} value={studentPassword} onChange={(e) => setStudentPassword(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" />
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-[9px] font-bold text-gray-500 uppercase">Sekolah</label>
-                                    <select value={studentLocationId} onChange={(e) => setStudentLocationId(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none bg-white text-xs">
-                                      <option value="">Pilih Sekolah</option>
-                                      {locations.length > 0
-                                        ? locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)
-                                        : MOCK_SCHOOLS.map(school => <option key={school.id} value={school.id}>{school.name}</option>)
-                                      }
-                                    </select>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div className="space-y-1">
+                                      <label className="text-[9px] font-bold text-gray-500 uppercase">Sekolah</label>
+                                      <select value={studentLocationId} onChange={(e) => { setStudentLocationId(e.target.value); setStudentGrade(''); }} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none bg-white text-xs">
+                                        <option value="">Pilih Sekolah</option>
+                                        {locations.length > 0
+                                          ? locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name} {loc.level ? `(${loc.level})` : ''}</option>)
+                                          : MOCK_SCHOOLS.map(school => <option key={school.id} value={school.id}>{school.name}</option>)
+                                        }
+                                      </select>
+                                  </div>
+                                  <div className="space-y-1">
+                                      <label className="text-[9px] font-bold text-gray-500 uppercase">Kelas <span className="text-red-500">*</span></label>
+                                      <select
+                                        value={studentGrade}
+                                        onChange={(e) => setStudentGrade(e.target.value)}
+                                        className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none bg-white text-xs"
+                                        disabled={!studentLocationId}
+                                      >
+                                        <option value="">{studentLocationId ? 'Pilih Kelas' : 'Pilih sekolah dulu'}</option>
+                                        {studentGradeOptions.map(grade => (
+                                          <option key={grade} value={grade}>Kelas {grade}</option>
+                                        ))}
+                                      </select>
+                                  </div>
+                                </div>
+
+                                {/* Student Class Type - Bilingual or Regular */}
+                                <div className="space-y-2 pt-2">
+                                  <label className="text-[9px] font-bold text-gray-500 uppercase">
+                                    Jenis Kelas <span className="text-red-500">*</span>
+                                  </label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setStudentClassType(ClassType.BILINGUAL)}
+                                      className={`flex items-center justify-center gap-2 px-3 py-2 border rounded-lg text-xs font-bold transition-all ${
+                                        studentClassType === ClassType.BILINGUAL
+                                          ? 'bg-blue-600 text-white border-blue-600 ring-2 ring-blue-200'
+                                          : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                                      }`}
+                                    >
+                                      <Globe className="w-3.5 h-3.5" />
+                                      Bilingual
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setStudentClassType(ClassType.REGULAR)}
+                                      className={`flex items-center justify-center gap-2 px-3 py-2 border rounded-lg text-xs font-bold transition-all ${
+                                        studentClassType === ClassType.REGULAR
+                                          ? 'bg-teal-600 text-white border-teal-600 ring-2 ring-teal-200'
+                                          : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                                      }`}
+                                    >
+                                      <UserCheck className="w-3.5 h-3.5" />
+                                      Regular
+                                    </button>
+                                  </div>
+                                  <p className="text-[9px] text-gray-400 italic">
+                                    Pilih jenis kelas untuk menentukan jadwal dan quiz yang akan ditampilkan ke siswa
+                                  </p>
                                 </div>
                             </div>
                         </div>
@@ -760,8 +990,10 @@ export const AccountManager: React.FC = () => {
                                 <input type="email" required value={teacherEmail} onChange={(e) => setTeacherEmail(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-gray-500 uppercase">Password</label>
-                                <input type="text" required placeholder="Set password" value={teacherPassword} onChange={(e) => setTeacherPassword(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" />
+                                <label className="text-[9px] font-bold text-gray-500 uppercase">
+                                  Password {isEditing && <span className="text-gray-400 font-normal">(kosongkan jika tidak ingin mengubah)</span>}
+                                </label>
+                                <input type="text" required={!isEditing} placeholder={isEditing ? "Kosongkan jika tidak ingin mengubah password" : "Set password"} value={teacherPassword} onChange={(e) => setTeacherPassword(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" />
                             </div>
                             <div className="space-y-1">
                                 <label className="text-[9px] font-bold text-gray-500 uppercase">Status</label>
@@ -773,25 +1005,61 @@ export const AccountManager: React.FC = () => {
                         </div>
                         <div className="space-y-1">
                             <label className="text-[9px] font-bold text-gray-500 uppercase">Sekolah</label>
-                            <select value={teacherLocationId} onChange={(e) => setTeacherLocationId(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none bg-white text-xs">
+                            <select value={teacherLocationId} onChange={(e) => { setTeacherLocationId(e.target.value); setTeacherClasses([]); }} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none bg-white text-xs">
                               <option value="">Pilih Sekolah</option>
                               {locations.length > 0
-                                ? locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)
+                                ? locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name} {loc.level ? `(${loc.level})` : ''}</option>)
                                 : MOCK_SCHOOLS.map(school => <option key={school.id} value={school.id}>{school.name}</option>)
                               }
                             </select>
                         </div>
 
-                        {/* Teacher Type Selection */}
+                        {/* Class Selection - Only show if school is selected */}
+                        {teacherLocationId && (
+                          <div className="space-y-2 bg-orange-50 p-3 rounded-lg border border-orange-200">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[9px] font-bold text-orange-700 uppercase">Kelas yang Diajarkan</label>
+                              {teacherClasses.length > 0 && (
+                                <span className="text-[9px] font-bold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">
+                                  {teacherClasses.length} kelas dipilih
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                              {availableClasses.map(cls => (
+                                <button
+                                  key={cls}
+                                  type="button"
+                                  onClick={() => toggleClass(cls)}
+                                  className={`px-2.5 py-1 rounded text-[10px] font-bold border transition-all ${
+                                    teacherClasses.includes(cls)
+                                      ? 'bg-orange-600 text-white border-orange-600'
+                                      : 'bg-white text-gray-600 border-gray-200 hover:bg-orange-50 hover:border-orange-300'
+                                  }`}
+                                >
+                                  {cls}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="text-[9px] text-orange-600 italic">
+                              Pilih kelas yang akan diajarkan oleh guru ini
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Teacher Class Types Selection - Multi-select */}
                         <div className="space-y-2">
-                            <label className="text-[9px] font-bold text-gray-500 uppercase">Teacher Type</label>
+                            <label className="text-[9px] font-bold text-gray-500 uppercase">
+                              Jenis Kelas yang Diajarkan <span className="text-red-500">*</span>
+                              <span className="text-gray-400 font-normal ml-1">(Bisa pilih keduanya)</span>
+                            </label>
                             <div className="grid grid-cols-2 gap-2">
                               <button
                                 type="button"
-                                onClick={() => handleTeacherTypeChange('bilingual')}
+                                onClick={() => toggleTeacherClassType(ClassType.BILINGUAL)}
                                 className={`flex items-center justify-center gap-2 px-3 py-2.5 border rounded-lg text-xs font-bold transition-all ${
-                                  teacherType === 'bilingual'
-                                    ? 'theme-border-primary bg-blue-50 theme-text-primary ring-1 theme-ring-primary'
+                                  teacherClassTypes.includes(ClassType.BILINGUAL)
+                                    ? 'bg-blue-600 text-white border-blue-600 ring-2 ring-blue-200'
                                     : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
                                 }`}
                               >
@@ -800,10 +1068,10 @@ export const AccountManager: React.FC = () => {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleTeacherTypeChange('regular')}
+                                onClick={() => toggleTeacherClassType(ClassType.REGULAR)}
                                 className={`flex items-center justify-center gap-2 px-3 py-2.5 border rounded-lg text-xs font-bold transition-all ${
-                                  teacherType === 'regular'
-                                    ? 'theme-border-primary bg-blue-50 theme-text-primary ring-1 theme-ring-primary'
+                                  teacherClassTypes.includes(ClassType.REGULAR)
+                                    ? 'bg-teal-600 text-white border-teal-600 ring-2 ring-teal-200'
                                     : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
                                 }`}
                               >
@@ -811,13 +1079,18 @@ export const AccountManager: React.FC = () => {
                                 Regular
                               </button>
                             </div>
+                            {teacherClassTypes.length > 0 && (
+                              <p className="text-[9px] text-green-600 font-medium">
+                                Guru ini akan mengajar kelas: {teacherClassTypes.join(' & ')}
+                              </p>
+                            )}
                         </div>
 
-                        {/* Subject Selection - Only show if teacher type is selected */}
-                        {teacherType && (
+                        {/* Subject Selection - Only show if at least one class type is selected */}
+                        {teacherClassTypes.length > 0 && (
                           <div className="space-y-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
                             <label className="text-[9px] font-bold text-gray-500 uppercase">Subjects (Select Multiple)</label>
-                            {teacherType === 'bilingual' ? (
+                            {teacherClassTypes.includes(ClassType.BILINGUAL) && (
                               <div className="space-y-3">
                                 {/* English Category */}
                                 <div>
@@ -880,22 +1153,26 @@ export const AccountManager: React.FC = () => {
                                   </div>
                                 </div>
                               </div>
-                            ) : (
-                              <div className="grid grid-cols-1 gap-1.5">
-                                {REGULAR_SUBJECTS.map(subject => (
-                                  <button
-                                    key={subject.id}
-                                    type="button"
-                                    onClick={() => toggleSubject(subject.id)}
-                                    className={`px-3 py-2 rounded text-xs font-bold border transition-all ${
-                                      teacherSubjects.includes(subject.id)
-                                        ? 'bg-teal-600 text-white border-teal-600'
-                                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'
-                                    }`}
-                                  >
-                                    {subject.label}
-                                  </button>
-                                ))}
+                            )}
+                            {teacherClassTypes.includes(ClassType.REGULAR) && (
+                              <div className="space-y-2">
+                                <p className="text-[8px] font-black text-teal-600 uppercase tracking-widest mb-1.5">Regular Class Subjects</p>
+                                <div className="grid grid-cols-1 gap-1.5">
+                                  {REGULAR_SUBJECTS.map(subject => (
+                                    <button
+                                      key={subject.id}
+                                      type="button"
+                                      onClick={() => toggleSubject(subject.id)}
+                                      className={`px-3 py-2 rounded text-xs font-bold border transition-all ${
+                                        teacherSubjects.includes(subject.id)
+                                          ? 'bg-teal-600 text-white border-teal-600'
+                                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'
+                                      }`}
+                                    >
+                                      {subject.label}
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
                             )}
                             {teacherSubjects.length > 0 && (

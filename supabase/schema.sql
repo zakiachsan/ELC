@@ -514,6 +514,28 @@ CREATE INDEX IF NOT EXISTS idx_oral_slots_date ON oral_test_slots(date);
 CREATE INDEX IF NOT EXISTS idx_oral_slots_booked ON oral_test_slots(is_booked);
 
 -- =====================================================
+-- TABLE: teacher_attendance
+-- =====================================================
+CREATE TABLE IF NOT EXISTS teacher_attendance (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  teacher_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  location_id UUID REFERENCES locations(id) ON DELETE SET NULL,
+  check_in_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  check_out_time TIMESTAMPTZ,
+  latitude DECIMAL(10, 8),
+  longitude DECIMAL(11, 8),
+  location_name TEXT,
+  notes TEXT,
+  status TEXT DEFAULT 'PRESENT' CHECK (status IN ('PRESENT', 'LATE', 'EARLY_LEAVE')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_attendance_teacher ON teacher_attendance(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_date ON teacher_attendance(check_in_time);
+CREATE INDEX IF NOT EXISTS idx_attendance_location ON teacher_attendance(location_id);
+
+-- =====================================================
 -- FUNCTIONS: Auto-update updated_at
 -- =====================================================
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -540,6 +562,7 @@ CREATE TRIGGER update_teachers_updated_at BEFORE UPDATE ON featured_teachers FOR
 CREATE TRIGGER update_applications_updated_at BEFORE UPDATE ON teacher_applications FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_settings_updated_at BEFORE UPDATE ON site_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_kahoot_updated_at BEFORE UPDATE ON kahoot_quizzes FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_attendance_updated_at BEFORE UPDATE ON teacher_attendance FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- =====================================================
 -- INITIAL DATA: Site Settings

@@ -1,20 +1,36 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import {
   Users, Search, Calendar, Clock, MapPin, BookOpen, FileText,
   ChevronRight, BarChart3, User, Mail, Phone, Loader2,
-  GraduationCap, Eye, X, Download, Filter, CalendarDays
+  GraduationCap, Eye, X, Download, Filter, CalendarDays, LogIn, LogOut, CheckCircle, AlertCircle, XCircle, ChevronLeft, ClipboardList
 } from 'lucide-react';
 import { useTeachers, useLocations } from '../../hooks/useProfiles';
 import { useSessions } from '../../hooks/useSessions';
+import { useTests } from '../../hooks/useTests';
+import { attendanceService } from '../../services/attendance.service';
+import { TestType } from '../../services/tests.service';
 
-type TabType = 'list' | 'schedule' | 'analytics';
+type TabType = 'list' | 'schedule' | 'analytics' | 'attendance' | 'tests';
+
+const TEST_TYPE_LABELS: Record<TestType, string> = {
+  'QUIZ': 'Quiz',
+  'MID_SEMESTER': 'UTS',
+  'FINAL_SEMESTER': 'UAS',
+};
+
+const TEST_TYPE_COLORS: Record<TestType, string> = {
+  'QUIZ': 'bg-blue-100 text-blue-700',
+  'MID_SEMESTER': 'bg-orange-100 text-orange-700',
+  'FINAL_SEMESTER': 'bg-purple-100 text-purple-700',
+};
 
 export const TeacherManager: React.FC = () => {
   const { profiles: teachers, loading: teachersLoading } = useTeachers();
   const { sessions: allSessions, loading: sessionsLoading } = useSessions();
   const { locations, loading: locationsLoading } = useLocations();
+  const { tests: allTests, loading: testsLoading } = useTests();
 
   // Helper to get location name
   const getLocationName = (locationId: string | null): string => {
@@ -27,8 +43,54 @@ export const TeacherManager: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
   const [selectedSession, setSelectedSession] = useState<any | null>(null);
+  const [selectedTest, setSelectedTest] = useState<any | null>(null);
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'week' | 'month' | 'custom'>('month');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
+
+  // Attendance state
+  const [attendanceTeacherId, setAttendanceTeacherId] = useState<string | null>(null);
+  const [teacherAttendance, setTeacherAttendance] = useState<any[]>([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceMonth, setAttendanceMonth] = useState(new Date().getMonth() + 1);
+  const [attendanceYear, setAttendanceYear] = useState(new Date().getFullYear());
+
+  // Fetch attendance when teacher is selected
+  useEffect(() => {
+    const fetchAttendance = async () => {
+      if (!attendanceTeacherId) {
+        setTeacherAttendance([]);
+        return;
+      }
+      setAttendanceLoading(true);
+      try {
+        const data = await attendanceService.getByTeacher(attendanceTeacherId);
+        setTeacherAttendance(data);
+      } catch (err) {
+        console.error('Error fetching attendance:', err);
+      } finally {
+        setAttendanceLoading(false);
+      }
+    };
+    fetchAttendance();
+  }, [attendanceTeacherId]);
+
+  // Filter attendance by month
+  const filteredAttendance = useMemo(() => {
+    return teacherAttendance.filter(a => {
+      const date = new Date(a.check_in_time);
+      return date.getMonth() + 1 === attendanceMonth && date.getFullYear() === attendanceYear;
+    });
+  }, [teacherAttendance, attendanceMonth, attendanceYear]);
+
+  // Attendance stats
+  const attendanceStats = useMemo(() => {
+    return {
+      total: filteredAttendance.length,
+      present: filteredAttendance.filter(a => a.status === 'PRESENT').length,
+      late: filteredAttendance.filter(a => a.status === 'LATE').length,
+      earlyLeave: filteredAttendance.filter(a => a.status === 'EARLY_LEAVE').length,
+    };
+  }, [filteredAttendance]);
 
   // Filter teachers by search
   const filteredTeachers = useMemo(() => {
@@ -176,6 +238,16 @@ export const TeacherManager: React.FC = () => {
           <CalendarDays className="w-3.5 h-3.5" /> Jadwal & Materi
         </button>
         <button
+          onClick={() => setActiveTab('tests')}
+          className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-1.5 ${
+            activeTab === 'tests'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          <ClipboardList className="w-3.5 h-3.5" /> Jadwal Test
+        </button>
+        <button
           onClick={() => setActiveTab('analytics')}
           className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-1.5 ${
             activeTab === 'analytics'
@@ -184,6 +256,16 @@ export const TeacherManager: React.FC = () => {
           }`}
         >
           <BarChart3 className="w-3.5 h-3.5" /> Analitik
+        </button>
+        <button
+          onClick={() => setActiveTab('attendance')}
+          className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-1.5 ${
+            activeTab === 'attendance'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          <Clock className="w-3.5 h-3.5" /> Absen
         </button>
       </div>
 
@@ -614,6 +696,204 @@ export const TeacherManager: React.FC = () => {
         </div>
       )}
 
+      {/* Tab 4: Attendance */}
+      {activeTab === 'attendance' && (
+        <div className="space-y-4">
+          {/* Teacher Selector */}
+          <Card className="!p-3">
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 block">
+                  Pilih Guru
+                </label>
+                <select
+                  value={attendanceTeacherId || ''}
+                  onChange={(e) => setAttendanceTeacherId(e.target.value || null)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">-- Pilih Guru --</option>
+                  {teachers.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+              {attendanceTeacherId && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (attendanceMonth === 1) {
+                        setAttendanceMonth(12);
+                        setAttendanceYear(attendanceYear - 1);
+                      } else {
+                        setAttendanceMonth(attendanceMonth - 1);
+                      }
+                    }}
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <ChevronLeft className="w-4 h-4 text-gray-600" />
+                  </button>
+                  <span className="text-xs font-medium text-gray-700 min-w-[120px] text-center">
+                    {new Date(attendanceYear, attendanceMonth - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (attendanceMonth === 12) {
+                        setAttendanceMonth(1);
+                        setAttendanceYear(attendanceYear + 1);
+                      } else {
+                        setAttendanceMonth(attendanceMonth + 1);
+                      }
+                    }}
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <ChevronRight className="w-4 h-4 text-gray-600" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {attendanceTeacherId ? (
+            <>
+              {/* Stats */}
+              <div className="grid grid-cols-4 gap-3">
+                <Card className="!p-3 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100 text-center">
+                  <p className="text-[9px] font-bold text-blue-600 uppercase">Total Hari</p>
+                  <p className="text-xl font-bold text-blue-900">{attendanceStats.total}</p>
+                </Card>
+                <Card className="!p-3 bg-gradient-to-br from-green-50 to-emerald-50 border-green-100 text-center">
+                  <p className="text-[9px] font-bold text-green-600 uppercase">Hadir</p>
+                  <p className="text-xl font-bold text-green-900">{attendanceStats.present}</p>
+                </Card>
+                <Card className="!p-3 bg-gradient-to-br from-yellow-50 to-amber-50 border-yellow-100 text-center">
+                  <p className="text-[9px] font-bold text-yellow-600 uppercase">Terlambat</p>
+                  <p className="text-xl font-bold text-yellow-900">{attendanceStats.late}</p>
+                </Card>
+                <Card className="!p-3 bg-gradient-to-br from-red-50 to-rose-50 border-red-100 text-center">
+                  <p className="text-[9px] font-bold text-red-600 uppercase">Pulang Awal</p>
+                  <p className="text-xl font-bold text-red-900">{attendanceStats.earlyLeave}</p>
+                </Card>
+              </div>
+
+              {/* Attendance List */}
+              {attendanceLoading ? (
+                <div className="flex items-center justify-center p-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                </div>
+              ) : (
+                <Card className="!p-0 overflow-hidden">
+                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-gray-700 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-blue-600" /> Riwayat Absensi
+                    </h3>
+                    <span className="text-[10px] text-gray-500">
+                      {filteredAttendance.length} hari tercatat
+                    </span>
+                  </div>
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                      <tr>
+                        <th className="px-4 py-2">Tanggal</th>
+                        <th className="px-4 py-2">Check-in</th>
+                        <th className="px-4 py-2">Check-out</th>
+                        <th className="px-4 py-2">Lokasi</th>
+                        <th className="px-4 py-2">Koordinat GPS</th>
+                        <th className="px-4 py-2 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {filteredAttendance.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-8 text-center text-gray-400 text-xs italic">
+                            Belum ada data absensi untuk bulan ini.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredAttendance
+                          .sort((a, b) => new Date(b.check_in_time).getTime() - new Date(a.check_in_time).getTime())
+                          .map((record) => (
+                          <tr key={record.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-2">
+                              <div className="text-xs font-medium text-gray-900">
+                                {new Date(record.check_in_time).toLocaleDateString('id-ID', {
+                                  weekday: 'long',
+                                  day: 'numeric',
+                                  month: 'short'
+                                })}
+                              </div>
+                            </td>
+                            <td className="px-4 py-2">
+                              <span className="flex items-center gap-1 text-[10px] text-green-600 font-medium">
+                                <LogIn className="w-3 h-3" />
+                                {new Date(record.check_in_time).toLocaleTimeString('id-ID', {
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2">
+                              {record.check_out_time ? (
+                                <span className="flex items-center gap-1 text-[10px] text-blue-600 font-medium">
+                                  <LogOut className="w-3 h-3" />
+                                  {new Date(record.check_out_time).toLocaleTimeString('id-ID', {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-gray-400 italic">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2">
+                              <span className="flex items-center gap-1 text-[10px] text-gray-600">
+                                <MapPin className="w-3 h-3 text-orange-500" />
+                                {record.location_name || 'Unknown'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2">
+                              {record.latitude && record.longitude ? (
+                                <a
+                                  href={`https://www.google.com/maps?q=${record.latitude},${record.longitude}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[10px] text-blue-600 font-mono hover:text-blue-800 hover:underline cursor-pointer"
+                                  title="Buka di Google Maps"
+                                >
+                                  {Number(record.latitude).toFixed(6)}, {Number(record.longitude).toFixed(6)}
+                                </a>
+                              ) : (
+                                <span className="text-[10px] text-gray-400 italic">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                record.status === 'PRESENT'
+                                  ? 'bg-green-100 text-green-700'
+                                  : record.status === 'LATE'
+                                  ? 'bg-yellow-100 text-yellow-700'
+                                  : 'bg-red-100 text-red-700'
+                              }`}>
+                                {record.status === 'PRESENT' ? 'Hadir' :
+                                 record.status === 'LATE' ? 'Terlambat' : 'Pulang Awal'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </Card>
+              )}
+            </>
+          ) : (
+            <Card className="!p-8 text-center">
+              <Clock className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-sm text-gray-500">Pilih guru untuk melihat data absensi</p>
+            </Card>
+          )}
+        </div>
+      )}
+
       {/* Session Detail Modal */}
       {selectedSession && (
         <div className="fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
@@ -703,6 +983,261 @@ export const TeacherManager: React.FC = () => {
               <Button
                 variant="outline"
                 onClick={() => setSelectedSession(null)}
+                className="w-full text-xs py-2"
+              >
+                Tutup
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Tab 5: Tests */}
+      {activeTab === 'tests' && (
+        <div className="space-y-4">
+          {/* Stats */}
+          <div className="grid grid-cols-4 gap-3">
+            <Card className="!p-3 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100">
+              <p className="text-[9px] font-bold text-blue-600 uppercase">Total Test</p>
+              <p className="text-xl font-bold text-blue-900">{allTests.length}</p>
+            </Card>
+            <Card className="!p-3 bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-100">
+              <p className="text-[9px] font-bold text-blue-600 uppercase">Quiz</p>
+              <p className="text-xl font-bold text-blue-900">
+                {allTests.filter(t => t.test_type === 'QUIZ').length}
+              </p>
+            </Card>
+            <Card className="!p-3 bg-gradient-to-br from-orange-50 to-amber-50 border-orange-100">
+              <p className="text-[9px] font-bold text-orange-600 uppercase">UTS</p>
+              <p className="text-xl font-bold text-orange-900">
+                {allTests.filter(t => t.test_type === 'MID_SEMESTER').length}
+              </p>
+            </Card>
+            <Card className="!p-3 bg-gradient-to-br from-purple-50 to-violet-50 border-purple-100">
+              <p className="text-[9px] font-bold text-purple-600 uppercase">UAS</p>
+              <p className="text-xl font-bold text-purple-900">
+                {allTests.filter(t => t.test_type === 'FINAL_SEMESTER').length}
+              </p>
+            </Card>
+          </div>
+
+          {/* Test List */}
+          <Card className="!p-0 overflow-hidden">
+            <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-xs font-bold text-gray-700 flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-purple-600" /> Jadwal Test
+              </h3>
+              <span className="text-[10px] text-gray-500">{allTests.length} test tercatat</span>
+            </div>
+            {testsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              </div>
+            ) : allTests.length === 0 ? (
+              <div className="py-12 text-center">
+                <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-sm text-gray-500">Belum ada jadwal test.</p>
+              </div>
+            ) : (
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                  <tr>
+                    <th className="px-4 py-2">Tanggal</th>
+                    <th className="px-4 py-2">Waktu</th>
+                    <th className="px-4 py-2">Judul Test</th>
+                    <th className="px-4 py-2">Lokasi</th>
+                    <th className="px-4 py-2">Materi</th>
+                    <th className="px-4 py-2 text-right">Detail</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {allTests
+                    .sort((a, b) => new Date(b.date_time).getTime() - new Date(a.date_time).getTime())
+                    .map((test) => (
+                    <tr key={test.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-2">
+                        <div className="text-xs font-medium text-gray-900">
+                          {formatDate(test.date_time)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2">
+                        <span className="flex items-center gap-1 text-[10px] text-gray-600">
+                          <Clock className="w-3 h-3 text-gray-400" />
+                          {formatTime(test.date_time)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2">
+                        <div>
+                          <p className="font-bold text-gray-900">{test.title}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${TEST_TYPE_COLORS[test.test_type]}`}>
+                              {TEST_TYPE_LABELS[test.test_type]}
+                            </span>
+                            <span className="text-[10px] text-gray-500">
+                              Kelas {test.class_name} • {test.duration_minutes} menit
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2">
+                        <span className="flex items-center gap-1 text-[10px] text-gray-600">
+                          <MapPin className="w-3 h-3 text-orange-500" />
+                          {test.location}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2">
+                        {test.materials && test.materials.length > 0 ? (
+                          <div className="flex items-center gap-1">
+                            <FileText className="w-3 h-3 text-red-500" />
+                            <span className="text-[10px] text-gray-600">
+                              {test.materials.length} file
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-gray-400 italic">Tidak ada</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <button
+                          onClick={() => setSelectedTest(test)}
+                          className="p-1.5 bg-purple-50 text-purple-600 rounded hover:bg-purple-600 hover:text-white transition-all"
+                        >
+                          <Eye className="w-3 h-3" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {allTests.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-gray-400 text-xs italic">
+                        Belum ada jadwal test tercatat.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* Test Detail Modal */}
+      {selectedTest && (
+        <div className="fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <Card className="w-full max-w-lg !p-0 overflow-hidden">
+            <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-purple-600" /> Detail Test
+              </h3>
+              <button onClick={() => setSelectedTest(null)} className="p-1 text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              {/* Test Info */}
+              <div className="flex items-center gap-3">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                  selectedTest.test_type === 'QUIZ' ? 'bg-blue-100' :
+                  selectedTest.test_type === 'MID_SEMESTER' ? 'bg-orange-100' : 'bg-purple-100'
+                }`}>
+                  <FileText className={`w-6 h-6 ${
+                    selectedTest.test_type === 'QUIZ' ? 'text-blue-600' :
+                    selectedTest.test_type === 'MID_SEMESTER' ? 'text-orange-600' : 'text-purple-600'
+                  }`} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-gray-900">{selectedTest.title}</h4>
+                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${TEST_TYPE_COLORS[selectedTest.test_type]}`}>
+                    {TEST_TYPE_LABELS[selectedTest.test_type]}
+                  </span>
+                </div>
+              </div>
+
+              {/* Date, Time & Location */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-2 bg-gray-50 rounded-lg">
+                  <p className="text-[9px] font-bold text-gray-400 uppercase">Tanggal & Waktu</p>
+                  <p className="text-xs font-medium text-gray-900">
+                    {formatDate(selectedTest.date_time)} • {formatTime(selectedTest.date_time)}
+                  </p>
+                </div>
+                <div className="p-2 bg-gray-50 rounded-lg">
+                  <p className="text-[9px] font-bold text-gray-400 uppercase">Durasi</p>
+                  <p className="text-xs font-medium text-gray-900 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-gray-400" />
+                    {selectedTest.duration_minutes} menit
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-2 bg-gray-50 rounded-lg">
+                  <p className="text-[9px] font-bold text-gray-400 uppercase">Lokasi</p>
+                  <p className="text-xs font-medium text-gray-900 flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-orange-500" />
+                    {selectedTest.location}
+                  </p>
+                </div>
+                <div className="p-2 bg-gray-50 rounded-lg">
+                  <p className="text-[9px] font-bold text-gray-400 uppercase">Kelas</p>
+                  <p className="text-xs font-medium text-gray-900">{selectedTest.class_name}</p>
+                </div>
+              </div>
+
+              <div className="p-2 bg-gray-50 rounded-lg">
+                <p className="text-[9px] font-bold text-gray-400 uppercase">Periode Akademik</p>
+                <p className="text-xs font-medium text-gray-900">
+                  Tahun Ajaran {selectedTest.academic_year} • Semester {selectedTest.semester}
+                </p>
+              </div>
+
+              {/* Description */}
+              {selectedTest.description && (
+                <div>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase mb-1">Deskripsi</p>
+                  <p className="text-xs text-gray-600">{selectedTest.description}</p>
+                </div>
+              )}
+
+              {/* Materials */}
+              <div>
+                <p className="text-[9px] font-bold text-gray-400 uppercase mb-2">Materi & Lampiran</p>
+                {selectedTest.materials && selectedTest.materials.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedTest.materials.map((file: string, idx: number) => {
+                      const fileName = file.split('/').pop() || file;
+                      return (
+                        <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                          <FileText className="w-4 h-4 text-red-500 shrink-0" />
+                          <a
+                            href={file}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex-1 truncate"
+                            title={fileName}
+                          >
+                            {fileName}
+                          </a>
+                          <a
+                            href={file}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                          >
+                            <Download className="w-3 h-3" />
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">Tidak ada materi terlampir</p>
+                )}
+              </div>
+
+              <Button
+                variant="outline"
+                onClick={() => setSelectedTest(null)}
                 className="w-full text-xs py-2"
               >
                 Tutup

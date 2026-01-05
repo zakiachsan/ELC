@@ -1,16 +1,16 @@
 
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../Card';
-import { Button } from '../Button';
 import { useStudents, useLocations } from '../../hooks/useProfiles';
 import { useSessions } from '../../hooks/useSessions';
 import { useReports } from '../../hooks/useReports';
 import type { Database } from '../../lib/database.types';
 import {
   Mail, Search, X,
-  TrendingUp, List as ListIcon, Eye,
-  User as UserIcon, ShieldAlert, School,
-  Smartphone, BarChart3, Users, GraduationCap,
+  List as ListIcon, Eye,
+  User as UserIcon, School,
+  BarChart3, Users, GraduationCap,
   Trophy, Calendar
 } from 'lucide-react';
 
@@ -27,6 +27,8 @@ const LEVEL_OPTIONS: { value: DifficultyLevel | ''; label: string }[] = [
 ];
 
 export const StudentList: React.FC = () => {
+  const navigate = useNavigate();
+
   // Data Hooks
   const { profiles: students, loading: studentsLoading } = useStudents();
   const { sessions, loading: sessionsLoading } = useSessions();
@@ -47,9 +49,6 @@ export const StudentList: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [schoolFilter, setSchoolFilter] = useState('');
   const [levelFilter, setLevelFilter] = useState('');
-
-  // Modal State
-  const [selectedStudent, setSelectedStudent] = useState<Profile | null>(null);
 
   // Calculate unique schools from students
   const uniqueSchools = useMemo(() => {
@@ -631,7 +630,7 @@ export const StudentList: React.FC = () => {
                           </td>
                           <td className="px-4 py-3 text-right">
                             <button
-                              onClick={() => setSelectedStudent(student)}
+                              onClick={() => navigate(`/admin/students/${student.id}`)}
                               className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg transition-all"
                               title="Lihat Detail"
                             >
@@ -656,101 +655,6 @@ export const StudentList: React.FC = () => {
         </div>
       )}
 
-      {/* --- MODAL: STUDENT DETAIL --- */}
-      {selectedStudent && (
-        <div className="fixed inset-0 z-[100] overflow-y-auto bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden relative border border-gray-100 animate-in zoom-in-95 duration-200">
-            <div className="absolute top-4 right-4">
-              <button onClick={() => setSelectedStudent(null)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-500 transition-colors">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-5">
-              {/* Compact Header */}
-              <div className="flex items-center gap-4 border-b border-gray-100 pb-4">
-                <div className="w-14 h-14 theme-bg-primary rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg">
-                  {selectedStudent.name.charAt(0)}
-                </div>
-                <div>
-                  <h3 className="text-lg font-black text-gray-900">{selectedStudent.name}</h3>
-                  <p className="text-xs text-gray-500">Profil Siswa</p>
-                </div>
-              </div>
-
-              {/* Stats Cards */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-blue-50 p-3 rounded-xl text-center">
-                  <p className="text-xl font-black text-blue-600">{getStudentAverage(selectedStudent.id).overall.toFixed(1) || '-'}</p>
-                  <p className="text-[9px] font-bold text-blue-500 uppercase">Rata-rata</p>
-                </div>
-                <div className="bg-green-50 p-3 rounded-xl text-center">
-                  <p className="text-xl font-black text-green-600">{getAttendanceRate(selectedStudent.id).toFixed(0) || 0}%</p>
-                  <p className="text-[9px] font-bold text-green-500 uppercase">Kehadiran</p>
-                </div>
-                <div className="bg-purple-50 p-3 rounded-xl text-center">
-                  <p className="text-xl font-black text-purple-600">{studentStats[selectedStudent.id]?.totalReports || 0}</p>
-                  <p className="text-[9px] font-bold text-purple-500 uppercase">Sesi</p>
-                </div>
-              </div>
-
-              {/* Detail Content Grid */}
-              <div className="space-y-4">
-                {/* Student Data Section */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
-                    <UserIcon className="w-4 h-4 text-blue-600" /> Informasi Siswa
-                  </h4>
-                  <div className="grid grid-cols-1 gap-2 bg-gray-50 p-4 rounded-xl">
-                    <div className="flex justify-between text-sm items-center">
-                      <span className="text-gray-500">Email</span>
-                      <span className="text-gray-900 font-medium truncate ml-4">{selectedStudent.email}</span>
-                    </div>
-                    <div className="flex justify-between text-sm items-center">
-                      <span className="text-gray-500">Telepon</span>
-                      <span className="text-gray-900 font-medium flex items-center gap-1">
-                        <Smartphone className="w-3.5 h-3.5 text-blue-500" /> {selectedStudent.phone || '-'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm items-center">
-                      <span className="text-gray-500">Sekolah</span>
-                      <span className="text-gray-900 font-medium">{getSchoolName(selectedStudent) || '-'}</span>
-                    </div>
-                    <div className="flex justify-between text-sm items-center">
-                      <span className="text-gray-500">Level</span>
-                      <span className="text-gray-900 font-medium">{studentStats[selectedStudent.id]?.level || 'Belum Ditentukan'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Score Details */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-green-600" /> Detail Nilai
-                  </h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-green-50 p-4 rounded-xl">
-                      <p className="text-xs font-bold text-green-600 uppercase mb-1">Written Score</p>
-                      <p className="text-2xl font-black text-green-700">{getStudentAverage(selectedStudent.id).written.toFixed(1) || '-'}</p>
-                    </div>
-                    <div className="bg-blue-50 p-4 rounded-xl">
-                      <p className="text-xs font-bold text-blue-600 uppercase mb-1">Oral Score</p>
-                      <p className="text-2xl font-black text-blue-700">{getStudentAverage(selectedStudent.id).oral.toFixed(1) || '-'}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="pt-2">
-                <Button onClick={() => setSelectedStudent(null)} className="w-full h-11 rounded-xl font-bold">
-                  Tutup
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

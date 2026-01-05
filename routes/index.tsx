@@ -28,6 +28,7 @@ const PlacementTestWrapper: React.FC<{
 import { AccountManager } from '../components/admin/FamilyCreator';
 import { ScheduleManager } from '../components/admin/ScheduleManager';
 import { StudentList } from '../components/admin/StudentList';
+import { StudentDetail } from '../components/admin/StudentDetail';
 import { LocationManager } from '../components/admin/LocationManager';
 import { SiteSettings } from '../components/admin/SiteSettings';
 import { OlympiadManager } from '../components/admin/OlympiadManager';
@@ -39,21 +40,27 @@ import { TeacherApplicationManager } from '../components/admin/TeacherApplicatio
 import { BillingManager } from '../components/admin/BillingManager';
 import { KahootManager } from '../components/admin/KahootManager';
 import { TeacherManager } from '../components/admin/TeacherManager';
+import { ReviewManager } from '../components/admin/ReviewManager';
 
 // Teacher Components
 import { TeacherView } from '../components/teacher/TeacherView';
 import { SessionManager } from '../components/teacher/SessionManager';
 import { StudentGrades } from '../components/teacher/StudentGrades';
 import { OnlineMaterialsManager } from '../components/teacher/OnlineMaterialsManager';
+import { TeacherAttendance } from '../components/teacher/TeacherAttendance';
+import { TestManager } from '../components/teacher/TestManager';
 
 // Student Components
 import { StudentView } from '../components/student/StudentView';
 import { StudentSchedule } from '../components/student/StudentSchedule';
 import { StudentProgress } from '../components/student/StudentProgress';
 import { StudentOnlineLearning } from '../components/student/StudentOnlineLearning';
+import { StudentGradesView } from '../components/student/StudentGradesView';
+import { TeacherReview as StudentTeacherReview } from '../components/student/TeacherReview';
 
 // Parent Components
 import { ParentOverview, ParentSchedule, ParentActivityLog } from '../components/parent/ParentDashboard';
+import { ParentTeacherReview } from '../components/parent/TeacherReview';
 
 // Shared Components
 import { FeedbackForm } from '../components/shared/FeedbackForm';
@@ -196,6 +203,16 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         }
       />
       <Route
+        path="/admin/students/:studentId"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.ADMIN]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <StudentDetail />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/teachers"
         element={
           <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.ADMIN]}>
@@ -315,6 +332,16 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/admin/reviews"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.ADMIN]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <ReviewManager />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Teacher Routes */}
       <Route
@@ -346,6 +373,26 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         }
       />
       <Route
+        path="/teacher/schedule/:schoolId"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.TEACHER]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <SessionManager />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teacher/schedule/:schoolId/:classId"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.TEACHER]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <SessionManager />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/teacher/grades"
         element={
           <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.TEACHER]}>
@@ -356,11 +403,71 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         }
       />
       <Route
+        path="/teacher/grades/:schoolId"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.TEACHER]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <StudentGrades />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teacher/grades/:schoolId/:classId"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.TEACHER]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <StudentGrades />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teacher/tests"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.TEACHER]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <TestManager />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teacher/tests/:schoolId"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.TEACHER]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <TestManager />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teacher/tests/:schoolId/:classId"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.TEACHER]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <TestManager />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/teacher/materials"
         element={
           <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.TEACHER]}>
             <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
               <OnlineMaterialsManager />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teacher/attendance"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.TEACHER]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <TeacherAttendance />
             </DashboardWrapper>
           </ProtectedRoute>
         }
@@ -416,11 +523,31 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         }
       />
       <Route
+        path="/student/grades"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.STUDENT]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <StudentGradesView student={currentUser} />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/student/feedback"
         element={
           <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.STUDENT]}>
             <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
               <FeedbackForm user={currentUser} />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/review"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.STUDENT]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <StudentTeacherReview />
             </DashboardWrapper>
           </ProtectedRoute>
         }
@@ -471,6 +598,16 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
           <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.PARENT]}>
             <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
               <FeedbackForm user={currentUser} />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/parent/review"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.PARENT]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <ParentTeacherReview />
             </DashboardWrapper>
           </ProtectedRoute>
         }

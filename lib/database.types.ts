@@ -29,8 +29,13 @@ export interface Database {
           linked_student_id: string | null
           assigned_location_id: string | null
           assigned_subjects: string[]
+          assigned_classes: string[]
           skill_levels: Json
           learning_hub_subscription: Json
+          class_types: string[]
+          class_type: string | null
+          school: string | null
+          class_name: string | null
           created_at: string
           updated_at: string
         }
@@ -50,8 +55,13 @@ export interface Database {
           linked_student_id?: string | null
           assigned_location_id?: string | null
           assigned_subjects?: string[]
+          assigned_classes?: string[]
           skill_levels?: Json
           learning_hub_subscription?: Json
+          class_types?: string[]
+          class_type?: string | null
+          school?: string | null
+          class_name?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -71,8 +81,13 @@ export interface Database {
           linked_student_id?: string | null
           assigned_location_id?: string | null
           assigned_subjects?: string[]
+          assigned_classes?: string[]
           skill_levels?: Json
           learning_hub_subscription?: Json
+          class_types?: string[]
+          class_type?: string | null
+          school?: string | null
+          class_name?: string | null
           updated_at?: string
         }
       }
@@ -119,6 +134,7 @@ export interface Database {
           difficulty_level: 'Starter' | 'Elementary' | 'Intermediate' | 'Upper-Intermediate' | 'Advanced'
           has_exam: boolean
           exam_materials: string[]
+          class_type: string | null
           created_at: string
           updated_at: string
         }
@@ -136,6 +152,7 @@ export interface Database {
           difficulty_level: 'Starter' | 'Elementary' | 'Intermediate' | 'Upper-Intermediate' | 'Advanced'
           has_exam?: boolean
           exam_materials?: string[]
+          class_type?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -153,6 +170,7 @@ export interface Database {
           difficulty_level?: 'Starter' | 'Elementary' | 'Intermediate' | 'Upper-Intermediate' | 'Advanced'
           has_exam?: boolean
           exam_materials?: string[]
+          class_type?: string | null
           updated_at?: string
         }
       }
@@ -245,6 +263,49 @@ export interface Database {
           submission_url?: string | null
           score?: number | null
           feedback?: string | null
+          updated_at?: string
+        }
+      }
+      teacher_attendance: {
+        Row: {
+          id: string
+          teacher_id: string
+          location_id: string | null
+          check_in_time: string
+          check_out_time: string | null
+          latitude: number | null
+          longitude: number | null
+          location_name: string | null
+          notes: string | null
+          status: 'PRESENT' | 'LATE' | 'EARLY_LEAVE'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          teacher_id: string
+          location_id?: string | null
+          check_in_time?: string
+          check_out_time?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          location_name?: string | null
+          notes?: string | null
+          status?: 'PRESENT' | 'LATE' | 'EARLY_LEAVE'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          teacher_id?: string
+          location_id?: string | null
+          check_in_time?: string
+          check_out_time?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          location_name?: string | null
+          notes?: string | null
+          status?: 'PRESENT' | 'LATE' | 'EARLY_LEAVE'
           updated_at?: string
         }
       }
@@ -1079,6 +1140,159 @@ export interface Database {
           passed?: boolean
           timestamp?: string
           feedback?: string | null
+        }
+      }
+      test_schedules: {
+        Row: {
+          id: string
+          teacher_id: string | null
+          test_type: 'QUIZ' | 'MID_SEMESTER' | 'FINAL_SEMESTER'
+          title: string
+          description: string | null
+          date_time: string
+          duration_minutes: number
+          location: string
+          class_name: string
+          academic_year: string
+          semester: string
+          materials: string[]
+          class_type: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          teacher_id?: string | null
+          test_type: 'QUIZ' | 'MID_SEMESTER' | 'FINAL_SEMESTER'
+          title: string
+          description?: string | null
+          date_time: string
+          duration_minutes?: number
+          location: string
+          class_name: string
+          academic_year: string
+          semester: string
+          materials?: string[]
+          class_type?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          teacher_id?: string | null
+          test_type?: 'QUIZ' | 'MID_SEMESTER' | 'FINAL_SEMESTER'
+          title?: string
+          description?: string | null
+          date_time?: string
+          duration_minutes?: number
+          location?: string
+          class_name?: string
+          academic_year?: string
+          semester?: string
+          materials?: string[]
+          class_type?: string | null
+          updated_at?: string
+        }
+      }
+      student_grades: {
+        Row: {
+          id: string
+          student_id: string
+          academic_year: string
+          semester: string
+          school_name: string
+          class_name: string
+          quiz1: number | null
+          quiz2: number | null
+          quiz3: number | null
+          participation: number | null
+          mid: number | null
+          final: number | null
+          class_type: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          student_id: string
+          academic_year: string
+          semester: string
+          school_name: string
+          class_name: string
+          quiz1?: number | null
+          quiz2?: number | null
+          quiz3?: number | null
+          participation?: number | null
+          mid?: number | null
+          final?: number | null
+          class_type?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          student_id?: string
+          academic_year?: string
+          semester?: string
+          school_name?: string
+          class_name?: string
+          quiz1?: number | null
+          quiz2?: number | null
+          quiz3?: number | null
+          participation?: number | null
+          mid?: number | null
+          final?: number | null
+          class_type?: string | null
+          updated_at?: string
+        }
+      }
+      teacher_reviews: {
+        Row: {
+          id: string
+          teacher_id: string
+          reviewer_id: string
+          reviewer_role: 'STUDENT' | 'PARENT'
+          review_month: string
+          technology_rating: number
+          punctuality_rating: number
+          material_quality_rating: number
+          english_encouragement_rating: number
+          teaching_topics_rating: number
+          pedagogic_rating: number
+          comments: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          teacher_id: string
+          reviewer_id: string
+          reviewer_role: 'STUDENT' | 'PARENT'
+          review_month: string
+          technology_rating: number
+          punctuality_rating: number
+          material_quality_rating: number
+          english_encouragement_rating: number
+          teaching_topics_rating: number
+          pedagogic_rating: number
+          comments?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          teacher_id?: string
+          reviewer_id?: string
+          reviewer_role?: 'STUDENT' | 'PARENT'
+          review_month?: string
+          technology_rating?: number
+          punctuality_rating?: number
+          material_quality_rating?: number
+          english_encouragement_rating?: number
+          teaching_topics_rating?: number
+          pedagogic_rating?: number
+          comments?: string | null
+          updated_at?: string
         }
       }
     }

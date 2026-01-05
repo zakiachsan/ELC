@@ -1,34 +1,97 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { LEVEL_COLORS, MOCK_USERS } from '../../constants';
+import { LEVEL_COLORS } from '../../constants';
 import { useSessions } from '../../hooks/useSessions';
-import { useLocations } from '../../hooks/useProfiles';
+import { useLocations, useStudents } from '../../hooks/useProfiles';
 import { useReports } from '../../hooks/useReports';
 import { useHomeworks } from '../../hooks/useHomeworks';
-import { useStudents } from '../../hooks/useProfiles';
 import { useAuth } from '../../contexts/AuthContext';
-import { ClassSession, StudentSessionReport, CEFRLevel, Homework, SkillCategory, DifficultyLevel, UserRole } from '../../types';
-import { Clock, MapPin, Calendar, CheckCircle, FileText, Upload, Trash2, Download, ShieldCheck, ShieldAlert, UserCheck, PenLine, Save, X, BookOpen, ClipboardList, Award, Mic, FileEdit, Plus, School, ChevronRight, GraduationCap, Loader2, File } from 'lucide-react';
+import { ClassSession, StudentSessionReport, CEFRLevel, Homework, SkillCategory, DifficultyLevel, User, ClassType } from '../../types';
+import { Clock, MapPin, Calendar, CheckCircle, FileText, Upload, Trash2, Download, ShieldCheck, ShieldAlert, UserCheck, PenLine, Save, X, BookOpen, ClipboardList, Award, Mic, FileEdit, Plus, School, ChevronRight, GraduationCap, Loader2, File, Globe } from 'lucide-react';
 import { uploadFile, isAllowedFileType, formatFileSize, UploadResult } from '../../lib/storage';
 import { SKILL_ICONS } from '../student/StudentView';
 
+// Type for multi-class schedule entry
+interface MultiClassScheduleEntry {
+  classId: string;
+  startTime: string;
+  endTime: string;
+}
+
+// Helper function to get timezone offset string (e.g., "+07:00" for WIB)
+const getTimezoneOffset = (): string => {
+  const offset = new Date().getTimezoneOffset();
+  const sign = offset <= 0 ? '+' : '-';
+  const hours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
+  const minutes = String(Math.abs(offset) % 60).padStart(2, '0');
+  return `${sign}${hours}:${minutes}`;
+};
+
 export const SessionManager: React.FC = () => {
+  const { schoolId, classId } = useParams<{ schoolId?: string; classId?: string }>();
+  const navigate = useNavigate();
   const { user: currentTeacher } = useAuth();
   const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError, createSession } = useSessions();
   const { locations: locationsData, loading: locationsLoading } = useLocations();
   const { reports: reportsData, loading: reportsLoading, createReport, updateReport } = useReports();
   const { homeworks: homeworksData, loading: homeworksLoading, createHomework } = useHomeworks();
+  const { profiles: studentsData, loading: studentsLoading } = useStudents();
 
-  const [selectedSchool, setSelectedSchool] = useState<string | null>(null);
+  // Derive selected school and class from URL params
+  const selectedSchool = schoolId ? decodeURIComponent(schoolId) : null;
+  const selectedClass = classId ? decodeURIComponent(classId) : null;
+
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming');
   const [selectedSession, setSelectedSession] = useState<ClassSession | null>(null);
   const [editingStudent, setEditingStudent] = useState<string | null>(null);
   const [showHomeworkModal, setShowHomeworkModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [detailTab, setDetailTab] = useState<'students' | 'materials'>('students');
+  const [showMultiClassModal, setShowMultiClassModal] = useState(false);
+  const [detailTab, setDetailTab] = useState<'students' | 'materials'>('materials');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Multi-class schedule form state
+  const [multiClassDates, setMultiClassDates] = useState<string[]>([]);
+  const [tempDate, setTempDate] = useState('');
+  const [multiClassEntries, setMultiClassEntries] = useState<MultiClassScheduleEntry[]>([]);
+  const [multiClassTopic, setMultiClassTopic] = useState('');
+  const [multiClassSkill, setMultiClassSkill] = useState<SkillCategory | ''>('');
+  const [multiClassDifficulty, setMultiClassDifficulty] = useState<DifficultyLevel | ''>('');
+  const [multiClassDescription, setMultiClassDescription] = useState('');
+  const [multiClassType, setMultiClassType] = useState<ClassType | ''>('');
+
+  // Get teacher's available class types
+  const teacherClassTypes: ClassType[] = (currentTeacher as any)?.classTypes || [];
+  const hasOnlyOneClassType = teacherClassTypes.length === 1;
+
+  // Auto-select class type if teacher only has one
+  useEffect(() => {
+    if (hasOnlyOneClassType && !multiClassType) {
+      setMultiClassType(teacherClassTypes[0]);
+    }
+  }, [hasOnlyOneClassType, teacherClassTypes, multiClassType]);
+
+  // Navigation helpers
+  const navigateToSchool = (schoolName: string) => {
+    navigate(`/teacher/schedule/${encodeURIComponent(schoolName)}`);
+  };
+
+  const navigateToClass = (className: string) => {
+    if (selectedSchool) {
+      navigate(`/teacher/schedule/${encodeURIComponent(selectedSchool)}/${encodeURIComponent(className)}`);
+    }
+  };
+
+  const navigateBack = () => {
+    if (selectedClass) {
+      navigate(`/teacher/schedule/${encodeURIComponent(selectedSchool!)}`);
+    } else if (selectedSchool) {
+      navigate('/teacher/schedule');
+    }
+  };
 
   // Build reports by session from database - use local state for now
   const [reports, setReports] = useState<Record<string, StudentSessionReport[]>>({});
@@ -102,12 +165,92 @@ export const SessionManager: React.FC = () => {
     .map(l => ({
       id: l.id,
       name: l.name,
+      level: l.level || null,
     }));
+
+  // Get teacher's assigned classes, or generate based on school level
+  const getAvailableClasses = (): string[] => {
+    // If teacher has assigned classes, use those
+    if (currentTeacher?.assignedClasses && currentTeacher.assignedClasses.length > 0) {
+      return currentTeacher.assignedClasses;
+    }
+    // Otherwise, generate based on selected school's level
+    const selectedSchoolData = schools.find(s => s.name === selectedSchool);
+    const level = selectedSchoolData?.level;
+    const classes: string[] = [];
+    switch (level?.toUpperCase()) {
+      case 'KINDERGARTEN':
+        ['TK-A', 'TK-B'].forEach(c => {
+          for (let i = 1; i <= 3; i++) classes.push(`${c}.${i}`);
+        });
+        break;
+      case 'PRIMARY':
+        for (let grade = 1; grade <= 6; grade++) {
+          for (let section = 1; section <= 3; section++) {
+            classes.push(`${grade}.${section}`);
+          }
+        }
+        break;
+      case 'JUNIOR':
+        for (let grade = 7; grade <= 9; grade++) {
+          for (let section = 1; section <= 3; section++) {
+            classes.push(`${grade}.${section}`);
+          }
+        }
+        break;
+      case 'SENIOR':
+        for (let grade = 10; grade <= 12; grade++) {
+          for (let section = 1; section <= 3; section++) {
+            classes.push(`${grade}.${section}`);
+          }
+        }
+        break;
+      default:
+        // General - show common classes
+        for (let grade = 1; grade <= 12; grade++) {
+          for (let section = 1; section <= 3; section++) {
+            classes.push(`${grade}.${section}`);
+          }
+        }
+    }
+    return classes;
+  };
+
+  const availableClasses = getAvailableClasses();
+
+  // Map students from database and filter by selected class
+  const allStudents: User[] = studentsData.map(s => ({
+    id: s.id,
+    name: s.name,
+    email: s.email,
+    phone: s.phone || undefined,
+    address: s.address || undefined,
+    role: s.role as any,
+    status: s.status as 'ACTIVE' | 'INACTIVE',
+    branch: s.branch || undefined,
+    assignedLocationId: s.assigned_location_id || undefined,
+  }));
+
+  // Filter students by class (branch) and optionally by school (assigned_location_id)
+  const enrolledStudents = allStudents.filter(student => {
+    // Match class (branch field stores the student's class like "10.1", "7.2", etc.)
+    if (selectedClass && selectedClass !== 'Online') {
+      if (student.branch !== selectedClass) return false;
+    }
+    // Optionally also match school if student has assigned location
+    if (selectedSchool && selectedSchool !== 'Online (Zoom)') {
+      const selectedSchoolData = schools.find(s => s.name === selectedSchool);
+      if (selectedSchoolData && student.assignedLocationId) {
+        if (student.assignedLocationId !== selectedSchoolData.id) return false;
+      }
+    }
+    return true;
+  });
 
   // Auto-select school if teacher has only one assigned school
   useEffect(() => {
     if (schools.length === 1 && !selectedSchool && !locationsLoading) {
-      setSelectedSchool(schools[0].name);
+      navigateToSchool(schools[0].name);
     }
   }, [schools, selectedSchool, locationsLoading]);
 
@@ -143,15 +286,15 @@ export const SessionManager: React.FC = () => {
 
   const now = new Date();
 
-  // Filter sessions by selected school
-  const filteredSessions = selectedSchool
-    ? sessions.filter(s => s.location.includes(selectedSchool.split(' - ')[0]))
+  // Filter sessions by selected school and class
+  const filteredSessions = (selectedSchool && selectedClass)
+    ? sessions.filter(s => s.location.includes(selectedSchool) && s.location.includes(`Kelas ${selectedClass}`))
     : sessions;
 
   const upcomingSessions = filteredSessions.filter(s => new Date(s.dateTime) > now);
   const pastSessions = filteredSessions.filter(s => new Date(s.dateTime) <= now);
 
-  if (sessionsLoading || locationsLoading || reportsLoading || homeworksLoading) {
+  if (sessionsLoading || locationsLoading || reportsLoading || homeworksLoading || studentsLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -223,7 +366,6 @@ export const SessionManager: React.FC = () => {
       alert('Judul dan tanggal deadline harus diisi!');
       return;
     }
-    const enrolledStudents = MOCK_USERS.filter(u => u.role === UserRole.STUDENT);
     const newHomeworks: Homework[] = enrolledStudents.map(student => ({
       id: `hw-${Date.now()}-${student.id}`,
       sessionId,
@@ -329,12 +471,12 @@ export const SessionManager: React.FC = () => {
 
       // Create a session for each selected date
       for (const date of scheduleForm.dates) {
-        const dateTime = `${date}T${scheduleForm.startTime}:00`;
+        const dateTime = `${date}T${scheduleForm.startTime}:00${getTimezoneOffset()}`;
         await createSession({
           teacher_id: currentTeacher?.id || '',
           topic: scheduleForm.topic,
           date_time: dateTime,
-          location: selectedSchool,
+          location: `${selectedSchool} - Kelas ${selectedClass}`,
           skill_category: scheduleForm.skillCategory as any || 'Grammar',
           difficulty_level: scheduleForm.difficultyLevel as any || 'Elementary',
           description: scheduleForm.description || null,
@@ -396,7 +538,7 @@ export const SessionManager: React.FC = () => {
             <Card
               key={school.id}
               className="!p-4 cursor-pointer hover:border-blue-400 transition-all group"
-              onClick={() => setSelectedSchool(school.name)}
+              onClick={() => navigateToSchool(school.name)}
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
@@ -404,7 +546,7 @@ export const SessionManager: React.FC = () => {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-sm font-bold text-gray-900 group-hover:text-blue-600">{school.name}</h3>
-                  <p className="text-[10px] text-gray-500">{school.address}</p>
+                  <p className="text-[10px] text-gray-500">{school.level ? `Level: ${school.level}` : 'General'}</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500" />
               </div>
@@ -413,7 +555,7 @@ export const SessionManager: React.FC = () => {
           {/* Online option */}
           <Card
             className="!p-4 cursor-pointer hover:border-purple-400 transition-all group"
-            onClick={() => setSelectedSchool('Online (Zoom)')}
+            onClick={() => navigate('/teacher/schedule/Online%20(Zoom)/Online')}
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
@@ -431,10 +573,352 @@ export const SessionManager: React.FC = () => {
     );
   }
 
+  // --- CLASS SELECTION VIEW ---
+  if (!selectedClass) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={() => navigate('/teacher/schedule')} className="text-xs py-1.5 px-3">
+              Kembali
+            </Button>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <GraduationCap className="w-5 h-5 text-orange-600" /> Pilih Kelas
+              </h2>
+              <p className="text-xs text-gray-500">{selectedSchool} - Pilih kelas yang akan dikelola</p>
+            </div>
+          </div>
+          <Button onClick={() => setShowMultiClassModal(true)} className="text-xs py-1.5 px-3">
+            Tambah Jadwal Multi-Kelas
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+          {availableClasses.map((cls) => (
+            <Card
+              key={cls}
+              className="!p-3 cursor-pointer hover:border-orange-400 transition-all group text-center"
+              onClick={() => navigateToClass(cls)}
+            >
+              <div className="w-10 h-10 mx-auto mb-2 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                <span className="text-sm font-bold">{cls.split('.')[0]}</span>
+              </div>
+              <h3 className="text-sm font-bold text-gray-900 group-hover:text-orange-600">Kelas {cls}</h3>
+            </Card>
+          ))}
+        </div>
+
+        {/* Multi-Class Schedule Modal */}
+        {showMultiClassModal && (
+          <div className="fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <Card className="w-full max-w-2xl !p-4 space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-gray-900">
+                  Tambah Jadwal Multi-Kelas
+                </h3>
+                <button onClick={() => { setShowMultiClassModal(false); setMultiClassEntries([]); setMultiClassDates([]); setTempDate(''); setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : ''); }} className="p-1 text-gray-400 hover:text-gray-600">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-500">Buat jadwal untuk beberapa kelas sekaligus dalam beberapa tanggal.</p>
+
+              {/* Step 1: Multiple Dates */}
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-gray-400 uppercase">1. Pilih Tanggal (bisa lebih dari satu)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={tempDate}
+                    onChange={e => setTempDate(e.target.value)}
+                    className="flex-1 border rounded-lg px-3 py-2 text-xs"
+                  />
+                  <button
+                    onClick={() => {
+                      if (tempDate && !multiClassDates.includes(tempDate)) {
+                        setMultiClassDates([...multiClassDates, tempDate].sort());
+                        setTempDate('');
+                      }
+                    }}
+                    disabled={!tempDate}
+                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
+                  >
+                    Tambah
+                  </button>
+                </div>
+                {multiClassDates.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {multiClassDates.map(date => (
+                      <span key={date} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-medium border border-blue-100">
+                        {new Date(date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        <button
+                          onClick={() => setMultiClassDates(multiClassDates.filter(d => d !== date))}
+                          className="p-0.5 hover:bg-blue-200 rounded"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {multiClassDates.length === 0 && (
+                  <p className="text-[10px] text-gray-400 italic">Belum ada tanggal dipilih</p>
+                )}
+              </div>
+
+              {/* Step 2: Topic & Info */}
+              {multiClassDates.length > 0 && (
+                <div className="space-y-3 p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase">Topik/Materi</label>
+                    <input
+                      type="text"
+                      value={multiClassTopic}
+                      onChange={e => setMultiClassTopic(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1"
+                      placeholder="e.g. Business English: Negotiation"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] font-black text-gray-400 uppercase">Skill Category</label>
+                      <select
+                        value={multiClassSkill}
+                        onChange={e => setMultiClassSkill(e.target.value as SkillCategory)}
+                        className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1 bg-white"
+                      >
+                        <option value="">Pilih...</option>
+                        {Object.values(SkillCategory).map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-gray-400 uppercase">Difficulty</label>
+                      <select
+                        value={multiClassDifficulty}
+                        onChange={e => setMultiClassDifficulty(e.target.value as DifficultyLevel)}
+                        className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1 bg-white"
+                      >
+                        <option value="">Pilih...</option>
+                        {Object.values(DifficultyLevel).map(lvl => (
+                          <option key={lvl} value={lvl}>{lvl}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Class Type Selection */}
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase">
+                      Jenis Kelas <span className="text-red-500">*</span>
+                    </label>
+                    {hasOnlyOneClassType ? (
+                      <div className="mt-1 px-3 py-1.5 bg-gray-100 rounded-lg text-xs text-gray-700 font-medium">
+                        {multiClassType === ClassType.BILINGUAL ? (
+                          <span className="flex items-center gap-1"><Globe className="w-3 h-3 text-blue-500" /> Bilingual</span>
+                        ) : (
+                          <span className="flex items-center gap-1"><UserCheck className="w-3 h-3 text-teal-500" /> Regular</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2 mt-1">
+                        <button
+                          type="button"
+                          onClick={() => setMultiClassType(ClassType.BILINGUAL)}
+                          className={`flex items-center justify-center gap-1.5 px-3 py-2 border rounded-lg text-xs font-bold transition-all ${
+                            multiClassType === ClassType.BILINGUAL
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                          }`}
+                        >
+                          <Globe className="w-3 h-3" /> Bilingual
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMultiClassType(ClassType.REGULAR)}
+                          className={`flex items-center justify-center gap-1.5 px-3 py-2 border rounded-lg text-xs font-bold transition-all ${
+                            multiClassType === ClassType.REGULAR
+                              ? 'bg-teal-600 text-white border-teal-600'
+                              : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                          }`}
+                        >
+                          <UserCheck className="w-3 h-3" /> Regular
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase">Deskripsi (opsional)</label>
+                    <textarea
+                      value={multiClassDescription}
+                      onChange={e => setMultiClassDescription(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1"
+                      rows={2}
+                      placeholder="Deskripsi materi..."
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: Select Classes & Times */}
+              {multiClassDates.length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black text-gray-400 uppercase">2. Pilih Kelas & Waktu</label>
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {availableClasses.map((cls) => {
+                      const entry = multiClassEntries.find(e => e.classId === cls);
+                      const isSelected = !!entry;
+
+                      return (
+                        <div key={cls} className={`p-3 rounded-lg border transition-all ${isSelected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                          <div className="flex items-center justify-between">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setMultiClassEntries([...multiClassEntries, { classId: cls, startTime: '', endTime: '' }]);
+                                  } else {
+                                    setMultiClassEntries(multiClassEntries.filter(ent => ent.classId !== cls));
+                                  }
+                                }}
+                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-sm font-bold text-gray-900">Kelas {cls}</span>
+                            </label>
+                            {isSelected && (
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[9px] text-gray-500">Mulai:</span>
+                                  <input
+                                    type="time"
+                                    value={entry?.startTime || ''}
+                                    onChange={e => {
+                                      setMultiClassEntries(multiClassEntries.map(ent =>
+                                        ent.classId === cls ? { ...ent, startTime: e.target.value } : ent
+                                      ));
+                                    }}
+                                    className="border rounded px-2 py-1 text-xs w-24"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[9px] text-gray-500">Selesai:</span>
+                                  <input
+                                    type="time"
+                                    value={entry?.endTime || ''}
+                                    onChange={e => {
+                                      setMultiClassEntries(multiClassEntries.map(ent =>
+                                        ent.classId === cls ? { ...ent, endTime: e.target.value } : ent
+                                      ));
+                                    }}
+                                    className="border rounded px-2 py-1 text-xs w-24"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Summary */}
+              {multiClassEntries.length > 0 && multiClassDates.length > 0 && (
+                <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                  <p className="text-[9px] font-black text-blue-600 uppercase mb-1">Ringkasan</p>
+                  <p className="text-xs text-blue-800">
+                    <span className="font-bold">{multiClassEntries.length * multiClassDates.length}</span> jadwal akan dibuat:{' '}
+                    <span className="font-bold">{multiClassEntries.length}</span> kelas × <span className="font-bold">{multiClassDates.length}</span> tanggal
+                  </p>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => { setShowMultiClassModal(false); setMultiClassEntries([]); setMultiClassDates([]); setTempDate(''); setMultiClassTopic(''); setMultiClassSkill(''); setMultiClassDifficulty(''); setMultiClassDescription(''); setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : ''); }}
+                  disabled={isSubmitting}
+                  className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+                >
+                  Batal
+                </button>
+                <Button
+                  onClick={async () => {
+                    if (multiClassDates.length === 0 || multiClassEntries.length === 0 || !multiClassTopic || !multiClassType) {
+                      alert('Pilih tanggal, kelas, jenis kelas (Bilingual/Regular), dan isi topik terlebih dahulu!');
+                      return;
+                    }
+                    const invalidEntries = multiClassEntries.filter(e => !e.startTime || !e.endTime);
+                    if (invalidEntries.length > 0) {
+                      alert('Pastikan semua kelas yang dipilih memiliki waktu mulai dan selesai!');
+                      return;
+                    }
+                    setIsSubmitting(true);
+                    try {
+                      // Create session for each date × class combination
+                      for (const date of multiClassDates) {
+                        for (const entry of multiClassEntries) {
+                          const dateTime = `${date}T${entry.startTime}:00${getTimezoneOffset()}`;
+                          await createSession({
+                            teacher_id: currentTeacher?.id || '',
+                            topic: multiClassTopic,
+                            date_time: dateTime,
+                            location: `${selectedSchool} - Kelas ${entry.classId}`,
+                            skill_category: multiClassSkill as any || 'Grammar',
+                            difficulty_level: multiClassDifficulty as any || 'Elementary',
+                            description: multiClassDescription || null,
+                            materials: [],
+                            class_type: multiClassType || 'REGULAR',
+                          });
+                        }
+                      }
+                      const totalCreated = multiClassDates.length * multiClassEntries.length;
+                      alert(`${totalCreated} jadwal berhasil ditambahkan!`);
+                      setShowMultiClassModal(false);
+                      setMultiClassEntries([]);
+                      setMultiClassDates([]);
+                      setTempDate('');
+                      setMultiClassTopic('');
+                      setMultiClassSkill('');
+                      setMultiClassDifficulty('');
+                      setMultiClassDescription('');
+                      setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : '');
+                    } catch (error) {
+                      console.error('Error creating sessions:', error);
+                      alert('Gagal menyimpan jadwal. Silakan coba lagi.');
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  disabled={isSubmitting || multiClassEntries.length === 0 || multiClassDates.length === 0 || !multiClassTopic || !multiClassType}
+                  className="flex-1 text-xs py-2 disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Menyimpan...
+                    </span>
+                  ) : (
+                    `Simpan ${multiClassEntries.length * multiClassDates.length} Jadwal`
+                  )}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // --- DETAIL VIEW ---
   if (selectedSession) {
     const Icon = SKILL_ICONS[selectedSession.skillCategory];
-    const enrolledStudents = MOCK_USERS.filter(u => u.role === UserRole.STUDENT);
     const sessionReports = reports[selectedSession.id] || [];
     const sessionHomeworks = homeworks.filter(h => h.sessionId === selectedSession.id);
     const isPast = new Date(selectedSession.dateTime) <= now;
@@ -478,15 +962,21 @@ export const SessionManager: React.FC = () => {
               </div>
             </div>
           </div>
+          {selectedSession.description && (
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Deskripsi</p>
+              <p className="text-xs text-gray-600">{selectedSession.description}</p>
+            </div>
+          )}
         </Card>
 
         {/* Detail Tabs */}
         <div className="flex gap-1 border-b border-gray-200">
-          <button onClick={() => setDetailTab('students')} className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${detailTab === 'students' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
-            Student Reports
-          </button>
           <button onClick={() => setDetailTab('materials')} className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${detailTab === 'materials' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
             Materials
+          </button>
+          <button onClick={() => setDetailTab('students')} className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${detailTab === 'students' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+            Student Reports
           </button>
         </div>
 
@@ -677,13 +1167,38 @@ export const SessionManager: React.FC = () => {
             <div className="space-y-3">
               {selectedSession.materials && selectedSession.materials.length > 0 ? (
                 <div className="space-y-2">
-                  {selectedSession.materials.map((file, idx) => (
-                    <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 rounded text-xs">
-                      <FileText className="w-3 h-3 text-red-500 shrink-0" />
-                      <span className="truncate flex-1">{file}</span>
-                      <button className="text-gray-400 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
-                    </div>
-                  ))}
+                  {selectedSession.materials.map((file, idx) => {
+                    // Extract filename from URL for display
+                    const fileName = file.split('/').pop() || file;
+                    const isUrl = file.startsWith('http://') || file.startsWith('https://');
+                    return (
+                      <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 rounded text-xs group hover:bg-blue-50 transition-colors">
+                        <FileText className="w-4 h-4 text-red-500 shrink-0" />
+                        {isUrl ? (
+                          <a
+                            href={file}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="truncate flex-1 text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                            title={fileName}
+                          >
+                            {fileName}
+                          </a>
+                        ) : (
+                          <span className="truncate flex-1 text-gray-700">{file}</span>
+                        )}
+                        <a
+                          href={file}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-gray-400 hover:text-blue-600 p-1"
+                          title="Download"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-[10px] text-gray-400 italic">Belum ada materi.</p>
@@ -769,14 +1284,14 @@ export const SessionManager: React.FC = () => {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => setSelectedSchool(null)} className="text-xs py-1.5 px-3">
-            Ganti Sekolah
+          <Button variant="outline" onClick={() => navigate(`/teacher/schedule/${encodeURIComponent(selectedSchool!)}`)} className="text-xs py-1.5 px-3">
+            Ganti Kelas
           </Button>
           <div>
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-blue-600" /> Jadwal Mengajar
             </h2>
-            <p className="text-xs text-gray-500">{selectedSchool}</p>
+            <p className="text-xs text-gray-500">{selectedSchool} - Kelas {selectedClass}</p>
           </div>
         </div>
         <Button onClick={() => setShowCreateModal(true)} className="text-xs py-1.5 px-3">
@@ -815,7 +1330,7 @@ export const SessionManager: React.FC = () => {
             {(activeTab === 'upcoming' ? upcomingSessions : pastSessions).map(session => {
               const sessionReports = reports[session.id] || [];
               const reportedCount = sessionReports.filter(r => r.writtenScore !== undefined || r.cefrLevel).length;
-              const enrolledCount = MOCK_USERS.filter(u => u.role === UserRole.STUDENT).length;
+              const enrolledCount = enrolledStudents.length;
 
               return (
                 <tr key={session.id} className="hover:bg-gray-50 transition-colors">
@@ -1079,9 +1594,9 @@ export const SessionManager: React.FC = () => {
             </div>
 
             <div className="bg-gray-50 p-3 rounded-lg">
-              <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Lokasi Terpilih</p>
+              <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Lokasi & Kelas Terpilih</p>
               <p className="text-xs font-bold text-gray-900 flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-orange-500" /> {selectedSchool}
+                <MapPin className="w-3 h-3 text-orange-500" /> {selectedSchool} - Kelas {selectedClass}
               </p>
             </div>
 

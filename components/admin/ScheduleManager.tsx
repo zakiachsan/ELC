@@ -241,12 +241,29 @@ export const ScheduleManager: React.FC = () => {
               <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Materials</h4>
               {selectedSession.materials && selectedSession.materials.length > 0 ? (
                 <div className="space-y-1">
-                  {selectedSession.materials.map((file, idx) => (
-                    <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 rounded text-xs">
-                      <BookOpen className="w-3 h-3 text-red-500 shrink-0" />
-                      <span className="truncate flex-1">{file}</span>
-                    </div>
-                  ))}
+                  {selectedSession.materials.map((file, idx) => {
+                    // Extract filename from URL for display
+                    const fileName = file.split('/').pop() || file;
+                    const isUrl = file.startsWith('http://') || file.startsWith('https://');
+                    return (
+                      <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 rounded text-xs hover:bg-blue-50 transition-colors">
+                        <BookOpen className="w-3 h-3 text-red-500 shrink-0" />
+                        {isUrl ? (
+                          <a
+                            href={file}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="truncate flex-1 text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                            title={fileName}
+                          >
+                            {fileName}
+                          </a>
+                        ) : (
+                          <span className="truncate flex-1 text-gray-700">{file}</span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-[10px] text-gray-400 italic">No materials attached.</p>

@@ -4,7 +4,7 @@ import { UserRole, User } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import {
   Users, GraduationCap, LayoutDashboard,
-  CalendarDays, BookOpen, List, Home, TrendingUp, MapPin, Globe, Activity, Palette, Trophy, Sparkles, CreditCard, Search, Menu, X, Briefcase, DollarSign, Gamepad2, BarChart3, MessageSquare, Newspaper, Award
+  CalendarDays, BookOpen, List, Home, TrendingUp, MapPin, Globe, Activity, Palette, Trophy, Sparkles, CreditCard, Search, Menu, X, Briefcase, DollarSign, Gamepad2, BarChart3, MessageSquare, Newspaper, Award, Clock, Star
 } from 'lucide-react';
 
 interface DashboardLayoutProps {
@@ -117,6 +117,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Akademik</div>
               <SidebarNavItem to="/admin/students" label={t.nav_student_reports} icon={List} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/teachers" label="Teacher" icon={GraduationCap} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/admin/reviews" label="Review Guru" icon={Star} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/schedule" label={t.nav_schedule} icon={CalendarDays} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/locations" label={t.nav_locations} icon={MapPin} onClick={closeMobileMenu} />
 
@@ -143,7 +144,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           {currentUser.role === UserRole.TEACHER && (
             <>
               <SidebarNavItem to="/teacher/dashboard" label={t.nav_dashboard} icon={LayoutDashboard} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/teacher/attendance" label="Absen" icon={Clock} onClick={closeMobileMenu} />
               <SidebarNavItem to="/teacher/schedule" label={t.nav_schedule} icon={CalendarDays} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/teacher/tests" label="Jadwal Test" icon={List} onClick={closeMobileMenu} />
               <SidebarNavItem to="/teacher/grades" label="Nilai Siswa" icon={BarChart3} onClick={closeMobileMenu} />
               <SidebarNavItem to="/teacher/materials" label="Afternoon Classes" icon={BookOpen} onClick={closeMobileMenu} />
             </>
@@ -154,6 +157,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <SidebarNavItem to="/student/dashboard" label={t.nav_dashboard} icon={LayoutDashboard} onClick={closeMobileMenu} />
               <SidebarNavItem to="/student/schedule" label={t.nav_schedule} icon={CalendarDays} onClick={closeMobileMenu} />
               <SidebarNavItem to="/student/progress" label={t.nav_my_progress} icon={TrendingUp} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/student/grades" label="Nilai Semester" icon={BarChart3} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/student/review" label="Review Guru" icon={Star} onClick={closeMobileMenu} />
               {/* Temporarily hidden - Afternoon Classes menu */}
               {/* <SidebarNavItem to="/student/learning" label="Afternoon Classes" icon={BookOpen} onClick={closeMobileMenu} /> */}
               <SidebarNavItem to="/student/feedback" label="Feedback" icon={MessageSquare} onClick={closeMobileMenu} />
@@ -165,6 +170,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <SidebarNavItem to="/parent/dashboard" label={t.nav_dashboard} icon={LayoutDashboard} onClick={closeMobileMenu} />
               <SidebarNavItem to="/parent/schedule" label={t.nav_schedule} icon={CalendarDays} onClick={closeMobileMenu} />
               <SidebarNavItem to="/parent/history" label={t.nav_activity_log} icon={Activity} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/parent/review" label="Review Guru" icon={Star} onClick={closeMobileMenu} />
               <SidebarNavItem to="/parent/feedback" label="Feedback" icon={MessageSquare} onClick={closeMobileMenu} />
             </>
           )}

@@ -6,6 +6,11 @@ export enum UserRole {
   PARENT = 'PARENT'
 }
 
+export enum ClassType {
+  BILINGUAL = 'BILINGUAL',
+  REGULAR = 'REGULAR'
+}
+
 export enum ApplicationStatus {
   PENDING = 'PENDING',
   REVIEWED = 'REVIEWED',
@@ -226,8 +231,12 @@ export interface User {
   needsAttention?: boolean;
   assignedSubjects?: string[];
   assignedLocationId?: string;
+  assignedClasses?: string[]; // e.g. ["10.1", "10.2", "11.1"]
   schoolOrigin?: string;
   status?: 'ACTIVE' | 'INACTIVE';
+  // Class type fields
+  classTypes?: ClassType[]; // For teachers: types of classes they can teach (BILINGUAL, REGULAR, or both)
+  classType?: ClassType; // For students: the class type they belong to (BILINGUAL or REGULAR)
   // Learning Hub subscription
   learningHubSubscription?: {
     isActive: boolean;
@@ -240,6 +249,7 @@ export interface Location {
   name: string;
   address: string;
   capacity: number;
+  level?: 'KINDERGARTEN' | 'PRIMARY' | 'JUNIOR' | 'SENIOR' | 'GENERAL'; // School level type
 }
 
 export interface CoursePreset {
@@ -292,10 +302,11 @@ export interface ClassSession {
   videoUrl?: string;
   description?: string;
   materials?: string[];
-  skillCategory: SkillCategory; 
-  difficultyLevel: DifficultyLevel; 
-  hasExam?: boolean; 
-  examMaterials?: string[]; 
+  skillCategory: SkillCategory;
+  difficultyLevel: DifficultyLevel;
+  hasExam?: boolean;
+  examMaterials?: string[];
+  classType?: ClassType; // BILINGUAL or REGULAR
 }
 
 export interface ModuleExam {

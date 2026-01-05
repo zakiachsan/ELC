@@ -4,7 +4,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from './Button';
 import {
   CheckCircle, Zap, Users, Trophy, Star, Globe,
-  Calendar, Award, ShieldCheck, Lock, Smartphone, Mail, X, ChevronRight, Brain, AlertCircle, Clock, Sparkles, XCircle, ArrowLeft, Newspaper, Medal, MonitorPlay, Video, Briefcase, Flag, UserPlus, FileText, Send, DollarSign, TrendingUp, Play, Target, Timer, Crown, Gamepad2, MapPin, GraduationCap, BadgeCheck, Quote, Loader2, BookOpen
+  Calendar, Award, ShieldCheck, Lock, Smartphone, Mail, X, ChevronRight, Brain, AlertCircle, Clock, Sparkles, XCircle, ArrowLeft, Newspaper, Medal, MonitorPlay, Video, Briefcase, Flag, UserPlus, FileText, Send, DollarSign, TrendingUp, Play, Target, Timer, Crown, Gamepad2, MapPin, GraduationCap, BadgeCheck, Quote, Loader2, BookOpen, Menu
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -135,6 +135,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
   const navigate = useNavigate();
   const location = useLocation();
   const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Supabase Data Hooks
   const { olympiads, loading: olympiadsLoading } = useOlympiads(true); // activeOnly
@@ -1498,26 +1499,112 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
 
         {/* Right Actions */}
         <div className="flex gap-2 md:gap-3 items-center">
-          {/* Karir CTA */}
+          {/* Karir CTA - Desktop only */}
           <button
             onClick={() => setTeacherFlow('type')}
-            className="hidden sm:flex items-center gap-1.5 text-xs font-semibold text-teal-700 hover:text-teal-800 px-3 py-1.5 rounded-full hover:bg-teal-50 transition-colors"
+            className="hidden md:flex items-center gap-1.5 text-xs font-semibold text-teal-700 hover:text-teal-800 px-3 py-1.5 rounded-full hover:bg-teal-50 transition-colors"
           >
             <Briefcase className="w-4 h-4" />
             <span>Karir</span>
           </button>
-          {/* Language - icon only on mobile */}
+          {/* Language - Desktop only */}
           <button
             onClick={() => setLanguage(language === 'en' ? 'id' : 'en')}
-            className="flex items-center gap-1.5 text-xs font-semibold bg-white border border-gray-200 px-2.5 py-1.5 md:px-3 md:py-2 rounded-full hover:bg-gray-50 transition-colors text-gray-700"
+            className="hidden md:flex items-center gap-1.5 text-xs font-semibold bg-white border border-gray-200 px-3 py-2 rounded-full hover:bg-gray-50 transition-colors text-gray-700"
           >
             <Globe className="w-4 h-4 text-blue-500" />
-            <span className="hidden sm:inline">{language === 'en' ? 'EN' : 'ID'}</span>
+            <span>{language === 'en' ? 'EN' : 'ID'}</span>
           </button>
-          {/* Login Button */}
-          <Button variant="outline" onClick={openLogin} className="text-sm px-3 py-1.5 md:px-4 md:py-2">{t.hp_login}</Button>
+          {/* Login Button - Desktop only */}
+          <Button variant="outline" onClick={openLogin} className="hidden md:block text-sm px-4 py-2">{t.hp_login}</Button>
+
+          {/* Hamburger Menu - Mobile only */}
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            aria-label="Toggle menu"
+          >
+            {isMobileMenuOpen ? <X className="w-6 h-6 text-gray-700" /> : <Menu className="w-6 h-6 text-gray-700" />}
+          </button>
         </div>
       </nav>
+
+      {/* Mobile Menu Dropdown */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden fixed inset-x-0 top-16 bottom-0 bg-white z-50 overflow-y-auto">
+          <div className="px-4 py-3">
+            <a
+              href="#why-elc"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="block px-4 py-2.5 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Keunggulan
+            </a>
+            <Link
+              to="/olympiad"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="block px-4 py-2.5 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Olimpiade
+            </Link>
+            <Link
+              to="/cefr"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="block px-4 py-2.5 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Free Test
+            </Link>
+            <Link
+              to="/hall-of-fame"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="block px-4 py-2.5 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Hall of Fame
+            </Link>
+            <Link
+              to="/live-quiz"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="block px-4 py-2.5 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Quiz
+            </Link>
+            <Link
+              to="/news"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="block px-4 py-2.5 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              News
+            </Link>
+
+            <div className="border-t border-gray-100 mt-3 pt-3 flex items-center gap-2">
+              <button
+                onClick={() => { setTeacherFlow('type'); setIsMobileMenuOpen(false); }}
+                className="flex items-center gap-2 flex-1 px-4 py-2.5 text-teal-700 font-medium rounded-lg hover:bg-teal-50 transition-colors"
+              >
+                <Briefcase className="w-5 h-5" />
+                <span>Karir</span>
+              </button>
+              <button
+                onClick={() => { setLanguage(language === 'en' ? 'id' : 'en'); }}
+                className="flex items-center gap-2 px-4 py-2.5 text-gray-700 font-medium rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
+              >
+                <Globe className="w-4 h-4 text-blue-500" />
+                <span>{language === 'en' ? 'ID' : 'EN'}</span>
+              </button>
+            </div>
+
+            <div className="pt-4">
+              <Button
+                variant="primary"
+                onClick={() => { openLogin(); setIsMobileMenuOpen(false); }}
+                className="w-full py-3 text-base"
+              >
+                {t.hp_login}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hero Section */}
       <section className="relative pt-10 pb-14 md:pt-12 md:pb-16 lg:pt-16 lg:pb-20 overflow-hidden">
