@@ -25,6 +25,22 @@ export const modulesService = {
     return data;
   },
 
+
+  // Get modules created by a specific teacher
+  async getByTeacher(teacherId: string) {
+    const { data, error } = await supabase
+      .from('online_modules')
+      .select(`
+        *,
+        creator:profiles!created_by(id, name)
+      `)
+      .eq('created_by', teacherId)
+      .order('posted_date', { ascending: false });
+
+    if (error) throw error;
+    return data;
+  },
+
   // Get published modules
   async getPublished() {
     const { data, error } = await supabase

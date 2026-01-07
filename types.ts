@@ -303,7 +303,7 @@ export interface ClassSession {
   videoUrl?: string;
   description?: string;
   materials?: string[];
-  skillCategory: SkillCategory;
+  skillCategories: SkillCategory[]; // Changed to array for multiple categories
   difficultyLevel: DifficultyLevel;
   hasExam?: boolean;
   examMaterials?: string[];

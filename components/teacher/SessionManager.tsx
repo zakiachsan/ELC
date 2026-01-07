@@ -1,16 +1,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { LEVEL_COLORS } from '../../constants';
 import { useSessions } from '../../hooks/useSessions';
-import { useLocations, useStudents, useClasses } from '../../hooks/useProfiles';
+import { useLocations, useStudents, useClasses, useStudentsBySchoolAndClass } from '../../hooks/useProfiles';
 import { useReports } from '../../hooks/useReports';
 import { useHomeworks } from '../../hooks/useHomeworks';
 import { useAuth } from '../../contexts/AuthContext';
 import { ClassSession, StudentSessionReport, CEFRLevel, Homework, SkillCategory, DifficultyLevel, User, ClassType } from '../../types';
-import { Clock, MapPin, Calendar, CheckCircle, FileText, Upload, Trash2, Download, ShieldCheck, ShieldAlert, UserCheck, PenLine, Save, X, BookOpen, ClipboardList, Award, Mic, FileEdit, Plus, School, ChevronRight, GraduationCap, Loader2, File, Globe } from 'lucide-react';
+import { Clock, MapPin, Calendar, CheckCircle, FileText, Upload, Trash2, Download, ShieldCheck, ShieldAlert, UserCheck, PenLine, Save, X, BookOpen, ClipboardList, Award, Mic, FileEdit, Plus, School, ChevronRight, GraduationCap, Loader2, File, Globe, Copy, AlignLeft } from 'lucide-react';
 import { uploadFile, isAllowedFileType, formatFileSize, UploadResult } from '../../lib/storage';
 import { SKILL_ICONS } from '../student/StudentView';
 
@@ -32,8 +32,12 @@ const getTimezoneOffset = (): string => {
 
 export const SessionManager: React.FC = () => {
   const { schoolId, classId } = useParams<{ schoolId?: string; classId?: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user: currentTeacher } = useAuth();
+
+  // Get session ID from URL params (for deep linking from dashboard)
+  const sessionIdFromUrl = searchParams.get('session');
 
   // Derive selected school and class from URL params
   const selectedSchool = schoolId ? decodeURIComponent(schoolId) : null;
@@ -54,10 +58,16 @@ export const SessionManager: React.FC = () => {
   const { classes: locationClasses, loading: classesLoading } = useClasses(selectedLocationId);
 
   // Stage 2: Only load sessions/students/reports when viewing class details
-  const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError, createSession } = useSessions({ enabled: isDetailView });
+  // OPTIMIZED: Filter at database level instead of loading all data
+  const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError, createSession } = useSessions({
+    schoolName: selectedSchool || undefined,
+    className: selectedClass || undefined,
+    enabled: isDetailView
+  });
   const { reports: reportsData, loading: reportsLoading, createReport, updateReport } = useReports({ enabled: isDetailView });
   const { homeworks: homeworksData, loading: homeworksLoading, createHomework } = useHomeworks({ enabled: isDetailView });
-  const { profiles: studentsData, loading: studentsLoading } = useStudents(isDetailView);
+  // OPTIMIZED: Load only students for selected school and class
+  const { students: studentsData, loading: studentsLoading } = useStudentsBySchoolAndClass(selectedLocationId, selectedClass || undefined);
 
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming');
   const [selectedSession, setSelectedSession] = useState<ClassSession | null>(null);
@@ -70,11 +80,11 @@ export const SessionManager: React.FC = () => {
 
   // Multi-class schedule form state
   const [multiClassDates, setMultiClassDates] = useState<string[]>([]);
-  const [tempDate, setTempDate] = useState('');
+  // tempDate state removed - dates are now auto-added on selection
   const [multiClassEntries, setMultiClassEntries] = useState<MultiClassScheduleEntry[]>([]);
   const [multiClassTopic, setMultiClassTopic] = useState('');
-  const [multiClassSkill, setMultiClassSkill] = useState<SkillCategory | ''>('');
-  const [multiClassDifficulty, setMultiClassDifficulty] = useState<DifficultyLevel | ''>('');
+  const [multiClassSkills, setMultiClassSkills] = useState<SkillCategory[]>([]);
+  // multiClassDifficulty removed - no longer needed
   const [multiClassDescription, setMultiClassDescription] = useState('');
   const [multiClassType, setMultiClassType] = useState<ClassType | ''>('');
   const [multiClassFiles, setMultiClassFiles] = useState<UploadResult[]>([]);
@@ -166,10 +176,20 @@ export const SessionManager: React.FC = () => {
     description: s.description || '',
     dateTime: s.date_time,
     location: s.location,
-    skillCategory: s.skill_category as SkillCategory,
+    skillCategories: (Array.isArray(s.skill_category) ? s.skill_category : [s.skill_category]) as SkillCategory[],
     difficultyLevel: s.difficulty_level as DifficultyLevel,
     materials: s.materials || [],
   }));
+
+  // Auto-select session from URL param (for deep linking from dashboard)
+  useEffect(() => {
+    if (sessionIdFromUrl && sessions.length > 0 && !selectedSession) {
+      const sessionToSelect = sessions.find(s => s.id === sessionIdFromUrl);
+      if (sessionToSelect) {
+        setSelectedSession(sessionToSelect);
+      }
+    }
+  }, [sessionIdFromUrl, sessions, selectedSession]);
 
   // Map schools/locations - filter to only show teacher's assigned schools
   const schools = locationsData
@@ -263,8 +283,8 @@ export const SessionManager: React.FC = () => {
 
   const availableClasses = getAvailableClasses();
 
-  // Map students from database and filter by selected class
-  const allStudents: User[] = studentsData.map(s => ({
+  // Map students from database - already filtered by school and class at database level
+  const enrolledStudents: User[] = studentsData.map(s => ({
     id: s.id,
     name: s.name,
     email: s.email,
@@ -276,28 +296,8 @@ export const SessionManager: React.FC = () => {
     assignedLocationId: s.assigned_location_id || undefined,
   }));
 
-  // Filter students by class (branch) and optionally by school (assigned_location_id)
-  const enrolledStudents = allStudents.filter(student => {
-    // Match class (branch field stores the student's class like "10.1", "7.2", etc.)
-    if (selectedClass && selectedClass !== 'Online') {
-      if (student.branch !== selectedClass) return false;
-    }
-    // Optionally also match school if student has assigned location
-    if (selectedSchool && selectedSchool !== 'Online (Zoom)') {
-      const selectedSchoolData = schools.find(s => s.name === selectedSchool);
-      if (selectedSchoolData && student.assignedLocationId) {
-        if (student.assignedLocationId !== selectedSchoolData.id) return false;
-      }
-    }
-    return true;
-  });
-
-  // Auto-select school if teacher has only one assigned school
-  useEffect(() => {
-    if (schools.length === 1 && !selectedSchool && !locationsLoading) {
-      navigateToSchool(schools[0].name);
-    }
-  }, [schools, selectedSchool, locationsLoading]);
+  // NOTE: Removed auto-select for single school to match StudentGrades/TestManager UX
+  // Teacher must always select school manually
 
   // Form states for student scores
   const [editForm, setEditForm] = useState<{
@@ -316,12 +316,11 @@ export const SessionManager: React.FC = () => {
     startTime: '',
     endTime: '',
     topic: '',
-    skillCategory: '' as SkillCategory | '',
-    difficultyLevel: '' as DifficultyLevel | '',
+    skillCategories: [] as SkillCategory[],
     description: '',
     materials: [] as string[]
   });
-  const [newDate, setNewDate] = useState('');
+  // newDate state removed - dates are now auto-added on selection
 
   // File upload states
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -332,12 +331,9 @@ export const SessionManager: React.FC = () => {
   const now = new Date();
 
   // Filter sessions by selected school and class
-  const filteredSessions = (selectedSchool && selectedClass)
-    ? sessions.filter(s => s.location.includes(selectedSchool) && s.location.includes(selectedClass))
-    : sessions;
-
-  const upcomingSessions = filteredSessions.filter(s => new Date(s.dateTime) > now);
-  const pastSessions = filteredSessions.filter(s => new Date(s.dateTime) <= now);
+  // Sessions are already filtered at database level by school and class
+  const upcomingSessions = sessions.filter(s => new Date(s.dateTime) > now);
+  const pastSessions = sessions.filter(s => new Date(s.dateTime) <= now);
 
   // Show loading spinner - only check heavy data loading when in detail view
   // Also check classesLoading when school is selected (for class selection view)
@@ -432,12 +428,7 @@ export const SessionManager: React.FC = () => {
     setShowHomeworkModal(false);
   };
 
-  const handleAddDate = () => {
-    if (newDate && !scheduleForm.dates.includes(newDate)) {
-      setScheduleForm({ ...scheduleForm, dates: [...scheduleForm.dates, newDate].sort() });
-      setNewDate('');
-    }
-  };
+  // handleAddDate removed - dates are now auto-added on selection
 
   const handleRemoveDate = (dateToRemove: string) => {
     setScheduleForm({
@@ -573,8 +564,8 @@ export const SessionManager: React.FC = () => {
           topic: scheduleForm.topic,
           date_time: dateTime,
           location: `${selectedSchool} - ${selectedClass}`,
-          skill_category: scheduleForm.skillCategory as any || 'Grammar',
-          difficulty_level: scheduleForm.difficultyLevel as any || 'Elementary',
+          skill_category: scheduleForm.skillCategories.length > 0 ? scheduleForm.skillCategories : ['Grammar'],
+          difficulty_level: 'Elementary', // Default value - field removed from UI
           description: scheduleForm.description || null,
           materials: materialUrls,
         });
@@ -587,8 +578,7 @@ export const SessionManager: React.FC = () => {
         startTime: '',
         endTime: '',
         topic: '',
-        skillCategory: '',
-        difficultyLevel: '',
+        skillCategories: [],
         description: '',
         materials: []
       });
@@ -717,7 +707,7 @@ export const SessionManager: React.FC = () => {
                 <h3 className="text-sm font-bold text-gray-900">
                   Add Multi-Class Schedule
                 </h3>
-                <button onClick={() => { setShowMultiClassModal(false); setMultiClassEntries([]); setMultiClassDates([]); setTempDate(''); setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : ''); setMultiClassFiles([]); setMultiClassUploadError(null); }} className="p-1 text-gray-400 hover:text-gray-600">
+                <button onClick={() => { setShowMultiClassModal(false); setMultiClassEntries([]); setMultiClassDates([]); setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : ''); setMultiClassFiles([]); setMultiClassUploadError(null); }} className="p-1 text-gray-400 hover:text-gray-600">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -727,26 +717,17 @@ export const SessionManager: React.FC = () => {
               {/* Step 1: Multiple Dates */}
               <div className="space-y-2">
                 <label className="text-[9px] font-black text-gray-400 uppercase">1. Select Dates (can select multiple)</label>
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    value={tempDate}
-                    onChange={e => setTempDate(e.target.value)}
-                    className="flex-1 border rounded-lg px-3 py-2 text-xs"
-                  />
-                  <button
-                    onClick={() => {
-                      if (tempDate && !multiClassDates.includes(tempDate)) {
-                        setMultiClassDates([...multiClassDates, tempDate].sort());
-                        setTempDate('');
-                      }
-                    }}
-                    disabled={!tempDate}
-                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
+                <input
+                  type="date"
+                  value=""
+                  onChange={e => {
+                    const selectedDate = e.target.value;
+                    if (selectedDate && !multiClassDates.includes(selectedDate)) {
+                      setMultiClassDates([...multiClassDates, selectedDate].sort());
+                    }
+                  }}
+                  className="w-full border rounded-lg px-3 py-2 text-xs"
+                />
                 {multiClassDates.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {multiClassDates.map(date => (
@@ -780,32 +761,33 @@ export const SessionManager: React.FC = () => {
                       placeholder="e.g. Business English: Negotiation"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[9px] font-black text-gray-400 uppercase">Skill Category</label>
-                      <select
-                        value={multiClassSkill}
-                        onChange={e => setMultiClassSkill(e.target.value as SkillCategory)}
-                        className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1 bg-white"
-                      >
-                        <option value="">Select...</option>
-                        {Object.values(SkillCategory).map(cat => (
-                          <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black text-gray-400 uppercase">Difficulty</label>
-                      <select
-                        value={multiClassDifficulty}
-                        onChange={e => setMultiClassDifficulty(e.target.value as DifficultyLevel)}
-                        className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1 bg-white"
-                      >
-                        <option value="">Select...</option>
-                        {Object.values(DifficultyLevel).map(lvl => (
-                          <option key={lvl} value={lvl}>{lvl}</option>
-                        ))}
-                      </select>
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase">Skill Categories (select multiple)</label>
+                    <div className="flex flex-wrap gap-2 mt-1.5">
+                      {Object.values(SkillCategory).map(cat => (
+                        <label
+                          key={cat}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                            multiClassSkills.includes(cat)
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={multiClassSkills.includes(cat)}
+                            onChange={e => {
+                              if (e.target.checked) {
+                                setMultiClassSkills([...multiClassSkills, cat]);
+                              } else {
+                                setMultiClassSkills(multiClassSkills.filter(c => c !== cat));
+                              }
+                            }}
+                            className="sr-only"
+                          />
+                          {cat}
+                        </label>
+                      ))}
                     </div>
                   </div>
 
@@ -941,13 +923,16 @@ export const SessionManager: React.FC = () => {
                 <div className="space-y-2">
                   <label className="text-[9px] font-black text-gray-400 uppercase">2. Select Classes & Time</label>
                   <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                    {availableClasses.map((cls) => {
+                    {availableClasses.map((cls, classIndex) => {
                       const entry = multiClassEntries.find(e => e.classId === cls);
                       const isSelected = !!entry;
+                      const entryIndex = multiClassEntries.findIndex(e => e.classId === cls);
+                      const previousEntry = entryIndex > 0 ? multiClassEntries[entryIndex - 1] : null;
+                      const canCopyFromAbove = isSelected && previousEntry && previousEntry.startTime && previousEntry.endTime;
 
                       return (
                         <div key={cls} className={`p-3 rounded-lg border transition-all ${isSelected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
                             <label className="flex items-center gap-2 cursor-pointer">
                               <input
                                 type="checkbox"
@@ -965,6 +950,22 @@ export const SessionManager: React.FC = () => {
                             </label>
                             {isSelected && (
                               <div className="flex items-center gap-2">
+                                {/* Copy from above button */}
+                                {canCopyFromAbove && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setMultiClassEntries(multiClassEntries.map(ent =>
+                                        ent.classId === cls ? { ...ent, startTime: previousEntry.startTime, endTime: previousEntry.endTime } : ent
+                                      ));
+                                    }}
+                                    className="flex items-center gap-1 px-2 py-1 text-[9px] font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-100 rounded transition-colors"
+                                    title="Copy time from above"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                    <span className="hidden sm:inline">Copy</span>
+                                  </button>
+                                )}
                                 <div className="flex items-center gap-1">
                                   <span className="text-[9px] text-gray-500">Start:</span>
                                   <input
@@ -1018,7 +1019,7 @@ export const SessionManager: React.FC = () => {
               {/* Actions */}
               <div className="flex gap-2 pt-2">
                 <button
-                  onClick={() => { setShowMultiClassModal(false); setMultiClassEntries([]); setMultiClassDates([]); setTempDate(''); setMultiClassTopic(''); setMultiClassSkill(''); setMultiClassDifficulty(''); setMultiClassDescription(''); setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : ''); setMultiClassFiles([]); setMultiClassUploadError(null); }}
+                  onClick={() => { setShowMultiClassModal(false); setMultiClassEntries([]); setMultiClassDates([]); setMultiClassTopic(''); setMultiClassSkills([]); setMultiClassDescription(''); setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : ''); setMultiClassFiles([]); setMultiClassUploadError(null); }}
                   disabled={isSubmitting || multiClassUploading}
                   className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50"
                 >
@@ -1049,8 +1050,8 @@ export const SessionManager: React.FC = () => {
                             topic: multiClassTopic,
                             date_time: dateTime,
                             location: `${selectedSchool} - ${entry.classId}`,
-                            skill_category: multiClassSkill as any || 'Grammar',
-                            difficulty_level: multiClassDifficulty as any || 'Elementary',
+                            skill_category: multiClassSkills.length > 0 ? multiClassSkills : ['Grammar'],
+                            difficulty_level: 'Elementary', // Default value - field removed from UI
                             description: multiClassDescription || null,
                             materials: materialUrls,
                             class_type: multiClassType || 'REGULAR',
@@ -1062,10 +1063,8 @@ export const SessionManager: React.FC = () => {
                       setShowMultiClassModal(false);
                       setMultiClassEntries([]);
                       setMultiClassDates([]);
-                      setTempDate('');
                       setMultiClassTopic('');
-                      setMultiClassSkill('');
-                      setMultiClassDifficulty('');
+                      setMultiClassSkills([]);
                       setMultiClassDescription('');
                       setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : '');
                       setMultiClassFiles([]);
@@ -1099,7 +1098,8 @@ export const SessionManager: React.FC = () => {
 
   // --- DETAIL VIEW ---
   if (selectedSession) {
-    const Icon = SKILL_ICONS[selectedSession.skillCategory];
+    const primarySkill = selectedSession.skillCategories[0] || SkillCategory.GRAMMAR;
+    const Icon = SKILL_ICONS[primarySkill] || AlignLeft;
     const sessionReports = reports[selectedSession.id] || [];
     const sessionHomeworks = homeworks.filter(h => h.sessionId === selectedSession.id);
     const isPast = new Date(selectedSession.dateTime) <= now;
@@ -1108,7 +1108,13 @@ export const SessionManager: React.FC = () => {
       <div className="space-y-4 animate-in slide-in-from-right-4">
         <div className="flex items-center justify-between">
            <div className="flex items-center gap-3">
-             <Button variant="outline" onClick={() => setSelectedSession(null)} className="text-xs py-1.5 px-3">
+             <Button variant="outline" onClick={() => {
+                setSelectedSession(null);
+                // Clear session param from URL to prevent auto-reselect
+                if (sessionIdFromUrl) {
+                  navigate(`/teacher/schedule/${encodeURIComponent(selectedSchool!)}/${encodeURIComponent(selectedClass!)}`, { replace: true });
+                }
+             }} className="text-xs py-1.5 px-3">
                 Back
              </Button>
              <div>
@@ -1128,7 +1134,7 @@ export const SessionManager: React.FC = () => {
           <div className="flex flex-col md:flex-row md:items-center gap-4">
             <div className="flex items-center gap-2 shrink-0">
               <span className="flex items-center gap-1 bg-gray-800 text-white px-2 py-1 rounded text-[9px] uppercase font-bold">
-                <Icon className="w-3 h-3" /> {selectedSession.skillCategory}
+                <Icon className="w-3 h-3" /> {selectedSession.skillCategories.join(', ')}
               </span>
               <span className={`px-2 py-1 rounded text-[9px] uppercase font-bold ${LEVEL_COLORS[selectedSession.difficultyLevel]}`}>
                 {selectedSession.difficultyLevel}
@@ -1524,7 +1530,7 @@ export const SessionManager: React.FC = () => {
                   </td>
                   <td className="px-4 py-2">
                     <span className="text-[9px] font-bold text-gray-600 uppercase bg-gray-100 px-1.5 py-0.5 rounded">
-                      {session.skillCategory}
+                      {session.skillCategories.join(', ')}
                     </span>
                   </td>
                   <td className="px-4 py-2">
@@ -1587,21 +1593,17 @@ export const SessionManager: React.FC = () => {
             {/* Multiple Dates Section */}
             <div className="space-y-2">
               <label className="text-[9px] font-black text-gray-400 uppercase">Dates (can select multiple)</label>
-              <div className="flex gap-2">
-                <input
-                  type="date"
-                  value={newDate}
-                  onChange={e => setNewDate(e.target.value)}
-                  className="flex-1 border rounded-lg px-3 py-1.5 text-xs"
-                />
-                <button
-                  onClick={handleAddDate}
-                  disabled={!newDate}
-                  className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <input
+                type="date"
+                value=""
+                onChange={e => {
+                  const selectedDate = e.target.value;
+                  if (selectedDate && !scheduleForm.dates.includes(selectedDate)) {
+                    setScheduleForm({ ...scheduleForm, dates: [...scheduleForm.dates, selectedDate].sort() });
+                  }
+                }}
+                className="w-full border rounded-lg px-3 py-1.5 text-xs"
+              />
               {scheduleForm.dates.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {scheduleForm.dates.map(date => (
@@ -1661,32 +1663,33 @@ export const SessionManager: React.FC = () => {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[9px] font-black text-gray-400 uppercase">Skill Category</label>
-                <select
-                  value={scheduleForm.skillCategory}
-                  onChange={e => setScheduleForm({ ...scheduleForm, skillCategory: e.target.value as SkillCategory })}
-                  className="w-full border rounded-lg px-3 py-1.5 text-xs bg-white"
-                >
-                  <option value="">Select category...</option>
-                  {skillCategories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-[9px] font-black text-gray-400 uppercase">Difficulty Level</label>
-                <select
-                  value={scheduleForm.difficultyLevel}
-                  onChange={e => setScheduleForm({ ...scheduleForm, difficultyLevel: e.target.value as DifficultyLevel })}
-                  className="w-full border rounded-lg px-3 py-1.5 text-xs bg-white"
-                >
-                  <option value="">Select level...</option>
-                  {difficultyLevels.map(level => (
-                    <option key={level} value={level}>{level}</option>
-                  ))}
-                </select>
+            <div>
+              <label className="text-[9px] font-black text-gray-400 uppercase">Skill Categories (select multiple)</label>
+              <div className="flex flex-wrap gap-2 mt-1.5">
+                {skillCategories.map(cat => (
+                  <label
+                    key={cat}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                      scheduleForm.skillCategories.includes(cat)
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={scheduleForm.skillCategories.includes(cat)}
+                      onChange={e => {
+                        if (e.target.checked) {
+                          setScheduleForm({ ...scheduleForm, skillCategories: [...scheduleForm.skillCategories, cat] });
+                        } else {
+                          setScheduleForm({ ...scheduleForm, skillCategories: scheduleForm.skillCategories.filter(c => c !== cat) });
+                        }
+                      }}
+                      className="sr-only"
+                    />
+                    {cat}
+                  </label>
+                ))}
               </div>
             </div>
 

@@ -118,6 +118,74 @@ export const useParents = () => {
   return useProfiles('PARENT');
 };
 
+
+// Hook for students needing attention (optimized - only fetches flagged students)
+export const useStudentsNeedingAttention = () => {
+  const [students, setStudents] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchStudents = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await profilesService.getStudentsNeedingAttention();
+      setStudents(data);
+    } catch (err) {
+      setError(err as Error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStudents();
+  }, [fetchStudents]);
+
+  return {
+    students,
+    loading,
+    error,
+    refetch: fetchStudents,
+  };
+};
+
+// Hook for students by school and class (optimized for class detail view)
+export const useStudentsBySchoolAndClass = (locationId?: string, className?: string) => {
+  const [students, setStudents] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchStudents = useCallback(async () => {
+    if (!locationId || !className) {
+      setLoading(false);
+      setStudents([]);
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await profilesService.getStudentsByLocationAndClass(locationId, className);
+      setStudents(data || []);
+    } catch (err) {
+      setError(err as Error);
+    } finally {
+      setLoading(false);
+    }
+  }, [locationId, className]);
+
+  useEffect(() => {
+    fetchStudents();
+  }, [fetchStudents]);
+
+  return {
+    students,
+    loading,
+    error,
+    refetch: fetchStudents,
+  };
+};
+
 export const useLocations = () => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);

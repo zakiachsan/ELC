@@ -7,7 +7,7 @@ import { useSessions } from '../../hooks/useSessions';
 import { useReports } from '../../hooks/useReports';
 import { useModuleProgress } from '../../hooks/useModules';
 import { User, SkillCategory, DifficultyLevel } from '../../types';
-import { ChevronRight, Search, MapPin, Clock, CheckCircle, FileText, Upload, AlertTriangle, Loader2 } from 'lucide-react';
+import { ChevronRight, Search, MapPin, Clock, CheckCircle, FileText, Upload, AlertTriangle, Loader2, AlignLeft } from 'lucide-react';
 import { Button } from '../Button';
 import { SKILL_ICONS } from '../student/StudentView';
 
@@ -279,7 +279,7 @@ const StudentDetail: React.FC<{ student: User; onBack: () => void }> = ({ studen
                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                   {Object.values(SkillCategory).map(skill => {
                      const level = student.skillLevels?.[skill];
-                     const Icon = SKILL_ICONS[skill];
+                     const Icon = SKILL_ICONS[skill] || AlignLeft;
                      return (
                         <div key={skill} className="flex flex-col items-center p-3 border rounded-xl bg-gray-50 text-center">
                            <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${level ? 'bg-white text-gray-800 shadow-sm' : 'bg-gray-200 text-gray-400'}`}>

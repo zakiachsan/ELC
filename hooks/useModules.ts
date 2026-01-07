@@ -11,6 +11,7 @@ interface UseModulesOptions {
   publishedOnly?: boolean;
   skillCategory?: string;
   difficultyLevel?: string;
+  createdBy?: string; // Filter by teacher who created the module
 }
 
 export const useModules = (options: UseModulesOptions = {}) => {
@@ -24,7 +25,10 @@ export const useModules = (options: UseModulesOptions = {}) => {
       setError(null);
 
       let data;
-      if (options.publishedOnly) {
+      if (options.createdBy) {
+        // Filter by teacher who created the module
+        data = await modulesService.getByTeacher(options.createdBy);
+      } else if (options.publishedOnly) {
         data = await modulesService.getPublished();
       } else if (options.skillCategory) {
         data = await modulesService.getBySkillCategory(options.skillCategory);
@@ -40,7 +44,7 @@ export const useModules = (options: UseModulesOptions = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [options.publishedOnly, options.skillCategory, options.difficultyLevel]);
+  }, [options.createdBy, options.publishedOnly, options.skillCategory, options.difficultyLevel]);
 
   useEffect(() => {
     fetchModules();

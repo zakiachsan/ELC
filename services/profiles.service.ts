@@ -136,6 +136,37 @@ export const profilesService = {
     return data;
   },
 
+  // Get students by location and class (most efficient for class detail view)
+  // Students have school_origin in format: "SCHOOL NAME - CLASS (TYPE)" or "SCHOOL NAME - CLASS"
+  async getStudentsByLocationAndClass(locationId: string, className: string) {
+    // First try filtering by assigned_location_id and pattern match on school_origin
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('role', 'STUDENT')
+      .eq('assigned_location_id', locationId)
+      .ilike('school_origin', `% - ${className}%`)
+      .order('name');
+
+    if (error) throw error;
+
+    // If no results with assigned_location_id, try just the school_origin pattern
+    // This handles cases where assigned_location_id might not be set
+    if (!data || data.length === 0) {
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', 'STUDENT')
+        .ilike('school_origin', `% - ${className}%`)
+        .order('name');
+
+      if (fallbackError) throw fallbackError;
+      return fallbackData || [];
+    }
+
+    return data;
+  },
+
   // Get students needing attention
   async getStudentsNeedingAttention() {
     const { data, error } = await supabase

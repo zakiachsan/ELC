@@ -119,6 +119,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <SidebarNavItem to="/admin/teachers" label="Teacher" icon={GraduationCap} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/reviews" label="Teacher Reviews" icon={Star} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/schedule" label={t.nav_schedule} icon={CalendarDays} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/admin/test-schedule" label="Test Schedule" icon={List} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/locations" label={t.nav_locations} icon={MapPin} onClick={closeMobileMenu} />
 
               {/* Public */}

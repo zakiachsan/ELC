@@ -92,7 +92,7 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
     description: s.description || '',
     dateTime: s.date_time,
     location: s.location,
-    skillCategory: s.skill_category as SkillCategory,
+    skillCategories: (Array.isArray(s.skill_category) ? s.skill_category : [s.skill_category]) as SkillCategory[],
     difficultyLevel: s.difficulty_level as DifficultyLevel,
     materials: s.materials || [],
   });
@@ -143,7 +143,7 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
   // Render Skill Card
   const renderSkillCard = (skill: SkillCategory) => {
     const level = student.skillLevels?.[skill];
-    const Icon = SKILL_ICONS[skill];
+    const Icon = SKILL_ICONS[skill] || AlignLeft;
 
     return (
       <div key={skill} className="bg-white px-3 py-3 rounded-lg border border-gray-100 shadow-sm flex items-center gap-3 hover:border-blue-200 transition-all">
@@ -255,7 +255,7 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
                      <div className="flex-1 space-y-1 text-center md:text-left">
                         <div className="flex items-center justify-center md:justify-start gap-2">
                            <span className="text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded uppercase">
-                             {todaySession.skillCategory}
+                             {todaySession.skillCategories.join(', ')}
                            </span>
                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${LEVEL_COLORS[todaySession.difficultyLevel]}`}>
                              {todaySession.difficultyLevel}
@@ -294,7 +294,7 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
                       <div className="flex-1 space-y-2">
                           <div className="flex flex-wrap gap-2">
                              <span className="text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded uppercase">
-                               {upcomingSession.skillCategory}
+                               {upcomingSession.skillCategories.join(', ')}
                              </span>
                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${LEVEL_COLORS[upcomingSession.difficultyLevel]}`}>
                                {upcomingSession.difficultyLevel}

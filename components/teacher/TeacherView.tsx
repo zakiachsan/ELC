@@ -1,14 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { LEVEL_COLORS } from '../../constants';
 import { useTodaySessions, useSessions } from '../../hooks/useSessions';
-import { useStudents, useLocations } from '../../hooks/useProfiles';
+import { useLocations } from '../../hooks/useProfiles';
 import { useAttendance } from '../../hooks/useAttendance';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTests } from '../../hooks/useTests';
 import { SkillCategory, DifficultyLevel, ClassSession } from '../../types';
-import { Calendar, AlertCircle, TrendingUp, Clock, MapPin, ChevronRight, ClipboardList, CheckCircle, Loader2, LogIn, LogOut, Navigation } from 'lucide-react';
+import { Calendar, Clock, MapPin, ChevronRight, Loader2, LogIn, LogOut, Navigation, AlignLeft, FileText, AlertTriangle, BookOpen } from 'lucide-react';
 import { SKILL_ICONS } from '../student/StudentView';
 import { useLanguage } from '../../contexts/LanguageContext';
 
@@ -18,10 +20,11 @@ interface TeacherViewProps {
 
 export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const { user: currentTeacher } = useAuth();
   const { sessions: todaySessionsData, loading: todayLoading, error: todayError } = useTodaySessions();
-  const { sessions: allSessionsData, loading: sessionsLoading, error: sessionsError } = useSessions();
-  const { profiles: studentsData, loading: studentsLoading, error: studentsError } = useStudents();
+  const { sessions: upcomingSessions, loading: upcomingLoading } = useSessions({ teacherId: currentTeacher?.id, upcoming: true });
+  const { tests: teacherTests, loading: testsLoading } = useTests({ teacherId: currentTeacher?.id });
   const { locations: locationsData } = useLocations();
   const { todayAttendance, checkIn, checkOut, loading: attendanceLoading } = useAttendance(currentTeacher?.id);
 
@@ -98,9 +101,7 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
   };
 
   // Check if there are any errors
-  const hasError = todayError || sessionsError || studentsError;
-
-  const now = new Date();
+  const hasError = todayError;
 
   // Map database format to component format
   const todaySessions: ClassSession[] = todaySessionsData.map(s => ({
@@ -110,34 +111,35 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
     description: s.description || '',
     dateTime: s.date_time,
     location: s.location,
-    skillCategory: s.skill_category as SkillCategory,
+    skillCategories: (Array.isArray(s.skill_category) ? s.skill_category : [s.skill_category]) as SkillCategory[],
     difficultyLevel: s.difficulty_level as DifficultyLevel,
     materials: s.materials || [],
   })).sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
 
-  // 2. STUDENTS NEED ATTENTION LOGIC
-  const studentsAtRisk = studentsData.filter(u => u.needs_attention).map(u => {
-    // Mocking specific reasons for display purposes
-    const reasons = [
-        "Absent 3x in a row",
-        "Grammar score dropped 15%",
-        "Incomplete homework assignments",
-        "Placement test failed twice"
-    ];
-    return {
-        id: u.id,
-        name: u.name,
-        reason: reasons[Math.floor(Math.random() * reasons.length)]
-    };
-  });
+  // Get today's tests
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
 
-  // 3. STATS LOGIC
-  const pendingTasks = allSessionsData.filter(s => {
-    return new Date(s.date_time) < now && (!s.description || s.description.length < 10);
-  }).length;
+  const todayTests = teacherTests.filter(test => {
+    const testDate = new Date(test.date_time);
+    return testDate >= today && testDate < tomorrow;
+  }).sort((a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime());
 
-  // Show loading only if still loading and no errors
-  const isLoading = (todayLoading || sessionsLoading || studentsLoading) && !hasError;
+  // Get upcoming sessions without materials (next 7 days)
+  const nextWeek = new Date();
+  nextWeek.setDate(nextWeek.getDate() + 7);
+
+  const sessionsWithoutMaterials = upcomingSessions
+    .filter(s => {
+      const sessionDate = new Date(s.date_time);
+      return sessionDate >= today && sessionDate <= nextWeek && (!s.materials || s.materials.length === 0);
+    })
+    .slice(0, 5); // Limit to 5 items
+
+  // Show loading only if critical data is loading
+  const isLoading = todayLoading && !hasError;
 
   if (isLoading) {
     return (
@@ -150,7 +152,7 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
 
   // Show error message if there's an error but allow viewing the dashboard with partial data
   if (hasError) {
-    console.error('Dashboard data errors:', { todayError, sessionsError, studentsError });
+    console.error('Dashboard data errors:', { todayError });
   }
 
   return (
@@ -167,65 +169,45 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
          </p>
        </div>
 
-       {/* ATTENDANCE CHECK-IN/OUT CARD */}
-       <Card className={`!p-4 ${todayAttendance && !todayAttendance.check_out_time ? 'bg-gradient-to-br from-green-50 to-white border-green-200' : 'bg-gradient-to-br from-orange-50 to-white border-orange-200'}`}>
-         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-           <div className="flex items-center gap-3">
-             <div className={`p-3 rounded-xl ${todayAttendance && !todayAttendance.check_out_time ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
-               {todayAttendance && !todayAttendance.check_out_time ? <LogOut className="w-5 h-5" /> : <LogIn className="w-5 h-5" />}
-             </div>
-             <div>
-               <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Today's Attendance</div>
-               {todayAttendance ? (
-                 <div>
-                   <div className="text-sm font-bold text-gray-900">
-                     Check-in: {new Date(todayAttendance.check_in_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                     {todayAttendance.check_out_time && (
-                       <span className="ml-2">
-                         | Check-out: {new Date(todayAttendance.check_out_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                       </span>
-                     )}
-                   </div>
-                   <div className="text-[10px] text-gray-500 flex items-center gap-1 mt-0.5">
-                     <MapPin className="w-3 h-3" /> {todayAttendance.location_name || 'Unknown Location'}
-                   </div>
-                 </div>
-               ) : (
-                 <div className="text-sm font-bold text-gray-900">Not checked in today</div>
-               )}
-             </div>
+       {/* ATTENDANCE CHECK-IN/OUT - Compact */}
+       <div className={`flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg border ${todayAttendance && !todayAttendance.check_out_time ? 'bg-green-50/50 border-green-200' : todayAttendance?.check_out_time ? 'bg-gray-50 border-gray-200' : 'bg-orange-50/50 border-orange-200'}`}>
+         <div className="flex items-center gap-2">
+           <div className={`p-1.5 rounded-lg ${todayAttendance && !todayAttendance.check_out_time ? 'bg-green-100 text-green-600' : todayAttendance?.check_out_time ? 'bg-gray-200 text-gray-500' : 'bg-orange-100 text-orange-600'}`}>
+             {todayAttendance && !todayAttendance.check_out_time ? <LogOut className="w-4 h-4" /> : <LogIn className="w-4 h-4" />}
            </div>
-           <div className="flex items-center gap-2">
-             {currentPosition && (
-               <div className="text-[9px] text-green-600 bg-green-50 px-2 py-1 rounded-full flex items-center gap-1">
-                 <Navigation className="w-3 h-3" /> GPS Active
-               </div>
-             )}
-             {!todayAttendance ? (
-               <Button
-                 onClick={() => setShowLocationSelect(true)}
-                 disabled={isCheckingIn || attendanceLoading}
-                 className="text-xs py-2 px-4"
-               >
-                 {isCheckingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Check-in'}
-               </Button>
-             ) : !todayAttendance.check_out_time ? (
-               <Button
-                 onClick={handleCheckOut}
-                 disabled={isCheckingIn}
-                 variant="outline"
-                 className="text-xs py-2 px-4 border-green-300 text-green-700 hover:bg-green-50"
-               >
-                 {isCheckingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Check-out'}
-               </Button>
-             ) : (
-               <span className="text-[10px] font-bold text-green-600 bg-green-100 px-3 py-1.5 rounded-full">
-                 Done
+           <div className="text-xs">
+             {todayAttendance ? (
+               <span className="text-gray-700">
+                 <span className="font-semibold">In:</span> {new Date(todayAttendance.check_in_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                 {todayAttendance.check_out_time && (
+                   <span className="ml-2"><span className="font-semibold">Out:</span> {new Date(todayAttendance.check_out_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                 )}
+                 <span className="text-gray-400 ml-2">@ {todayAttendance.location_name || 'Unknown'}</span>
                </span>
+             ) : (
+               <span className="text-gray-600">Not checked in today</span>
              )}
            </div>
          </div>
-       </Card>
+         <div className="flex items-center gap-2">
+           {currentPosition && (
+             <span className="text-[9px] text-green-600 flex items-center gap-0.5">
+               <Navigation className="w-3 h-3" /> GPS
+             </span>
+           )}
+           {!todayAttendance ? (
+             <Button onClick={() => setShowLocationSelect(true)} disabled={isCheckingIn || attendanceLoading} className="text-xs py-1 px-3 h-7">
+               {isCheckingIn ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Check-in'}
+             </Button>
+           ) : !todayAttendance.check_out_time ? (
+             <Button onClick={handleCheckOut} disabled={isCheckingIn} variant="outline" className="text-xs py-1 px-3 h-7 border-green-300 text-green-700 hover:bg-green-50">
+               {isCheckingIn ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Check-out'}
+             </Button>
+           ) : (
+             <span className="text-[10px] font-semibold text-green-600 bg-green-100 px-2 py-0.5 rounded">Done</span>
+           )}
+         </div>
+       </div>
 
        {/* Location Selection Modal */}
        {showLocationSelect && (
@@ -283,41 +265,6 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
          </div>
        )}
 
-       {/* TOP STATS ROW */}
-       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-         <Card className="!p-3 bg-gradient-to-br from-blue-50 to-white border-blue-100">
-           <div className="flex items-center justify-between">
-             <div className="flex items-center gap-3">
-               <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
-                 <TrendingUp className="w-4 h-4" />
-               </div>
-               <div>
-                 <div className="text-gray-500 text-[9px] font-black uppercase tracking-widest">{t.tc_avg_att}</div>
-                 <div className="text-lg font-bold text-gray-900">94%</div>
-               </div>
-             </div>
-             <CheckCircle className="w-8 h-8 text-blue-100" />
-           </div>
-         </Card>
-
-         <Card className="!p-3 bg-gradient-to-br from-yellow-50 to-white border-yellow-100">
-           <div className="flex items-center justify-between">
-             <div className="flex items-center gap-3">
-               <div className="p-2 bg-yellow-100 rounded-lg text-yellow-600">
-                 <ClipboardList className="w-4 h-4" />
-               </div>
-               <div>
-                 <div className="text-gray-500 text-[9px] font-black uppercase tracking-widest">{t.tc_pending_tasks}</div>
-                 <div className="text-lg font-bold text-gray-900">{pendingTasks} <span className="text-xs font-medium text-gray-400">{t.tc_items}</span></div>
-               </div>
-             </div>
-             <div className="text-[9px] text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded font-bold">
-                Action Needed
-             </div>
-           </div>
-         </Card>
-       </div>
-
        {/* MAIN CONTENT GRID */}
        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
@@ -340,11 +287,22 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
             ) : (
                 <div className="space-y-2">
                     {todaySessions.map(session => {
-                        const Icon = SKILL_ICONS[session.skillCategory];
+                        const primarySkill = session.skillCategories[0] || SkillCategory.GRAMMAR;
+                        const Icon = SKILL_ICONS[primarySkill] || AlignLeft;
+                        // Parse location to get school and class (format: "SCHOOL - CLASS")
+                        const locationParts = session.location.split(' - ');
+                        const schoolName = locationParts[0] || session.location;
+                        const className = locationParts[1] || '';
                         return (
                             <div
                                 key={session.id}
-                                onClick={() => onNavigate('schedule')}
+                                onClick={() => {
+                                    if (className) {
+                                        navigate(`/teacher/schedule/${encodeURIComponent(schoolName)}/${encodeURIComponent(className)}?session=${session.id}`);
+                                    } else {
+                                        navigate(`/teacher/schedule/${encodeURIComponent(schoolName)}?session=${session.id}`);
+                                    }
+                                }}
                                 className="group bg-white border border-gray-100 rounded-xl p-3 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer flex flex-col sm:flex-row gap-3 items-start sm:items-center"
                             >
                                 {/* Time Column */}
@@ -365,7 +323,7 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
                                             {session.difficultyLevel}
                                         </span>
                                         <span className="text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
-                                            <Icon className="w-2.5 h-2.5" /> {session.skillCategory}
+                                            <Icon className="w-2.5 h-2.5" /> {session.skillCategories.join(', ')}
                                         </span>
                                     </div>
                                     <h4 className="text-xs font-bold text-gray-800 group-hover:text-blue-600 transition-colors">{session.topic}</h4>
@@ -385,43 +343,93 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
             )}
          </div>
 
-         {/* RIGHT: STUDENTS NEED ATTENTION (1/3 Width) */}
-         <div className="space-y-3">
-            <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-500" /> {t.tc_needs_attention}
-            </h3>
-
-            <Card className="!p-0 overflow-hidden border-red-100">
-                <div className="divide-y divide-gray-100">
-                    {studentsAtRisk.length === 0 && (
-                        <div className="p-4 text-center text-xs text-gray-500">
-                            {t.tc_no_flags}
+         {/* RIGHT SIDEBAR */}
+         <div className="space-y-4">
+            {/* TODAY'S TESTS */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                <FileText className="w-4 h-4 text-purple-600" /> Today's Tests
+              </h3>
+              <Card className="!p-0 overflow-hidden border-purple-100">
+                {todayTests.length === 0 ? (
+                  <div className="p-3 text-center text-xs text-gray-500">
+                    No tests scheduled for today
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-100">
+                    {todayTests.map(test => (
+                      <div key={test.id} onClick={() => onNavigate('tests')} className="p-2.5 hover:bg-purple-50/50 cursor-pointer transition-colors">
+                        <div className="flex items-start gap-2">
+                          <div className="p-1.5 bg-purple-100 text-purple-600 rounded-lg shrink-0">
+                            <Clock className="w-3 h-3" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-gray-900 truncate">{test.title}</p>
+                            <p className="text-[10px] text-gray-500 truncate">{test.class_name} • {test.location}</p>
+                            <p className="text-[10px] text-purple-600 font-medium mt-0.5">
+                              {new Date(test.date_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} • {test.duration_minutes} mins
+                            </p>
+                          </div>
                         </div>
-                    )}
-                    {studentsAtRisk.map(student => (
-                        <div
-                            key={student.id}
-                            onClick={() => onNavigate('students')}
-                            className="p-3 hover:bg-red-50/50 cursor-pointer transition-colors"
-                        >
-                            <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 bg-red-100 text-red-600 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0">
-                                    {student.name.charAt(0)}
-                                </div>
-                                <div className="min-w-0">
-                                    <p className="text-xs font-bold text-gray-900 truncate">{student.name}</p>
-                                    <p className="text-[10px] text-red-600 font-medium truncate">{student.reason}</p>
-                                </div>
-                            </div>
-                        </div>
+                      </div>
                     ))}
-                </div>
+                  </div>
+                )}
+              </Card>
+            </div>
+
+            {/* SESSIONS WITHOUT MATERIALS */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-500" /> Missing Materials
+              </h3>
+              <Card className="!p-0 overflow-hidden border-amber-100">
+                {sessionsWithoutMaterials.length === 0 ? (
+                  <div className="p-3 text-center text-xs text-gray-500">
+                    All upcoming sessions have materials
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-100">
+                    {sessionsWithoutMaterials.map(session => {
+                      const locationParts = session.location.split(' - ');
+                      const schoolName = locationParts[0] || session.location;
+                      const className = locationParts[1] || '';
+                      return (
+                        <div
+                          key={session.id}
+                          onClick={() => {
+                            if (className) {
+                              navigate(`/teacher/schedule/${encodeURIComponent(schoolName)}/${encodeURIComponent(className)}?session=${session.id}`);
+                            } else {
+                              navigate(`/teacher/schedule/${encodeURIComponent(schoolName)}?session=${session.id}`);
+                            }
+                          }}
+                          className="p-2.5 hover:bg-amber-50/50 cursor-pointer transition-colors"
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className="p-1.5 bg-amber-100 text-amber-600 rounded-lg shrink-0">
+                              <BookOpen className="w-3 h-3" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-gray-900 truncate">{session.topic}</p>
+                              <p className="text-[10px] text-gray-500 truncate">{session.location}</p>
+                              <p className="text-[10px] text-amber-600 font-medium mt-0.5">
+                                {new Date(session.date_time).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="bg-gray-50 p-2 text-center border-t border-gray-100">
-                    <button onClick={() => onNavigate('students')} className="text-[10px] font-bold text-gray-500 hover:text-gray-800">
-                        {t.tc_view_all_students}
-                    </button>
+                  <button onClick={() => onNavigate('schedule')} className="text-[10px] font-bold text-gray-500 hover:text-gray-800">
+                    View All Sessions →
+                  </button>
                 </div>
-            </Card>
+              </Card>
+            </div>
          </div>
 
        </div>

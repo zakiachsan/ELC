@@ -133,7 +133,7 @@ export interface Database {
           video_url: string | null
           description: string | null
           materials: string[]
-          skill_category: 'Listening' | 'Reading' | 'Writing' | 'Speaking' | 'Grammar' | 'Vocabulary'
+          skill_category: ('Listening' | 'Reading' | 'Writing' | 'Speaking' | 'Grammar' | 'Vocabulary')[]
           difficulty_level: 'Starter' | 'Elementary' | 'Intermediate' | 'Upper-Intermediate' | 'Advanced'
           has_exam: boolean
           exam_materials: string[]
@@ -151,7 +151,7 @@ export interface Database {
           video_url?: string | null
           description?: string | null
           materials?: string[]
-          skill_category: 'Listening' | 'Reading' | 'Writing' | 'Speaking' | 'Grammar' | 'Vocabulary'
+          skill_category: ('Listening' | 'Reading' | 'Writing' | 'Speaking' | 'Grammar' | 'Vocabulary')[]
           difficulty_level: 'Starter' | 'Elementary' | 'Intermediate' | 'Upper-Intermediate' | 'Advanced'
           has_exam?: boolean
           exam_materials?: string[]
@@ -169,7 +169,7 @@ export interface Database {
           video_url?: string | null
           description?: string | null
           materials?: string[]
-          skill_category?: 'Listening' | 'Reading' | 'Writing' | 'Speaking' | 'Grammar' | 'Vocabulary'
+          skill_category?: ('Listening' | 'Reading' | 'Writing' | 'Speaking' | 'Grammar' | 'Vocabulary')[]
           difficulty_level?: 'Starter' | 'Elementary' | 'Intermediate' | 'Upper-Intermediate' | 'Advanced'
           has_exam?: boolean
           exam_materials?: string[]
@@ -1160,6 +1160,9 @@ export interface Database {
           semester: string
           materials: string[]
           class_type: string | null
+          has_online_test: boolean
+          is_published: boolean
+          quiz_number: number | null
           created_at: string
           updated_at: string
         }
@@ -1177,6 +1180,9 @@ export interface Database {
           semester: string
           materials?: string[]
           class_type?: string | null
+          has_online_test?: boolean
+          is_published?: boolean
+          quiz_number?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -1194,6 +1200,129 @@ export interface Database {
           semester?: string
           materials?: string[]
           class_type?: string | null
+          has_online_test?: boolean
+          is_published?: boolean
+          quiz_number?: number | null
+          updated_at?: string
+        }
+      }
+      test_questions: {
+        Row: {
+          id: string
+          test_schedule_id: string
+          question_order: number
+          question_type: 'MULTIPLE_CHOICE' | 'ESSAY'
+          question_text: string
+          options: string[]
+          correct_answer_index: number | null
+          answer_key: string | null
+          points: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          test_schedule_id: string
+          question_order?: number
+          question_type: 'MULTIPLE_CHOICE' | 'ESSAY'
+          question_text: string
+          options?: string[]
+          correct_answer_index?: number | null
+          answer_key?: string | null
+          points?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          test_schedule_id?: string
+          question_order?: number
+          question_type?: 'MULTIPLE_CHOICE' | 'ESSAY'
+          question_text?: string
+          options?: string[]
+          correct_answer_index?: number | null
+          answer_key?: string | null
+          points?: number
+          updated_at?: string
+        }
+      }
+      test_submissions: {
+        Row: {
+          id: string
+          test_schedule_id: string
+          student_id: string
+          started_at: string
+          submitted_at: string | null
+          status: 'IN_PROGRESS' | 'SUBMITTED' | 'GRADED'
+          total_score: number | null
+          max_score: number | null
+          graded_at: string | null
+          graded_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          test_schedule_id: string
+          student_id: string
+          started_at?: string
+          submitted_at?: string | null
+          status?: 'IN_PROGRESS' | 'SUBMITTED' | 'GRADED'
+          total_score?: number | null
+          max_score?: number | null
+          graded_at?: string | null
+          graded_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          test_schedule_id?: string
+          student_id?: string
+          started_at?: string
+          submitted_at?: string | null
+          status?: 'IN_PROGRESS' | 'SUBMITTED' | 'GRADED'
+          total_score?: number | null
+          max_score?: number | null
+          graded_at?: string | null
+          graded_by?: string | null
+          updated_at?: string
+        }
+      }
+      test_answers: {
+        Row: {
+          id: string
+          submission_id: string
+          question_id: string
+          selected_option: number | null
+          answer_text: string | null
+          is_correct: boolean | null
+          score: number
+          teacher_feedback: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          submission_id: string
+          question_id: string
+          selected_option?: number | null
+          answer_text?: string | null
+          is_correct?: boolean | null
+          score?: number
+          teacher_feedback?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          submission_id?: string
+          question_id?: string
+          selected_option?: number | null
+          answer_text?: string | null
+          is_correct?: boolean | null
+          score?: number
+          teacher_feedback?: string | null
           updated_at?: string
         }
       }
@@ -1338,3 +1467,7 @@ export type QuizQuestion = Database['public']['Tables']['quiz_questions']['Row']
 export type KahootQuiz = Database['public']['Tables']['kahoot_quizzes']['Row']
 export type KahootParticipant = Database['public']['Tables']['kahoot_participants']['Row']
 export type QuizAttempt = Database['public']['Tables']['quiz_attempts']['Row']
+export type TestSchedule = Database['public']['Tables']['test_schedules']['Row']
+export type TestQuestion = Database['public']['Tables']['test_questions']['Row']
+export type TestSubmission = Database['public']['Tables']['test_submissions']['Row']
+export type TestAnswer = Database['public']['Tables']['test_answers']['Row']

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Card } from '../Card';
-import { Calendar, Clock, User as UserIcon, BookOpen, MapPin, Eye, Filter, School, Loader2 } from 'lucide-react';
+import { Calendar, Clock, User as UserIcon, BookOpen, MapPin, Eye, Filter, School, Loader2, AlignLeft } from 'lucide-react';
 import { useSessions } from '../../hooks/useSessions';
 import { useTeachers, useLocations } from '../../hooks/useProfiles';
 import { useReports } from '../../hooks/useReports';
@@ -27,7 +27,7 @@ export const ScheduleManager: React.FC = () => {
     description: s.description || '',
     dateTime: s.date_time,
     location: s.location,
-    skillCategory: s.skill_category as SkillCategory,
+    skillCategories: (Array.isArray(s.skill_category) ? s.skill_category : [s.skill_category]) as SkillCategory[],
     difficultyLevel: s.difficulty_level as DifficultyLevel,
     materials: s.materials || [],
   }));
@@ -109,7 +109,8 @@ export const ScheduleManager: React.FC = () => {
 
   // Detail view for a selected session
   if (selectedSession) {
-    const Icon = SKILL_ICONS[selectedSession.skillCategory];
+    const primarySkill = selectedSession.skillCategories[0] || SkillCategory.GRAMMAR;
+    const Icon = SKILL_ICONS[primarySkill] || AlignLeft;
     const reports = sessionReportsMap[selectedSession.id] || [];
     const status = getSessionStatus(selectedSession);
 
@@ -133,7 +134,7 @@ export const ScheduleManager: React.FC = () => {
           <div className="flex flex-col md:flex-row md:items-center gap-4">
             <div className="flex items-center gap-2 shrink-0">
               <span className="flex items-center gap-1 bg-gray-800 text-white px-2 py-1 rounded text-[9px] uppercase font-bold">
-                <Icon className="w-3 h-3" /> {selectedSession.skillCategory}
+                <Icon className="w-3 h-3" /> {selectedSession.skillCategories.join(', ')}
               </span>
               <span className={`px-2 py-1 rounded text-[9px] uppercase font-bold ${LEVEL_COLORS[selectedSession.difficultyLevel]}`}>
                 {selectedSession.difficultyLevel}
@@ -352,7 +353,7 @@ export const ScheduleManager: React.FC = () => {
                     </td>
                     <td className="px-3 py-2">
                       <span className="text-[9px] font-bold text-gray-600 uppercase tracking-tight bg-gray-100 px-1.5 py-0.5 rounded">
-                         {session.skillCategory}
+                         {session.skillCategories.join(', ')}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-700 font-medium">

@@ -3,11 +3,14 @@ import React, { useState } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { useModules } from '../../hooks/useModules';
+import { useAuth } from '../../contexts/AuthContext';
 import { OnlineModule, ModuleExam, DifficultyLevel, SkillCategory } from '../../types';
 import { Video, FileText, Paperclip, Filter, Globe, Trash2, Layers, Search, Loader2 } from 'lucide-react';
 
 export const OnlineMaterialsManager: React.FC = () => {
-  const { modules: modulesData, loading, error, createModule, updateModule, deleteModule } = useModules();
+  const { user } = useAuth();
+  // Only show modules created by the current teacher
+  const { modules: modulesData, loading, error, createModule, updateModule, deleteModule } = useModules({ createdBy: user?.id });
 
   // ALL useState hooks must be called before any conditional returns
   const [isEditing, setIsEditing] = useState(false);
@@ -100,7 +103,7 @@ export const OnlineMaterialsManager: React.FC = () => {
            status: currentModule.status || 'DRAFT',
          });
       } else {
-         // Create new
+         // Create new - set created_by to current user
          await createModule({
            title: currentModule.title!,
            description: currentModule.description || null,
@@ -109,6 +112,7 @@ export const OnlineMaterialsManager: React.FC = () => {
            difficulty_level: currentModule.difficultyLevel || DifficultyLevel.INTERMEDIATE,
            materials: currentModule.materials || [],
            status: currentModule.status || 'DRAFT',
+           created_by: user?.id || null,
          });
       }
       setIsEditing(false);

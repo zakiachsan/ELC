@@ -10,7 +10,7 @@ import {
   BookOpen, PlayCircle, FileText, Lock,
   CheckCircle, AlertCircle, Filter, Trophy, Clock,
   RotateCcw, Brain, Check, X, Eye, Search, Info, ArrowRight,
-  ChevronRight, XCircle, Crown, Star, Sparkles
+  ChevronRight, XCircle, Crown, Star, Sparkles, AlignLeft
 } from 'lucide-react';
 import { SKILL_ICONS } from './StudentView';
 
@@ -162,7 +162,7 @@ export const StudentOnlineLearning: React.FC<{ student: User }> = ({ student }) 
 
   if (selectedModule) {
     const isCompleted = completedModuleIds.includes(selectedModule.id);
-    const Icon = SKILL_ICONS[selectedModule.skillCategory];
+    const Icon = SKILL_ICONS[selectedModule.skillCategory] || AlignLeft;
 
     return (
       <div className="space-y-4 animate-in slide-in-from-right-4">
@@ -299,7 +299,7 @@ export const StudentOnlineLearning: React.FC<{ student: User }> = ({ student }) 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
          {filteredModules.map((module, index) => {
            const isCompleted = completedModuleIds.includes(module.id);
-           const Icon = SKILL_ICONS[module.skillCategory];
+           const Icon = SKILL_ICONS[module.skillCategory] || AlignLeft;
            const isAccessible = isModuleAccessible(module.id);
            const isFreeTrialModule = module.id === FREE_TRIAL_MODULE_ID;
 

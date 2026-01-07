@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { useStudents, useLocations, useClasses } from '../../hooks/useProfiles';
+import { useLocations, useClasses, useStudentsBySchoolAndClass } from '../../hooks/useProfiles';
 import { useSessions } from '../../hooks/useSessions';
 import { useReports } from '../../hooks/useReports';
 import { useAuth } from '../../contexts/AuthContext';
@@ -87,12 +87,17 @@ export const StudentGrades: React.FC = () => {
   // Stage 1.5: Load classes for the selected school (to filter teacher's assigned classes)
   const { classes: locationClasses, loading: classesLoading } = useClasses(selectedLocationId);
 
-  // Stage 2: Only load students/sessions/reports when viewing class details
-  const { profiles: studentsData, loading: studentsLoading, error: studentsError } = useStudents(isDetailView);
-  const { sessions: sessionsData } = useSessions({ enabled: isDetailView });
-  const { reports: reportsData } = useReports({ enabled: isDetailView });
+  // Stage 2: Load students filtered by school and class (database-level filtering)
+  const { students: studentsData, loading: studentsLoading, error: studentsError } = useStudentsBySchoolAndClass(
+    selectedLocationId,
+    selectedClass || undefined
+  );
 
   const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
+
+  // Stage 3: Only load sessions/reports when viewing a specific student's details
+  const { sessions: sessionsData } = useSessions({ enabled: !!selectedStudent });
+  const { reports: reportsData } = useReports({ enabled: !!selectedStudent });
 
   // Academic year and semester selection
   const academicYears = generateAcademicYears();
@@ -109,6 +114,7 @@ export const StudentGrades: React.FC = () => {
   // Extended grades state with quizzes and participation
   const [semesterGrades, setSemesterGrades] = useState<Record<string, StudentGradeData>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Test creation modal state
   const [showTestModal, setShowTestModal] = useState(false);
@@ -178,8 +184,61 @@ export const StudentGrades: React.FC = () => {
         // Reset when no grades found (e.g., when switching year/semester)
         setSemesterGrades({});
       }
+      // Reset unsaved changes when data loads from DB
+      setHasUnsavedChanges(false);
     }
   }, [dbGradesJson, gradesLoading]);
+
+  // Helper to check if there are any actual changes from DB
+  const checkForChanges = (grades: Record<string, StudentGradeData>): boolean => {
+    for (const [studentId, grade] of Object.entries(grades)) {
+      const dbGrade = dbGrades[studentId];
+
+      const hasCurrentValues = grade.quiz1 || grade.quiz2 || grade.quiz3 || grade.participation || grade.mid || grade.final;
+      const hadDbValues = dbGrade && (dbGrade.quiz1 || dbGrade.quiz2 || dbGrade.quiz3 || dbGrade.participation || dbGrade.mid || dbGrade.final);
+
+      if (!hasCurrentValues && !hadDbValues) {
+        continue; // No change for this student
+      }
+
+      // Compare each field
+      const currentQ1 = grade.quiz1 || '';
+      const currentQ2 = grade.quiz2 || '';
+      const currentQ3 = grade.quiz3 || '';
+      const currentPart = grade.participation || '';
+      const currentMid = grade.mid || '';
+      const currentFinal = grade.final || '';
+
+      const dbQ1 = dbGrade?.quiz1?.toString() || '';
+      const dbQ2 = dbGrade?.quiz2?.toString() || '';
+      const dbQ3 = dbGrade?.quiz3?.toString() || '';
+      const dbPart = dbGrade?.participation?.toString() || '';
+      const dbMid = dbGrade?.mid?.toString() || '';
+      const dbFinal = dbGrade?.final?.toString() || '';
+
+      if (currentQ1 !== dbQ1 || currentQ2 !== dbQ2 || currentQ3 !== dbQ3 ||
+          currentPart !== dbPart || currentMid !== dbMid || currentFinal !== dbFinal) {
+        return true; // Found a change
+      }
+    }
+    return false;
+  };
+
+  // Helper to update a student's grade and mark as having unsaved changes
+  const updateStudentGrade = (studentId: string, field: keyof StudentGradeData, value: string) => {
+    setSemesterGrades(prev => {
+      const newGrades = {
+        ...prev,
+        [studentId]: { ...(prev[studentId] || { quiz1: '', quiz2: '', quiz3: '', participation: '', mid: '', final: '' }), [field]: value }
+      };
+
+      // Recalculate hasUnsavedChanges based on actual differences from DB
+      const hasChanges = checkForChanges(newGrades);
+      setHasUnsavedChanges(hasChanges);
+
+      return newGrades;
+    });
+  };
 
   // Map schools from database - filter to only show teacher's assigned schools
   const schools = locationsData
@@ -273,8 +332,8 @@ export const StudentGrades: React.FC = () => {
 
   const availableClasses = getAvailableClasses();
 
-  // Map students from database
-  const allStudents: User[] = studentsData.map(s => ({
+  // Map students from database (already filtered by school and class at DB level)
+  const students: User[] = studentsData.map(s => ({
     id: s.id,
     name: s.name,
     email: s.email,
@@ -289,25 +348,6 @@ export const StudentGrades: React.FC = () => {
     schoolOrigin: s.school_origin || undefined,
     skillLevels: (s.skill_levels as Partial<Record<SkillCategory, DifficultyLevel>>) || {},
   }));
-
-  // Filter students by selected class and school (assigned_location_id)
-  const students = allStudents.filter(student => {
-    // First, match school by assigned_location_id
-    if (selectedSchool && selectedSchool !== 'Online (Zoom)') {
-      const selectedSchoolData = schools.find(s => s.name === selectedSchool);
-      if (selectedSchoolData) {
-        if (student.assignedLocationId !== selectedSchoolData.id) return false;
-      }
-    }
-
-    // Then, match class - use branch if available, otherwise parse from school_origin
-    if (selectedClass && selectedClass !== 'Online') {
-      const studentClass = student.branch || parseClassFromSchoolOrigin(student.schoolOrigin);
-      if (studentClass !== selectedClass) return false;
-    }
-
-    return true;
-  });
 
   // Build reports map by session
   const MOCK_SESSION_REPORTS: Record<string, any[]> = {};
@@ -378,6 +418,8 @@ export const StudentGrades: React.FC = () => {
         mid: grade.mid ? parseInt(grade.mid) : null,
         final: grade.final ? parseInt(grade.final) : null,
       });
+      // Check if there are still other unsaved changes
+      setHasUnsavedChanges(false);
       alert('Semester grade saved successfully!');
     } catch (err) {
       console.error('Error saving grade:', err);
@@ -390,19 +432,46 @@ export const StudentGrades: React.FC = () => {
   const saveAllGrades = async () => {
     if (!selectedSchool || !selectedClass) return;
 
-    const gradesWithValues = Object.entries(semesterGrades).filter(
-      ([_, grade]: [string, StudentGradeData]) =>
-        grade.quiz1 || grade.quiz2 || grade.quiz3 || grade.participation || grade.mid || grade.final
-    );
+    // Find students whose grades have changed (comparing with database values)
+    const changedGrades = Object.entries(semesterGrades).filter(([studentId, grade]) => {
+      const dbGrade = dbGrades[studentId];
 
-    if (gradesWithValues.length === 0) {
-      alert('No grades to save.');
+      // If student has any value in current grades OR had values in DB (to allow clearing)
+      const hasCurrentValues = grade.quiz1 || grade.quiz2 || grade.quiz3 || grade.participation || grade.mid || grade.final;
+      const hadDbValues = dbGrade && (dbGrade.quiz1 || dbGrade.quiz2 || dbGrade.quiz3 || dbGrade.participation || dbGrade.mid || dbGrade.final);
+
+      if (!hasCurrentValues && !hadDbValues) {
+        return false; // Nothing to save - no current values and no previous values
+      }
+
+      // Check if any value has changed
+      const currentQ1 = grade.quiz1 || '';
+      const currentQ2 = grade.quiz2 || '';
+      const currentQ3 = grade.quiz3 || '';
+      const currentPart = grade.participation || '';
+      const currentMid = grade.mid || '';
+      const currentFinal = grade.final || '';
+
+      const dbQ1 = dbGrade?.quiz1?.toString() || '';
+      const dbQ2 = dbGrade?.quiz2?.toString() || '';
+      const dbQ3 = dbGrade?.quiz3?.toString() || '';
+      const dbPart = dbGrade?.participation?.toString() || '';
+      const dbMid = dbGrade?.mid?.toString() || '';
+      const dbFinal = dbGrade?.final?.toString() || '';
+
+      return currentQ1 !== dbQ1 || currentQ2 !== dbQ2 || currentQ3 !== dbQ3 ||
+             currentPart !== dbPart || currentMid !== dbMid || currentFinal !== dbFinal;
+    });
+
+    if (changedGrades.length === 0) {
+      alert('No changes to save.');
+      setHasUnsavedChanges(false);
       return;
     }
 
     setIsSaving(true);
     try {
-      const inputs = gradesWithValues.map(([studentId, grade]) => ({
+      const inputs = changedGrades.map(([studentId, grade]) => ({
         student_id: studentId,
         academic_year: selectedAcademicYear,
         semester: selectedSemester,
@@ -417,6 +486,7 @@ export const StudentGrades: React.FC = () => {
       }));
 
       const savedCount = await saveAllGradesToDb(inputs);
+      setHasUnsavedChanges(false);
       alert(`${savedCount} semester grades saved successfully for AY ${selectedAcademicYear} Semester ${selectedSemester}!`);
     } catch (err) {
       console.error('Error saving grades:', err);
@@ -619,10 +689,7 @@ export const StudentGrades: React.FC = () => {
                 min="0"
                 max="100"
                 value={grade.quiz1}
-                onChange={e => setSemesterGrades({
-                  ...semesterGrades,
-                  [selectedStudent.id]: { ...grade, quiz1: e.target.value }
-                })}
+                onChange={e => updateStudentGrade(selectedStudent.id, 'quiz1', e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg text-sm mt-1"
                 placeholder="0-100"
               />
@@ -634,10 +701,7 @@ export const StudentGrades: React.FC = () => {
                 min="0"
                 max="100"
                 value={grade.quiz2}
-                onChange={e => setSemesterGrades({
-                  ...semesterGrades,
-                  [selectedStudent.id]: { ...grade, quiz2: e.target.value }
-                })}
+                onChange={e => updateStudentGrade(selectedStudent.id, 'quiz2', e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg text-sm mt-1"
                 placeholder="0-100"
               />
@@ -649,10 +713,7 @@ export const StudentGrades: React.FC = () => {
                 min="0"
                 max="100"
                 value={grade.quiz3}
-                onChange={e => setSemesterGrades({
-                  ...semesterGrades,
-                  [selectedStudent.id]: { ...grade, quiz3: e.target.value }
-                })}
+                onChange={e => updateStudentGrade(selectedStudent.id, 'quiz3', e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg text-sm mt-1"
                 placeholder="0-100"
               />
@@ -666,10 +727,7 @@ export const StudentGrades: React.FC = () => {
                 min="0"
                 max="100"
                 value={grade.participation}
-                onChange={e => setSemesterGrades({
-                  ...semesterGrades,
-                  [selectedStudent.id]: { ...grade, participation: e.target.value }
-                })}
+                onChange={e => updateStudentGrade(selectedStudent.id, 'participation', e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg text-sm mt-1"
                 placeholder="0-100"
               />
@@ -681,10 +739,7 @@ export const StudentGrades: React.FC = () => {
                 min="0"
                 max="100"
                 value={grade.mid}
-                onChange={e => setSemesterGrades({
-                  ...semesterGrades,
-                  [selectedStudent.id]: { ...grade, mid: e.target.value }
-                })}
+                onChange={e => updateStudentGrade(selectedStudent.id, 'mid', e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg text-sm mt-1"
                 placeholder="0-100"
               />
@@ -696,10 +751,7 @@ export const StudentGrades: React.FC = () => {
                 min="0"
                 max="100"
                 value={grade.final}
-                onChange={e => setSemesterGrades({
-                  ...semesterGrades,
-                  [selectedStudent.id]: { ...grade, final: e.target.value }
-                })}
+                onChange={e => updateStudentGrade(selectedStudent.id, 'final', e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg text-sm mt-1"
                 placeholder="0-100"
               />
@@ -878,7 +930,7 @@ export const StudentGrades: React.FC = () => {
 
   // --- GRADES LIST VIEW ---
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 ${hasUnsavedChanges ? 'pb-20' : ''}`}>
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
           <Button variant="outline" onClick={() => navigate(`/teacher/grades/${encodeURIComponent(selectedSchool!)}`)} className="text-xs py-1.5 px-3">
@@ -888,18 +940,6 @@ export const StudentGrades: React.FC = () => {
             <h2 className="text-lg font-bold text-gray-900">Semester Grades</h2>
             <p className="text-xs text-gray-500">{selectedSchool} - {selectedClass}</p>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setShowTestModal(true)}
-            className="text-xs py-1.5 px-3 border-blue-200 text-blue-600 hover:bg-blue-50"
-          >
-            + Create Test Schedule
-          </Button>
-          <Button onClick={saveAllGrades} disabled={isSaving || gradesLoading} className="text-xs py-1.5 px-3">
-            {isSaving ? 'Saving...' : 'Save All'}
-          </Button>
         </div>
       </div>
 
@@ -1004,10 +1044,7 @@ export const StudentGrades: React.FC = () => {
                       min="0"
                       max="100"
                       value={grade.quiz1}
-                      onChange={e => setSemesterGrades({
-                        ...semesterGrades,
-                        [student.id]: { ...grade, quiz1: e.target.value }
-                      })}
+                      onChange={e => updateStudentGrade(student.id, 'quiz1', e.target.value)}
                       className="w-14 px-1 py-1 border rounded text-center text-xs"
                       placeholder="0-100"
                     />
@@ -1018,10 +1055,7 @@ export const StudentGrades: React.FC = () => {
                       min="0"
                       max="100"
                       value={grade.quiz2}
-                      onChange={e => setSemesterGrades({
-                        ...semesterGrades,
-                        [student.id]: { ...grade, quiz2: e.target.value }
-                      })}
+                      onChange={e => updateStudentGrade(student.id, 'quiz2', e.target.value)}
                       className="w-14 px-1 py-1 border rounded text-center text-xs"
                       placeholder="0-100"
                     />
@@ -1032,10 +1066,7 @@ export const StudentGrades: React.FC = () => {
                       min="0"
                       max="100"
                       value={grade.quiz3}
-                      onChange={e => setSemesterGrades({
-                        ...semesterGrades,
-                        [student.id]: { ...grade, quiz3: e.target.value }
-                      })}
+                      onChange={e => updateStudentGrade(student.id, 'quiz3', e.target.value)}
                       className="w-14 px-1 py-1 border rounded text-center text-xs"
                       placeholder="0-100"
                     />
@@ -1046,10 +1077,7 @@ export const StudentGrades: React.FC = () => {
                       min="0"
                       max="100"
                       value={grade.participation}
-                      onChange={e => setSemesterGrades({
-                        ...semesterGrades,
-                        [student.id]: { ...grade, participation: e.target.value }
-                      })}
+                      onChange={e => updateStudentGrade(student.id, 'participation', e.target.value)}
                       className="w-14 px-1 py-1 border rounded text-center text-xs"
                       placeholder="0-100"
                     />
@@ -1060,10 +1088,7 @@ export const StudentGrades: React.FC = () => {
                       min="0"
                       max="100"
                       value={grade.mid}
-                      onChange={e => setSemesterGrades({
-                        ...semesterGrades,
-                        [student.id]: { ...grade, mid: e.target.value }
-                      })}
+                      onChange={e => updateStudentGrade(student.id, 'mid', e.target.value)}
                       className="w-14 px-1 py-1 border rounded text-center text-xs"
                       placeholder="0-100"
                     />
@@ -1074,10 +1099,7 @@ export const StudentGrades: React.FC = () => {
                       min="0"
                       max="100"
                       value={grade.final}
-                      onChange={e => setSemesterGrades({
-                        ...semesterGrades,
-                        [student.id]: { ...grade, final: e.target.value }
-                      })}
+                      onChange={e => updateStudentGrade(student.id, 'final', e.target.value)}
                       className="w-14 px-1 py-1 border rounded text-center text-xs"
                       placeholder="0-100"
                     />
@@ -1116,6 +1138,35 @@ export const StudentGrades: React.FC = () => {
         </table>
         </div>
       </Card>
+
+      {/* Sticky Save All Button - only shows when there are unsaved changes */}
+      {hasUnsavedChanges && (
+        <div className="fixed bottom-0 left-0 right-0 md:left-64 bg-white border-t border-gray-200 shadow-lg p-4 z-40">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse shrink-0" />
+              <span className="text-sm text-gray-600">You have unsaved changes</span>
+            </div>
+            <Button
+              onClick={saveAllGrades}
+              disabled={isSaving || gradesLoading}
+              className="text-sm py-2 px-6 bg-purple-600 hover:bg-purple-700 shrink-0"
+            >
+              {isSaving ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Save className="w-4 h-4" />
+                  Save All Grades
+                </span>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Test Creation Modal */}
       {showTestModal && (

@@ -10,7 +10,8 @@ import { ClassType } from '../../types';
 import {
   School, ChevronRight, GraduationCap, Calendar, Clock,
   Plus, Loader2, FileText, ClipboardList, BookOpen,
-  Edit, Trash2, X, Save, ArrowLeft, Upload, File, Download, Globe, UserCheck
+  Edit, Trash2, X, Save, ArrowLeft, Upload, File, Download, Globe, UserCheck,
+  ListChecks, Play, Eye
 } from 'lucide-react';
 import { uploadFile, isAllowedFileType, UploadResult } from '../../lib/storage';
 
@@ -95,7 +96,6 @@ export const TestManager: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showMultiClassModal, setShowMultiClassModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedTest, setSelectedTest] = useState<TestSchedule | null>(null);
 
   // Academic year state
   const academicYears = generateAcademicYears();
@@ -391,20 +391,6 @@ export const TestManager: React.FC = () => {
     }
   };
 
-  // Handle delete test
-  const handleDeleteTest = async (testId: string) => {
-    if (!confirm('Are you sure you want to delete this test schedule?')) return;
-
-    try {
-      await deleteTest(testId);
-      setSelectedTest(null);
-      alert('Test schedule deleted successfully.');
-    } catch (err) {
-      console.error('Error deleting test:', err);
-      alert('Failed to delete test schedule.');
-    }
-  };
-
   // Loading state - only check tests loading when in detail view
   // Also check classesLoading when school is selected (for class selection view)
   const isLoading = locationsLoading || (selectedSchool && !selectedClass && classesLoading) || (isDetailView && testsLoading);
@@ -424,45 +410,38 @@ export const TestManager: React.FC = () => {
   if (!selectedSchool) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <ClipboardList className="w-5 h-5 text-purple-600" /> Test Schedule
-            </h2>
-            <p className="text-xs text-gray-500">Manage Quiz, Mid-term, and Final exam schedules.</p>
-          </div>
+        <div>
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <ClipboardList className="w-5 h-5 text-purple-600" /> Select School
+          </h2>
+          <p className="text-xs text-gray-500">Select a school to manage test schedules.</p>
         </div>
 
-        <Card className="!p-4">
-          <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Select School</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {schools.map(school => (
-              <button
-                key={school.id}
-                onClick={() => navigateToSchool(school.name)}
-                className="p-4 bg-gray-50 hover:bg-purple-50 border border-gray-200 hover:border-purple-200 rounded-xl text-left transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors">
-                    <School className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-bold text-gray-900 text-sm">{school.name}</h4>
-                    {school.level && (
-                      <span className="text-[10px] text-gray-500">{school.level}</span>
-                    )}
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition-colors" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {schools.map(school => (
+            <Card
+              key={school.id}
+              className="!p-4 cursor-pointer hover:border-purple-400 transition-all group"
+              onClick={() => navigateToSchool(school.name)}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                  <School className="w-5 h-5" />
                 </div>
-              </button>
-            ))}
-            {schools.length === 0 && (
-              <p className="text-sm text-gray-400 italic col-span-full text-center py-8">
-                No schools available.
-              </p>
-            )}
-          </div>
-        </Card>
+                <div className="flex-1">
+                  <h3 className="text-sm font-bold text-gray-900 group-hover:text-purple-600">{school.name}</h3>
+                  <p className="text-[10px] text-gray-500">{school.level ? `Level: ${school.level}` : 'General'}</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-purple-500" />
+              </div>
+            </Card>
+          ))}
+          {schools.length === 0 && (
+            <p className="text-sm text-gray-400 italic col-span-full text-center py-8">
+              No schools available.
+            </p>
+          )}
+        </div>
       </div>
     );
   }
@@ -477,30 +456,35 @@ export const TestManager: React.FC = () => {
               Back
             </Button>
             <div>
-              <h2 className="text-lg font-bold text-gray-900">{selectedSchool}</h2>
-              <p className="text-xs text-gray-500">Select class or create test schedule.</p>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <GraduationCap className="w-5 h-5 text-orange-600" /> Select Class
+              </h2>
+              <p className="text-xs text-gray-500">{selectedSchool} - Select class to manage test schedules</p>
             </div>
           </div>
-          <Button onClick={() => setShowMultiClassModal(true)} className="text-xs py-1.5 px-3">
+          <Button onClick={() => navigate(`/teacher/tests/create?school=${encodeURIComponent(selectedSchool)}`)} className="text-xs py-1.5 px-3">
             + Create Test Schedule
           </Button>
         </div>
 
-        <Card className="!p-4">
-          <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Select Class</h3>
-          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-            {availableClasses.map(cls => (
-              <button
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+          {availableClasses.map((cls) => {
+            // Extract short label for icon (e.g., "KELAS 1 A" -> "1A", "1.1" -> "1")
+            const shortLabel = cls.replace(/^KELAS\s*/i, '').replace(/\s+/g, '').split('.')[0];
+            return (
+              <Card
                 key={cls}
+                className="!p-3 cursor-pointer hover:border-orange-400 transition-all group text-center"
                 onClick={() => navigateToClass(cls)}
-                className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-200 hover:border-purple-200 rounded-lg text-center transition-all group"
               >
-                <GraduationCap className="w-4 h-4 text-gray-400 group-hover:text-purple-600 mx-auto mb-1" />
-                <span className="text-sm font-bold text-gray-900">{cls}</span>
-              </button>
-            ))}
-          </div>
-        </Card>
+                <div className="w-10 h-10 mx-auto mb-2 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                  <span className="text-xs font-bold truncate px-1">{shortLabel}</span>
+                </div>
+                <h3 className="text-xs font-bold text-gray-900 group-hover:text-orange-600 line-clamp-2">{cls}</h3>
+              </Card>
+            );
+          })}
+        </div>
 
         {/* Multi-class Test Creation Modal */}
         {showMultiClassModal && (
@@ -823,6 +807,12 @@ export const TestManager: React.FC = () => {
             <p className="text-xs text-gray-500">{selectedSchool} - {selectedClass}</p>
           </div>
         </div>
+        <Button
+          onClick={() => navigate(`/teacher/tests/create?school=${encodeURIComponent(selectedSchool!)}&class=${encodeURIComponent(selectedClass!)}`)}
+          className="text-xs py-1.5 px-3"
+        >
+          + Create Test Schedule
+        </Button>
       </div>
 
       {/* Tab Navigation */}
@@ -866,7 +856,7 @@ export const TestManager: React.FC = () => {
               <div
                 key={test.id}
                 className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
-                onClick={() => setSelectedTest(test)}
+                onClick={() => navigate(`/teacher/tests/detail/${test.id}`)}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3">
@@ -912,117 +902,6 @@ export const TestManager: React.FC = () => {
         )}
       </Card>
 
-      {/* Test Detail Modal */}
-      {selectedTest && (
-        <div className="fixed inset-0 z-[100] overflow-y-auto bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">Test Details</h3>
-              <button onClick={() => setSelectedTest(null)} className="p-2 hover:bg-gray-100 rounded-full">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                  selectedTest.test_type === 'QUIZ' ? 'bg-blue-100' :
-                  selectedTest.test_type === 'MID_SEMESTER' ? 'bg-orange-100' : 'bg-purple-100'
-                }`}>
-                  <FileText className={`w-6 h-6 ${
-                    selectedTest.test_type === 'QUIZ' ? 'text-blue-600' :
-                    selectedTest.test_type === 'MID_SEMESTER' ? 'text-orange-600' : 'text-purple-600'
-                  }`} />
-                </div>
-                <div>
-                  <h4 className="font-bold text-gray-900">{selectedTest.title}</h4>
-                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${TEST_TYPE_COLORS[selectedTest.test_type]}`}>
-                    {TEST_TYPE_LABELS[selectedTest.test_type]}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase">Date</p>
-                  <p className="text-sm font-bold text-gray-900">
-                    {new Date(selectedTest.date_time).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                  </p>
-                </div>
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase">Time</p>
-                  <p className="text-sm font-bold text-gray-900">
-                    {new Date(selectedTest.date_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase">Duration</p>
-                  <p className="text-sm font-bold text-gray-900">{selectedTest.duration_minutes} minutes</p>
-                </div>
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase">Period</p>
-                  <p className="text-sm font-bold text-gray-900">TA {selectedTest.academic_year} / Sem {selectedTest.semester}</p>
-                </div>
-              </div>
-
-              {selectedTest.description && (
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase mb-1">Description</p>
-                  <p className="text-sm text-gray-700">{selectedTest.description}</p>
-                </div>
-              )}
-
-              {/* Materials Section */}
-              {selectedTest.materials && selectedTest.materials.length > 0 && (
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase mb-2">Materials ({selectedTest.materials.length} file)</p>
-                  <div className="space-y-1.5">
-                    {selectedTest.materials.map((file, idx) => {
-                      const fileName = file.split('/').pop() || file;
-                      return (
-                        <div key={idx} className="flex items-center gap-2 p-2 bg-white rounded border border-gray-100">
-                          <FileText className="w-4 h-4 text-purple-500 shrink-0" />
-                          <a
-                            href={file}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:text-blue-800 hover:underline truncate flex-1"
-                            title={fileName}
-                          >
-                            {fileName}
-                          </a>
-                          <a
-                            href={file}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1 text-gray-400 hover:text-purple-600"
-                            title="Download"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </a>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-between bg-gray-50">
-              <Button
-                variant="outline"
-                onClick={() => handleDeleteTest(selectedTest.id)}
-                className="text-red-600 border-red-200 hover:bg-red-50"
-              >
-                <Trash2 className="w-4 h-4 mr-1" /> Delete
-              </Button>
-              <Button onClick={() => setSelectedTest(null)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

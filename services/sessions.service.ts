@@ -52,7 +52,7 @@ export const sessionsService = {
     return data;
   },
 
-  // Get sessions by location
+  // Get sessions by location (exact match)
   async getByLocation(location: string) {
     const { data, error } = await supabase
       .from('class_sessions')
@@ -61,6 +61,22 @@ export const sessionsService = {
         teacher:profiles!teacher_id(id, name, email)
       `)
       .eq('location', location)
+      .order('date_time', { ascending: false });
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Get sessions by school and class (partial match - more efficient)
+  async getBySchoolAndClass(schoolName: string, className: string) {
+    const locationPattern = `${schoolName} - ${className}`;
+    const { data, error } = await supabase
+      .from('class_sessions')
+      .select(`
+        *,
+        teacher:profiles!teacher_id(id, name, email)
+      `)
+      .eq('location', locationPattern)
       .order('date_time', { ascending: false });
 
     if (error) throw error;
@@ -198,6 +214,26 @@ export const sessionsService = {
     const newMaterials = currentMaterials.filter(m => m !== materialUrl);
 
     return this.update(id, { materials: newMaterials });
+  },
+
+
+  // Get count of pending tasks (past sessions without proper description)
+  async getPendingTasksCount(teacherId?: string) {
+    const now = new Date().toISOString();
+    
+    let query = supabase
+      .from('class_sessions')
+      .select('id', { count: 'exact', head: true })
+      .lt('date_time', now)
+      .or('description.is.null,description.eq.');
+    
+    if (teacherId) {
+      query = query.eq('teacher_id', teacherId);
+    }
+    
+    const { count, error } = await query;
+    if (error) throw error;
+    return count || 0;
   },
 };
 

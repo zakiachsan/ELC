@@ -9,6 +9,8 @@ type ClassSessionUpdate = Database['public']['Tables']['class_sessions']['Update
 interface UseSessionsOptions {
   teacherId?: string;
   location?: string;
+  schoolName?: string;
+  className?: string;
   upcoming?: boolean;
   past?: boolean;
   today?: boolean;
@@ -31,7 +33,10 @@ export const useSessions = (options: UseSessionsOptions = {}) => {
       setError(null);
 
       let data;
-      if (options.teacherId) {
+      if (options.schoolName && options.className) {
+        // Most efficient: filter by school and class at database level
+        data = await sessionsService.getBySchoolAndClass(options.schoolName, options.className);
+      } else if (options.teacherId) {
         data = await sessionsService.getByTeacher(options.teacherId);
       } else if (options.location) {
         data = await sessionsService.getByLocation(options.location);
@@ -51,7 +56,7 @@ export const useSessions = (options: UseSessionsOptions = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [options.teacherId, options.location, options.upcoming, options.past, options.today, enabled]);
+  }, [options.teacherId, options.location, options.schoolName, options.className, options.upcoming, options.past, options.today, enabled]);
 
   useEffect(() => {
     fetchSessions();
@@ -111,6 +116,31 @@ export const useUpcomingSessions = (limit?: number) => {
 
 export const useTodaySessions = () => {
   return useSessions({ today: true });
+};
+
+
+// Hook for pending tasks count (optimized - only fetches count)
+export const usePendingTasksCount = (teacherId?: string) => {
+  const [count, setCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    const fetchCount = async () => {
+      try {
+        setLoading(true);
+        const data = await sessionsService.getPendingTasksCount(teacherId);
+        setCount(data);
+      } catch (err) {
+        setError(err as Error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCount();
+  }, [teacherId]);
+
+  return { count, loading, error };
 };
 
 export default useSessions;
