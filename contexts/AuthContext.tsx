@@ -25,6 +25,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Map database profile to app User type
 const mapProfileToUser = (profile: Profile): User => {
+  // Handle assigned_location_ids - prefer array, fallback to single ID
+  const assignedLocationIds = (profile as any).assigned_location_ids && (profile as any).assigned_location_ids.length > 0
+    ? (profile as any).assigned_location_ids
+    : profile.assigned_location_id
+      ? [profile.assigned_location_id]
+      : [];
+
   return {
     id: profile.id,
     name: profile.name,
@@ -39,7 +46,10 @@ const mapProfileToUser = (profile: Profile): User => {
     needsAttention: profile.needs_attention,
     schoolOrigin: profile.school_origin || undefined,
     assignedLocationId: profile.assigned_location_id || undefined,
+    assignedLocationIds: assignedLocationIds,
     assignedSubjects: profile.assigned_subjects || [],
+    assignedClasses: (profile as any).assigned_classes || [],
+    classTypes: (profile as any).class_types || [],
     skillLevels: profile.skill_levels as Partial<Record<SkillCategory, DifficultyLevel>> || {},
     learningHubSubscription: profile.learning_hub_subscription as { isActive: boolean; expiresAt?: string } || { isActive: false },
   };

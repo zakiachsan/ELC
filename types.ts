@@ -231,6 +231,7 @@ export interface User {
   needsAttention?: boolean;
   assignedSubjects?: string[];
   assignedLocationId?: string;
+  assignedLocationIds?: string[]; // Multiple school IDs for teachers
   assignedClasses?: string[]; // e.g. ["10.1", "10.2", "11.1"]
   schoolOrigin?: string;
   status?: 'ACTIVE' | 'INACTIVE';

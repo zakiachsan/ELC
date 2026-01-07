@@ -28,6 +28,7 @@ export interface Database {
           school_origin: string | null
           linked_student_id: string | null
           assigned_location_id: string | null
+          assigned_location_ids: string[] | null
           assigned_subjects: string[]
           assigned_classes: string[]
           skill_levels: Json
@@ -54,6 +55,7 @@ export interface Database {
           school_origin?: string | null
           linked_student_id?: string | null
           assigned_location_id?: string | null
+          assigned_location_ids?: string[] | null
           assigned_subjects?: string[]
           assigned_classes?: string[]
           skill_levels?: Json
@@ -80,6 +82,7 @@ export interface Database {
           school_origin?: string | null
           linked_student_id?: string | null
           assigned_location_id?: string | null
+          assigned_location_ids?: string[] | null
           assigned_subjects?: string[]
           assigned_classes?: string[]
           skill_levels?: Json
