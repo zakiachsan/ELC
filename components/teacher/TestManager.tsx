@@ -57,6 +57,15 @@ export const TestManager: React.FC = () => {
   const navigate = useNavigate();
   const { user: currentTeacher } = useAuth();
 
+  // DEBUG: Log teacher data to diagnose school filtering issue
+  console.log('TestManager DEBUG - currentTeacher:', {
+    id: currentTeacher?.id,
+    name: currentTeacher?.name,
+    assignedLocationId: currentTeacher?.assignedLocationId,
+    assignedLocationIds: currentTeacher?.assignedLocationIds,
+    role: currentTeacher?.role,
+  });
+
   // Derive selected school and class from URL params
   const selectedSchool = schoolId ? decodeURIComponent(schoolId) : null;
   const selectedClass = classId ? decodeURIComponent(classId) : null;
