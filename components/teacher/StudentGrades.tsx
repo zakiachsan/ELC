@@ -378,10 +378,10 @@ export const StudentGrades: React.FC = () => {
         mid: grade.mid ? parseInt(grade.mid) : null,
         final: grade.final ? parseInt(grade.final) : null,
       });
-      alert('Nilai semester berhasil disimpan!');
+      alert('Semester grade saved successfully!');
     } catch (err) {
       console.error('Error saving grade:', err);
-      alert('Gagal menyimpan nilai. Silakan coba lagi.');
+      alert('Failed to save grade. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -396,7 +396,7 @@ export const StudentGrades: React.FC = () => {
     );
 
     if (gradesWithValues.length === 0) {
-      alert('Tidak ada nilai untuk disimpan.');
+      alert('No grades to save.');
       return;
     }
 
@@ -417,10 +417,10 @@ export const StudentGrades: React.FC = () => {
       }));
 
       const savedCount = await saveAllGradesToDb(inputs);
-      alert(`${savedCount} nilai semester berhasil disimpan untuk TA ${selectedAcademicYear} Semester ${selectedSemester}!`);
+      alert(`${savedCount} semester grades saved successfully for AY ${selectedAcademicYear} Semester ${selectedSemester}!`);
     } catch (err) {
       console.error('Error saving grades:', err);
-      alert('Gagal menyimpan nilai. Silakan coba lagi.');
+      alert('Failed to save grade. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -448,13 +448,13 @@ export const StudentGrades: React.FC = () => {
 
         // Check file type
         if (!isAllowedFileType(file)) {
-          setTestUploadError(`File "${file.name}" tidak didukung. Gunakan PDF, DOC, DOCX, PPT, PPTX, atau gambar.`);
+          setTestUploadError(`File "${file.name}" is not supported. Use PDF, DOC, DOCX, PPT, PPTX, or images.`);
           continue;
         }
 
         // Check file size (max 10MB)
         if (file.size > 10 * 1024 * 1024) {
-          setTestUploadError(`File "${file.name}" terlalu besar. Maksimal 10MB.`);
+          setTestUploadError(`File "${file.name}" is too large. Maximum 10MB.`);
           continue;
         }
 
@@ -464,7 +464,7 @@ export const StudentGrades: React.FC = () => {
       }
     } catch (err) {
       console.error('Upload error:', err);
-      setTestUploadError('Gagal mengupload file. Silakan coba lagi.');
+      setTestUploadError('Failed to upload file. Please try again.');
     } finally {
       setIsUploadingTest(false);
       // Reset input
@@ -482,7 +482,7 @@ export const StudentGrades: React.FC = () => {
   // Create test function
   const handleCreateTest = async () => {
     if (!testDate || !testTitle || !selectedSchool || !selectedClass || !testClassType) {
-      alert('Mohon lengkapi semua field yang diperlukan');
+      alert('Please complete all required fields');
       return;
     }
 
@@ -514,7 +514,7 @@ export const StudentGrades: React.FC = () => {
       };
 
       await testsService.create(testData);
-      alert(`${TEST_TYPE_LABELS[testType]} berhasil dibuat untuk kelas ${selectedClass}!`);
+      alert(`${TEST_TYPE_LABELS[testType]} created successfully for class ${selectedClass}!`);
 
       // Reset form
       setShowTestModal(false);
@@ -528,7 +528,7 @@ export const StudentGrades: React.FC = () => {
       setTestClassType(hasOnlyOneClassType ? teacherClassTypes[0] : '');
     } catch (err) {
       console.error('Error creating test:', err);
-      alert('Gagal membuat jadwal test. Silakan coba lagi.');
+      alert('Failed to create test schedule. Please try again.');
     } finally {
       setIsCreatingTest(false);
     }
@@ -566,7 +566,7 @@ export const StudentGrades: React.FC = () => {
             Back
           </Button>
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Detail Siswa</h2>
+            <h2 className="text-lg font-bold text-gray-900">Student Details</h2>
             <p className="text-xs text-gray-500">{selectedSchool}</p>
           </div>
         </div>
@@ -602,7 +602,7 @@ export const StudentGrades: React.FC = () => {
           <div className="flex items-center gap-3">
             <Calendar className="w-5 h-5 text-purple-600" />
             <div>
-              <p className="text-xs font-bold text-purple-800">Tahun Ajaran {selectedAcademicYear} - Semester {selectedSemester}</p>
+              <p className="text-xs font-bold text-purple-800">Academic Year {selectedAcademicYear} - Semester {selectedSemester}</p>
               <p className="text-[10px] text-purple-600">{selectedSchool} - {selectedClass}</p>
             </div>
           </div>
@@ -610,7 +610,7 @@ export const StudentGrades: React.FC = () => {
 
         {/* Semester Grades Input */}
         <Card className="!p-4">
-          <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Nilai Semester</h4>
+          <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Semester Grades</h4>
           <div className="grid grid-cols-3 gap-3 mb-4">
             <div>
               <label className="text-[9px] font-black text-gray-400 uppercase">Quiz 1</label>
@@ -707,7 +707,7 @@ export const StudentGrades: React.FC = () => {
           </div>
           <div className="mt-4">
             <Button onClick={() => saveSemesterGrade(selectedStudent.id)} disabled={isSaving} className="text-xs py-1.5 px-3">
-              {isSaving ? 'Menyimpan...' : 'Simpan Nilai'}
+              {isSaving ? 'Saving...' : 'Save Grades'}
             </Button>
           </div>
         </Card>
@@ -715,12 +715,12 @@ export const StudentGrades: React.FC = () => {
         {/* Class History */}
         <Card className="!p-0 overflow-hidden">
           <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-            <h3 className="text-xs font-bold text-gray-700">Riwayat Kelas ({studentClassHistory.length})</h3>
+            <h3 className="text-xs font-bold text-gray-700">Class History ({studentClassHistory.length})</h3>
           </div>
           <div className="divide-y divide-gray-100">
             {studentClassHistory.length === 0 ? (
               <div className="px-4 py-8 text-center text-gray-400 text-xs italic">
-                Belum ada kelas yang diikuti di lokasi ini.
+                No classes attended at this location yet.
               </div>
             ) : (
               studentClassHistory.map(({ session, report }) => (
@@ -749,15 +749,15 @@ export const StudentGrades: React.FC = () => {
                           <div className="flex items-center gap-2 justify-end">
                             {report.attendanceStatus === 'PRESENT' ? (
                               <span className="flex items-center gap-1 text-[9px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full border border-green-200">
-                                <CheckCircle className="w-3 h-3" /> Hadir
+                                <CheckCircle className="w-3 h-3" /> Present
                               </span>
                             ) : report.attendanceStatus === 'LATE' ? (
                               <span className="text-[9px] font-bold text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-full border border-yellow-200">
-                                Terlambat
+                                Late
                               </span>
                             ) : (
                               <span className="flex items-center gap-1 text-[9px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-200">
-                                <XCircle className="w-3 h-3" /> Absen
+                                <XCircle className="w-3 h-3" /> Absent
                               </span>
                             )}
                           </div>
@@ -776,7 +776,7 @@ export const StudentGrades: React.FC = () => {
                           )}
                         </div>
                       ) : (
-                        <span className="text-[9px] text-gray-400 italic">Belum ada nilai</span>
+                        <span className="text-[9px] text-gray-400 italic">No grades yet</span>
                       )}
                     </div>
                   </div>
@@ -794,8 +794,8 @@ export const StudentGrades: React.FC = () => {
     return (
       <div className="space-y-4">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">Nilai Siswa</h2>
-          <p className="text-xs text-gray-500">Pilih sekolah untuk mengelola nilai mid & final semester siswa.</p>
+          <h2 className="text-lg font-bold text-gray-900">Student Grades</h2>
+          <p className="text-xs text-gray-500">Select school to manage student mid & final semester grades.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -828,7 +828,7 @@ export const StudentGrades: React.FC = () => {
               </div>
               <div className="flex-1">
                 <h3 className="text-sm font-bold text-gray-900 group-hover:text-teal-600">Online (Zoom)</h3>
-                <p className="text-[10px] text-gray-500">Kelas Virtual</p>
+                <p className="text-[10px] text-gray-500">Virtual Class</p>
               </div>
               <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-teal-500" />
             </div>
@@ -844,13 +844,13 @@ export const StudentGrades: React.FC = () => {
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <Button variant="outline" onClick={() => navigate('/teacher/grades')} className="text-xs py-1.5 px-3">
-            Kembali
+            Back
           </Button>
           <div>
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <GraduationCap className="w-5 h-5 text-orange-600" /> Pilih Kelas
+              <GraduationCap className="w-5 h-5 text-orange-600" /> Select Class
             </h2>
-            <p className="text-xs text-gray-500">{selectedSchool} - Pilih kelas untuk melihat nilai siswa</p>
+            <p className="text-xs text-gray-500">{selectedSchool} - Select class to view student grades</p>
           </div>
         </div>
 
@@ -882,10 +882,10 @@ export const StudentGrades: React.FC = () => {
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
           <Button variant="outline" onClick={() => navigate(`/teacher/grades/${encodeURIComponent(selectedSchool!)}`)} className="text-xs py-1.5 px-3">
-            Ganti Kelas
+            Change Class
           </Button>
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Nilai Semester</h2>
+            <h2 className="text-lg font-bold text-gray-900">Semester Grades</h2>
             <p className="text-xs text-gray-500">{selectedSchool} - {selectedClass}</p>
           </div>
         </div>
@@ -895,10 +895,10 @@ export const StudentGrades: React.FC = () => {
             onClick={() => setShowTestModal(true)}
             className="text-xs py-1.5 px-3 border-blue-200 text-blue-600 hover:bg-blue-50"
           >
-            + Buat Jadwal Test
+            + Create Test Schedule
           </Button>
           <Button onClick={saveAllGrades} disabled={isSaving || gradesLoading} className="text-xs py-1.5 px-3">
-            {isSaving ? 'Menyimpan...' : 'Simpan Semua'}
+            {isSaving ? 'Saving...' : 'Save All'}
           </Button>
         </div>
       </div>
@@ -907,7 +907,7 @@ export const StudentGrades: React.FC = () => {
       <Card className="!p-4">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
-            <label className="text-[10px] font-bold text-gray-500 uppercase">Tahun Ajaran:</label>
+            <label className="text-[10px] font-bold text-gray-500 uppercase">Academic Year:</label>
             <select
               value={selectedAcademicYear}
               onChange={(e) => setSelectedAcademicYear(e.target.value)}
@@ -925,8 +925,8 @@ export const StudentGrades: React.FC = () => {
               onChange={(e) => setSelectedSemester(e.target.value as '1' | '2')}
               className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
             >
-              <option value="1">Semester 1 (Ganjil)</option>
-              <option value="2">Semester 2 (Genap)</option>
+              <option value="1">Semester 1 (Odd)</option>
+              <option value="2">Semester 2 (Even)</option>
             </select>
           </div>
           <div className="flex items-center gap-2 ml-auto">
@@ -941,11 +941,11 @@ export const StudentGrades: React.FC = () => {
       <Card className="!p-0 overflow-hidden">
         <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
           <h3 className="text-xs font-bold text-gray-700">
-            Nilai Semester {selectedSemester} - TA {selectedAcademicYear}
+            Semester {selectedSemester} Grades - AY {selectedAcademicYear}
           </h3>
           {gradesLoading && (
             <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
-              <Loader2 className="w-3 h-3 animate-spin" /> Memuat nilai...
+              <Loader2 className="w-3 h-3 animate-spin" /> Loading grades...
             </span>
           )}
         </div>
@@ -969,7 +969,7 @@ export const StudentGrades: React.FC = () => {
             {students.length === 0 ? (
               <tr>
                 <td colSpan={10} className="px-4 py-8 text-center text-gray-400 text-xs italic">
-                  Belum ada siswa di kelas {selectedClass} untuk sekolah ini.
+                  No students in class {selectedClass} for this school yet.
                 </td>
               </tr>
             ) : students.map((student) => {
@@ -1106,7 +1106,7 @@ export const StudentGrades: React.FC = () => {
                       disabled={isSaving}
                       className="px-2 py-1 bg-purple-50 text-purple-600 rounded text-[9px] font-bold uppercase hover:bg-purple-600 hover:text-white transition-all border border-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {isSaving ? '...' : 'Simpan'}
+                      {isSaving ? '...' : 'Save'}
                     </button>
                   </td>
                 </tr>
@@ -1122,7 +1122,7 @@ export const StudentGrades: React.FC = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-base font-bold text-gray-900">Buat Jadwal Test</h3>
+              <h3 className="text-base font-bold text-gray-900">Create Test Schedule</h3>
               <button
                 onClick={() => setShowTestModal(false)}
                 className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
@@ -1135,17 +1135,17 @@ export const StudentGrades: React.FC = () => {
               {/* Test Info */}
               <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
                 <p className="text-xs text-blue-700">
-                  <strong>{selectedSchool}</strong> - Kelas <strong>{selectedClass}</strong>
+                  <strong>{selectedSchool}</strong> - Class <strong>{selectedClass}</strong>
                 </p>
                 <p className="text-[10px] text-blue-600 mt-1">
-                  TA {selectedAcademicYear} - Semester {selectedSemester}
+                  AY {selectedAcademicYear} - Semester {selectedSemester}
                 </p>
               </div>
 
               {/* Test Type */}
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">
-                  Jenis Test *
+                  Test Type *
                 </label>
                 <div className="flex gap-2">
                   {(['QUIZ', 'MID_SEMESTER', 'FINAL_SEMESTER'] as TestType[]).map((type) => (
@@ -1167,7 +1167,7 @@ export const StudentGrades: React.FC = () => {
               {/* Title */}
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">
-                  Judul Test *
+                  Test Title *
                 </label>
                 <input
                   type="text"
@@ -1181,12 +1181,12 @@ export const StudentGrades: React.FC = () => {
               {/* Description */}
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">
-                  Deskripsi (Opsional)
+                  Description (Optional)
                 </label>
                 <textarea
                   value={testDescription}
                   onChange={(e) => setTestDescription(e.target.value)}
-                  placeholder="Materi yang diujikan, catatan untuk siswa, dll."
+                  placeholder="Topics to test, notes for students, etc."
                   rows={2}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -1195,7 +1195,7 @@ export const StudentGrades: React.FC = () => {
               {/* Class Type Selection */}
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">
-                  Jenis Kelas <span className="text-red-500">*</span>
+                  Class Type <span className="text-red-500">*</span>
                 </label>
                 {hasOnlyOneClassType ? (
                   <div className="px-3 py-2 bg-gray-100 rounded-lg text-xs text-gray-700 font-medium">
@@ -1236,7 +1236,7 @@ export const StudentGrades: React.FC = () => {
               {/* Date */}
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">
-                  Tanggal Test *
+                  Test Date *
                 </label>
                 <input
                   type="date"
@@ -1250,7 +1250,7 @@ export const StudentGrades: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">
-                    Waktu Mulai
+                    Start Time
                   </label>
                   <input
                     type="time"
@@ -1261,7 +1261,7 @@ export const StudentGrades: React.FC = () => {
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">
-                    Waktu Selesai
+                    End Time
                   </label>
                   <input
                     type="time"
@@ -1275,7 +1275,7 @@ export const StudentGrades: React.FC = () => {
               {/* File Upload Section */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                  Upload Materi (PDF, DOC, PPT, Gambar)
+                  Upload Materials (PDF, DOC, PPT, Images)
                 </label>
 
                 {/* Upload Zone */}
@@ -1290,16 +1290,16 @@ export const StudentGrades: React.FC = () => {
                   {isUploadingTest ? (
                     <div className="flex items-center justify-center gap-2">
                       <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
-                      <span className="text-xs text-gray-500">Mengupload...</span>
+                      <span className="text-xs text-gray-500">Uploading...</span>
                     </div>
                   ) : (
                     <>
                       <Upload className="w-6 h-6 text-gray-300 mx-auto mb-2" />
                       <p className="text-[10px] text-gray-400">
-                        Klik untuk pilih file atau drag & drop
+                        Click to select file or drag & drop
                       </p>
                       <p className="text-[9px] text-gray-300 mt-1">
-                        Maks. 10MB per file
+                        Max. 10MB per file
                       </p>
                     </>
                   )}
@@ -1352,14 +1352,14 @@ export const StudentGrades: React.FC = () => {
                 onClick={() => setShowTestModal(false)}
                 className="text-xs py-1.5 px-3"
               >
-                Batal
+                Cancel
               </Button>
               <Button
                 onClick={handleCreateTest}
                 disabled={isCreatingTest || !testDate || !testTitle || !testClassType}
                 className="text-xs py-1.5 px-3"
               >
-                {isCreatingTest ? 'Membuat...' : 'Buat Jadwal'}
+                {isCreatingTest ? 'Creating...' : 'Create Schedule'}
               </Button>
             </div>
           </div>

@@ -110,33 +110,33 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
           {currentUser.role === UserRole.ADMIN && (
             <>
-              {/* Manajemen */}
+              {/* Management */}
               <SidebarNavItem to="/admin/accounts" label={t.nav_accounts} icon={Users} onClick={closeMobileMenu} />
 
-              {/* Akademik */}
-              <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Akademik</div>
+              {/* Academic */}
+              <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Academic</div>
               <SidebarNavItem to="/admin/students" label={t.nav_student_reports} icon={List} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/teachers" label="Teacher" icon={GraduationCap} onClick={closeMobileMenu} />
-              <SidebarNavItem to="/admin/reviews" label="Review Guru" icon={Star} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/admin/reviews" label="Teacher Reviews" icon={Star} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/schedule" label={t.nav_schedule} icon={CalendarDays} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/locations" label={t.nav_locations} icon={MapPin} onClick={closeMobileMenu} />
 
-              {/* Publik */}
-              <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Publik</div>
+              {/* Public */}
+              <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Public</div>
               <SidebarNavItem to="/admin/placement" label="CEFR Center" icon={Search} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/kahoot" label="Live Quiz" icon={Gamepad2} highlight onClick={closeMobileMenu} />
-              <SidebarNavItem to="/admin/olympiad" label="Olimpiade" icon={Trophy} onClick={closeMobileMenu} />
-              <SidebarNavItem to="/admin/news" label="News & Artikel" icon={Newspaper} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/admin/olympiad" label="Olympiad" icon={Trophy} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/admin/news" label="News & Articles" icon={Newspaper} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/student-of-month" label="Student of Month" icon={Award} onClick={closeMobileMenu} />
-              <SidebarNavItem to="/admin/careers" label="Karir" icon={Briefcase} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/admin/careers" label="Careers" icon={Briefcase} onClick={closeMobileMenu} />
 
-              {/* Keuangan */}
-              <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Keuangan</div>
+              {/* Finance */}
+              <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Finance</div>
               <SidebarNavItem to="/admin/billing" label="Billing & SPP" icon={DollarSign} onClick={closeMobileMenu} />
-              <SidebarNavItem to="/admin/transactions" label="Transaksi" icon={CreditCard} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/admin/transactions" label="Transactions" icon={CreditCard} onClick={closeMobileMenu} />
 
-              {/* Pengaturan */}
-              <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Pengaturan</div>
+              {/* Settings */}
+              <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Settings</div>
               <SidebarNavItem to="/admin/settings" label="Site Settings" icon={Palette} onClick={closeMobileMenu} />
             </>
           )}
@@ -144,10 +144,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           {currentUser.role === UserRole.TEACHER && (
             <>
               <SidebarNavItem to="/teacher/dashboard" label={t.nav_dashboard} icon={LayoutDashboard} onClick={closeMobileMenu} />
-              <SidebarNavItem to="/teacher/attendance" label="Absen" icon={Clock} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/teacher/attendance" label="Attendance" icon={Clock} onClick={closeMobileMenu} />
               <SidebarNavItem to="/teacher/schedule" label={t.nav_schedule} icon={CalendarDays} onClick={closeMobileMenu} />
-              <SidebarNavItem to="/teacher/tests" label="Jadwal Test" icon={List} onClick={closeMobileMenu} />
-              <SidebarNavItem to="/teacher/grades" label="Nilai Siswa" icon={BarChart3} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/teacher/tests" label="Test Schedule" icon={List} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/teacher/grades" label="Student Grades" icon={BarChart3} onClick={closeMobileMenu} />
               <SidebarNavItem to="/teacher/materials" label="Afternoon Classes" icon={BookOpen} onClick={closeMobileMenu} />
             </>
           )}
@@ -157,8 +157,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <SidebarNavItem to="/student/dashboard" label={t.nav_dashboard} icon={LayoutDashboard} onClick={closeMobileMenu} />
               <SidebarNavItem to="/student/schedule" label={t.nav_schedule} icon={CalendarDays} onClick={closeMobileMenu} />
               <SidebarNavItem to="/student/progress" label={t.nav_my_progress} icon={TrendingUp} onClick={closeMobileMenu} />
-              <SidebarNavItem to="/student/grades" label="Nilai Semester" icon={BarChart3} onClick={closeMobileMenu} />
-              <SidebarNavItem to="/student/review" label="Review Guru" icon={Star} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/student/grades" label="Semester Grades" icon={BarChart3} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/student/review" label="Teacher Review" icon={Star} onClick={closeMobileMenu} />
               {/* Temporarily hidden - Afternoon Classes menu */}
               {/* <SidebarNavItem to="/student/learning" label="Afternoon Classes" icon={BookOpen} onClick={closeMobileMenu} /> */}
               <SidebarNavItem to="/student/feedback" label="Feedback" icon={MessageSquare} onClick={closeMobileMenu} />
@@ -170,7 +170,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <SidebarNavItem to="/parent/dashboard" label={t.nav_dashboard} icon={LayoutDashboard} onClick={closeMobileMenu} />
               <SidebarNavItem to="/parent/schedule" label={t.nav_schedule} icon={CalendarDays} onClick={closeMobileMenu} />
               <SidebarNavItem to="/parent/history" label={t.nav_activity_log} icon={Activity} onClick={closeMobileMenu} />
-              <SidebarNavItem to="/parent/review" label="Review Guru" icon={Star} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/parent/review" label="Teacher Review" icon={Star} onClick={closeMobileMenu} />
               <SidebarNavItem to="/parent/feedback" label="Feedback" icon={MessageSquare} onClick={closeMobileMenu} />
             </>
           )}

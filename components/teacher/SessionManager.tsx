@@ -414,7 +414,7 @@ export const SessionManager: React.FC = () => {
 
   const addHomework = (sessionId: string) => {
     if (!hwForm.title || !hwForm.dueDate) {
-      alert('Judul dan tanggal deadline harus diisi!');
+      alert('Title and due date are required!');
       return;
     }
     const newHomeworks: Homework[] = enrolledStudents.map(student => ({
@@ -471,13 +471,13 @@ export const SessionManager: React.FC = () => {
 
         // Check file type
         if (!isAllowedFileType(file)) {
-          setUploadError(`File "${file.name}" tidak didukung. Gunakan PDF, DOC, DOCX, PPT, PPTX, atau gambar.`);
+          setUploadError(`File "${file.name}" is not supported. Use PDF, DOC, DOCX, PPT, PPTX, or images.`);
           continue;
         }
 
         // Check file size (max 10MB)
         if (file.size > 10 * 1024 * 1024) {
-          setUploadError(`File "${file.name}" terlalu besar. Maksimal 10MB.`);
+          setUploadError(`File "${file.name}" is too large. Maximum 10MB.`);
           continue;
         }
 
@@ -487,7 +487,7 @@ export const SessionManager: React.FC = () => {
       }
     } catch (err) {
       console.error('Upload error:', err);
-      setUploadError('Gagal mengupload file. Silakan coba lagi.');
+      setUploadError('Failed to upload file. Please try again.');
     } finally {
       setIsUploading(false);
       // Reset input
@@ -516,13 +516,13 @@ export const SessionManager: React.FC = () => {
 
         // Check file type
         if (!isAllowedFileType(file)) {
-          setMultiClassUploadError(`File "${file.name}" tidak didukung. Gunakan PDF, DOC, DOCX, PPT, PPTX, atau gambar.`);
+          setMultiClassUploadError(`File "${file.name}" is not supported. Use PDF, DOC, DOCX, PPT, PPTX, or images.`);
           continue;
         }
 
         // Check file size (max 10MB)
         if (file.size > 10 * 1024 * 1024) {
-          setMultiClassUploadError(`File "${file.name}" terlalu besar. Maksimal 10MB.`);
+          setMultiClassUploadError(`File "${file.name}" is too large. Maximum 10MB.`);
           continue;
         }
 
@@ -549,13 +549,13 @@ export const SessionManager: React.FC = () => {
 
   const handleCreateSchedule = async () => {
     if (scheduleForm.dates.length === 0 || !scheduleForm.startTime || !scheduleForm.endTime || !scheduleForm.topic || !selectedSchool) {
-      alert('Silakan lengkapi semua field yang wajib diisi!');
+      alert('Please complete all required fields!');
       return;
     }
 
     const duration = calculateDuration();
     if (!duration || duration <= 0) {
-      alert('Waktu selesai harus lebih besar dari waktu mulai!');
+      alert('End time must be after start time!');
       return;
     }
 
@@ -580,7 +580,7 @@ export const SessionManager: React.FC = () => {
         });
       }
 
-      alert(`${scheduleForm.dates.length} jadwal berhasil ditambahkan!`);
+      alert(`${scheduleForm.dates.length} schedule(s) added successfully!`);
       setShowCreateModal(false);
       setScheduleForm({
         dates: [],
@@ -596,7 +596,7 @@ export const SessionManager: React.FC = () => {
       setUploadError(null);
     } catch (error) {
       console.error('Error creating sessions:', error);
-      alert('Gagal menyimpan jadwal. Silakan coba lagi.');
+      alert('Failed to save schedule. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -624,9 +624,9 @@ export const SessionManager: React.FC = () => {
       <div className="space-y-4">
         <div>
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <School className="w-5 h-5 text-blue-600" /> Pilih Sekolah
+            <School className="w-5 h-5 text-blue-600" /> Select School
           </h2>
-          <p className="text-xs text-gray-500">Pilih sekolah terlebih dahulu untuk mengelola jadwal kelas.</p>
+          <p className="text-xs text-gray-500">Select a school first to manage class schedules.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -659,7 +659,7 @@ export const SessionManager: React.FC = () => {
               </div>
               <div className="flex-1">
                 <h3 className="text-sm font-bold text-gray-900 group-hover:text-purple-600">Online (Zoom)</h3>
-                <p className="text-[10px] text-gray-500">Kelas Virtual</p>
+                <p className="text-[10px] text-gray-500">Virtual Class</p>
               </div>
               <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-purple-500" />
             </div>
@@ -676,17 +676,17 @@ export const SessionManager: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button variant="outline" onClick={() => navigate('/teacher/schedule')} className="text-xs py-1.5 px-3">
-              Kembali
+              Back
             </Button>
             <div>
               <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <GraduationCap className="w-5 h-5 text-orange-600" /> Pilih Kelas
+                <GraduationCap className="w-5 h-5 text-orange-600" /> Select Class
               </h2>
-              <p className="text-xs text-gray-500">{selectedSchool} - Pilih kelas yang akan dikelola</p>
+              <p className="text-xs text-gray-500">{selectedSchool} - Select class to manage</p>
             </div>
           </div>
           <Button onClick={() => setShowMultiClassModal(true)} className="text-xs py-1.5 px-3">
-            Tambah Jadwal Multi-Kelas
+            Add Multi-Class Schedule
           </Button>
         </div>
 
@@ -715,18 +715,18 @@ export const SessionManager: React.FC = () => {
             <Card className="w-full max-w-2xl !p-4 space-y-4 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-gray-900">
-                  Tambah Jadwal Multi-Kelas
+                  Add Multi-Class Schedule
                 </h3>
                 <button onClick={() => { setShowMultiClassModal(false); setMultiClassEntries([]); setMultiClassDates([]); setTempDate(''); setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : ''); setMultiClassFiles([]); setMultiClassUploadError(null); }} className="p-1 text-gray-400 hover:text-gray-600">
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <p className="text-xs text-gray-500">Buat jadwal untuk beberapa kelas sekaligus dalam beberapa tanggal.</p>
+              <p className="text-xs text-gray-500">Create schedules for multiple classes on multiple dates.</p>
 
               {/* Step 1: Multiple Dates */}
               <div className="space-y-2">
-                <label className="text-[9px] font-black text-gray-400 uppercase">1. Pilih Tanggal (bisa lebih dari satu)</label>
+                <label className="text-[9px] font-black text-gray-400 uppercase">1. Select Dates (can select multiple)</label>
                 <div className="flex gap-2">
                   <input
                     type="date"
@@ -744,7 +744,7 @@ export const SessionManager: React.FC = () => {
                     disabled={!tempDate}
                     className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
                   >
-                    Tambah
+                    Add
                   </button>
                 </div>
                 {multiClassDates.length > 0 && (
@@ -763,7 +763,7 @@ export const SessionManager: React.FC = () => {
                   </div>
                 )}
                 {multiClassDates.length === 0 && (
-                  <p className="text-[10px] text-gray-400 italic">Belum ada tanggal dipilih</p>
+                  <p className="text-[10px] text-gray-400 italic">No dates selected</p>
                 )}
               </div>
 
@@ -771,7 +771,7 @@ export const SessionManager: React.FC = () => {
               {multiClassDates.length > 0 && (
                 <div className="space-y-3 p-3 bg-gray-50 rounded-lg">
                   <div>
-                    <label className="text-[9px] font-black text-gray-400 uppercase">Topik/Materi</label>
+                    <label className="text-[9px] font-black text-gray-400 uppercase">Topic/Material</label>
                     <input
                       type="text"
                       value={multiClassTopic}
@@ -788,7 +788,7 @@ export const SessionManager: React.FC = () => {
                         onChange={e => setMultiClassSkill(e.target.value as SkillCategory)}
                         className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1 bg-white"
                       >
-                        <option value="">Pilih...</option>
+                        <option value="">Select...</option>
                         {Object.values(SkillCategory).map(cat => (
                           <option key={cat} value={cat}>{cat}</option>
                         ))}
@@ -801,7 +801,7 @@ export const SessionManager: React.FC = () => {
                         onChange={e => setMultiClassDifficulty(e.target.value as DifficultyLevel)}
                         className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1 bg-white"
                       >
-                        <option value="">Pilih...</option>
+                        <option value="">Select...</option>
                         {Object.values(DifficultyLevel).map(lvl => (
                           <option key={lvl} value={lvl}>{lvl}</option>
                         ))}
@@ -812,7 +812,7 @@ export const SessionManager: React.FC = () => {
                   {/* Class Type Selection */}
                   <div>
                     <label className="text-[9px] font-black text-gray-400 uppercase">
-                      Jenis Kelas <span className="text-red-500">*</span>
+                      Class Type <span className="text-red-500">*</span>
                     </label>
                     {hasOnlyOneClassType ? (
                       <div className="mt-1 px-3 py-1.5 bg-gray-100 rounded-lg text-xs text-gray-700 font-medium">
@@ -851,20 +851,20 @@ export const SessionManager: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="text-[9px] font-black text-gray-400 uppercase">Deskripsi (opsional)</label>
+                    <label className="text-[9px] font-black text-gray-400 uppercase">Description (optional)</label>
                     <textarea
                       value={multiClassDescription}
                       onChange={e => setMultiClassDescription(e.target.value)}
                       className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1"
                       rows={2}
-                      placeholder="Deskripsi materi..."
+                      placeholder="Material description..."
                     />
                   </div>
 
                   {/* File Upload Section */}
                   <div className="space-y-2">
                     <label className="text-[9px] font-black text-gray-400 uppercase">
-                      Upload Materi (PDF, DOC, PPT, Gambar)
+                      Upload Materials (PDF, DOC, PPT, Images)
                     </label>
 
                     {/* Upload Zone */}
@@ -879,16 +879,16 @@ export const SessionManager: React.FC = () => {
                       {multiClassUploading ? (
                         <div className="flex items-center justify-center gap-2">
                           <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
-                          <span className="text-xs text-gray-500">Mengupload...</span>
+                          <span className="text-xs text-gray-500">Uploading...</span>
                         </div>
                       ) : (
                         <>
                           <Upload className="w-5 h-5 text-gray-300 mx-auto mb-1" />
                           <p className="text-[10px] text-gray-400">
-                            Klik untuk pilih file
+                            Click to select file
                           </p>
                           <p className="text-[9px] text-gray-300">
-                            Maks. 10MB per file
+                            Max. 10MB per file
                           </p>
                         </>
                       )}
@@ -939,7 +939,7 @@ export const SessionManager: React.FC = () => {
               {/* Step 3: Select Classes & Times */}
               {multiClassDates.length > 0 && (
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black text-gray-400 uppercase">2. Pilih Kelas & Waktu</label>
+                  <label className="text-[9px] font-black text-gray-400 uppercase">2. Select Classes & Time</label>
                   <div className="space-y-2 max-h-[300px] overflow-y-auto">
                     {availableClasses.map((cls) => {
                       const entry = multiClassEntries.find(e => e.classId === cls);
@@ -966,7 +966,7 @@ export const SessionManager: React.FC = () => {
                             {isSelected && (
                               <div className="flex items-center gap-2">
                                 <div className="flex items-center gap-1">
-                                  <span className="text-[9px] text-gray-500">Mulai:</span>
+                                  <span className="text-[9px] text-gray-500">Start:</span>
                                   <input
                                     type="time"
                                     value={entry?.startTime || ''}
@@ -979,7 +979,7 @@ export const SessionManager: React.FC = () => {
                                   />
                                 </div>
                                 <div className="flex items-center gap-1">
-                                  <span className="text-[9px] text-gray-500">Selesai:</span>
+                                  <span className="text-[9px] text-gray-500">End:</span>
                                   <input
                                     type="time"
                                     value={entry?.endTime || ''}
@@ -1004,12 +1004,12 @@ export const SessionManager: React.FC = () => {
               {/* Summary */}
               {multiClassEntries.length > 0 && multiClassDates.length > 0 && (
                 <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                  <p className="text-[9px] font-black text-blue-600 uppercase mb-1">Ringkasan</p>
+                  <p className="text-[9px] font-black text-blue-600 uppercase mb-1">Summary</p>
                   <p className="text-xs text-blue-800">
-                    <span className="font-bold">{multiClassEntries.length * multiClassDates.length}</span> jadwal akan dibuat:{' '}
-                    <span className="font-bold">{multiClassEntries.length}</span> kelas × <span className="font-bold">{multiClassDates.length}</span> tanggal
+                    <span className="font-bold">{multiClassEntries.length * multiClassDates.length}</span> schedule(s) will be created:{' '}
+                    <span className="font-bold">{multiClassEntries.length}</span> class(es) × <span className="font-bold">{multiClassDates.length}</span> date(s)
                     {multiClassFiles.length > 0 && (
-                      <span> • <span className="font-bold">{multiClassFiles.length}</span> file materi</span>
+                      <span> • <span className="font-bold">{multiClassFiles.length}</span> material file(s)</span>
                     )}
                   </p>
                 </div>
@@ -1022,17 +1022,17 @@ export const SessionManager: React.FC = () => {
                   disabled={isSubmitting || multiClassUploading}
                   className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50"
                 >
-                  Batal
+                  Cancel
                 </button>
                 <Button
                   onClick={async () => {
                     if (multiClassDates.length === 0 || multiClassEntries.length === 0 || !multiClassTopic || !multiClassType) {
-                      alert('Pilih tanggal, kelas, jenis kelas (Bilingual/Regular), dan isi topik terlebih dahulu!');
+                      alert('Please select dates, classes, class type (Bilingual/Regular), and fill in the topic!');
                       return;
                     }
                     const invalidEntries = multiClassEntries.filter(e => !e.startTime || !e.endTime);
                     if (invalidEntries.length > 0) {
-                      alert('Pastikan semua kelas yang dipilih memiliki waktu mulai dan selesai!');
+                      alert('Make sure all selected classes have start and end times!');
                       return;
                     }
                     setIsSubmitting(true);
@@ -1058,7 +1058,7 @@ export const SessionManager: React.FC = () => {
                         }
                       }
                       const totalCreated = multiClassDates.length * multiClassEntries.length;
-                      alert(`${totalCreated} jadwal berhasil ditambahkan!`);
+                      alert(`${totalCreated} schedule(s) added successfully!`);
                       setShowMultiClassModal(false);
                       setMultiClassEntries([]);
                       setMultiClassDates([]);
@@ -1072,7 +1072,7 @@ export const SessionManager: React.FC = () => {
                       setMultiClassUploadError(null);
                     } catch (error) {
                       console.error('Error creating sessions:', error);
-                      alert('Gagal menyimpan jadwal. Silakan coba lagi.');
+                      alert('Failed to save schedule. Please try again.');
                     } finally {
                       setIsSubmitting(false);
                     }
@@ -1083,10 +1083,10 @@ export const SessionManager: React.FC = () => {
                   {isSubmitting ? (
                     <span className="flex items-center justify-center gap-2">
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Menyimpan...
+                      Saving...
                     </span>
                   ) : (
-                    `Simpan ${multiClassEntries.length * multiClassDates.length} Jadwal`
+                    `Save ${multiClassEntries.length * multiClassDates.length} Schedule(s)`
                   )}
                 </Button>
               </div>
@@ -1145,7 +1145,7 @@ export const SessionManager: React.FC = () => {
           </div>
           {selectedSession.description && (
             <div className="mt-3 pt-3 border-t border-gray-100">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Deskripsi</p>
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Description</p>
               <p className="text-xs text-gray-600">{selectedSession.description}</p>
             </div>
           )}
@@ -1343,7 +1343,7 @@ export const SessionManager: React.FC = () => {
         {detailTab === 'materials' && (
           <Card className="!p-4">
             <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">
-              Materi Pembelajaran
+              Learning Materials
             </h4>
             <div className="space-y-3">
               {selectedSession.materials && selectedSession.materials.length > 0 ? (
@@ -1382,15 +1382,15 @@ export const SessionManager: React.FC = () => {
                   })}
                 </div>
               ) : (
-                <p className="text-[10px] text-gray-400 italic">Belum ada materi.</p>
+                <p className="text-[10px] text-gray-400 italic">No materials yet.</p>
               )}
               <div className="border-2 border-dashed border-gray-200 rounded-lg p-4 text-center">
                 <Upload className="w-6 h-6 text-gray-300 mx-auto mb-2" />
-                <p className="text-[10px] text-gray-400">Drag & drop atau klik untuk upload</p>
+                <p className="text-[10px] text-gray-400">Drag & drop or click to upload</p>
                 <input type="file" className="hidden" />
               </div>
               <Button variant="outline" className="text-xs py-1.5 px-3 w-full">
-                Tambah Materi
+                Add Materials
               </Button>
             </div>
           </Card>
@@ -1466,17 +1466,17 @@ export const SessionManager: React.FC = () => {
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
           <Button variant="outline" onClick={() => navigate(`/teacher/schedule/${encodeURIComponent(selectedSchool!)}`)} className="text-xs py-1.5 px-3">
-            Ganti Kelas
+            Change Class
           </Button>
           <div>
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-blue-600" /> Jadwal Mengajar
+              <Calendar className="w-5 h-5 text-blue-600" /> Teaching Schedule
             </h2>
             <p className="text-xs text-gray-500">{selectedSchool} - {selectedClass}</p>
           </div>
         </div>
         <Button onClick={() => setShowCreateModal(true)} className="text-xs py-1.5 px-3">
-          Tambah Jadwal
+          Add Schedule
         </Button>
       </div>
 
@@ -1577,7 +1577,7 @@ export const SessionManager: React.FC = () => {
           <Card className="w-full max-w-lg !p-4 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-blue-600" /> Tambah Jadwal Baru
+                <Calendar className="w-4 h-4 text-blue-600" /> Add New Schedule
               </h3>
               <button onClick={handleCloseCreateModal} className="p-1 text-gray-400 hover:text-gray-600">
                 <X className="w-4 h-4" />
@@ -1586,7 +1586,7 @@ export const SessionManager: React.FC = () => {
 
             {/* Multiple Dates Section */}
             <div className="space-y-2">
-              <label className="text-[9px] font-black text-gray-400 uppercase">Tanggal (bisa pilih beberapa)</label>
+              <label className="text-[9px] font-black text-gray-400 uppercase">Dates (can select multiple)</label>
               <div className="flex gap-2">
                 <input
                   type="date"
@@ -1618,14 +1618,14 @@ export const SessionManager: React.FC = () => {
                 </div>
               )}
               {scheduleForm.dates.length === 0 && (
-                <p className="text-[10px] text-gray-400 italic">Belum ada tanggal dipilih</p>
+                <p className="text-[10px] text-gray-400 italic">No dates selected</p>
               )}
             </div>
 
             {/* Start & End Time */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[9px] font-black text-gray-400 uppercase">Waktu Mulai</label>
+                <label className="text-[9px] font-black text-gray-400 uppercase">Start Time</label>
                 <input
                   type="time"
                   value={scheduleForm.startTime}
@@ -1634,7 +1634,7 @@ export const SessionManager: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-[9px] font-black text-gray-400 uppercase">Waktu Selesai</label>
+                <label className="text-[9px] font-black text-gray-400 uppercase">End Time</label>
                 <input
                   type="time"
                   value={scheduleForm.endTime}
@@ -1646,12 +1646,12 @@ export const SessionManager: React.FC = () => {
             {calculateDuration() && (
               <div className="flex items-center gap-1 text-[10px] text-green-600 font-medium">
                 <Clock className="w-3 h-3" />
-                Durasi: {calculateDuration()} jam
+                Duration: {calculateDuration()} hours
               </div>
             )}
 
             <div>
-              <label className="text-[9px] font-black text-gray-400 uppercase">Topik/Materi</label>
+              <label className="text-[9px] font-black text-gray-400 uppercase">Topic/Material</label>
               <input
                 type="text"
                 value={scheduleForm.topic}
@@ -1669,7 +1669,7 @@ export const SessionManager: React.FC = () => {
                   onChange={e => setScheduleForm({ ...scheduleForm, skillCategory: e.target.value as SkillCategory })}
                   className="w-full border rounded-lg px-3 py-1.5 text-xs bg-white"
                 >
-                  <option value="">Pilih kategori...</option>
+                  <option value="">Select category...</option>
                   {skillCategories.map(cat => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
@@ -1682,7 +1682,7 @@ export const SessionManager: React.FC = () => {
                   onChange={e => setScheduleForm({ ...scheduleForm, difficultyLevel: e.target.value as DifficultyLevel })}
                   className="w-full border rounded-lg px-3 py-1.5 text-xs bg-white"
                 >
-                  <option value="">Pilih level...</option>
+                  <option value="">Select level...</option>
                   {difficultyLevels.map(level => (
                     <option key={level} value={level}>{level}</option>
                   ))}
@@ -1691,20 +1691,20 @@ export const SessionManager: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-[9px] font-black text-gray-400 uppercase">Deskripsi</label>
+              <label className="text-[9px] font-black text-gray-400 uppercase">Description</label>
               <textarea
                 value={scheduleForm.description}
                 onChange={e => setScheduleForm({ ...scheduleForm, description: e.target.value })}
                 className="w-full border rounded-lg px-3 py-1.5 text-xs"
                 rows={3}
-                placeholder="Deskripsi materi yang akan diajarkan..."
+                placeholder="Description of materials to teach..."
               />
             </div>
 
             {/* File Upload Section */}
             <div className="space-y-2">
               <label className="text-[9px] font-black text-gray-400 uppercase">
-                Upload Materi (PDF, DOC, PPT, Gambar)
+                Upload Materials (PDF, DOC, PPT, Images)
               </label>
 
               {/* Upload Zone */}
@@ -1719,16 +1719,16 @@ export const SessionManager: React.FC = () => {
                 {isUploading ? (
                   <div className="flex items-center justify-center gap-2">
                     <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
-                    <span className="text-xs text-gray-500">Mengupload...</span>
+                    <span className="text-xs text-gray-500">Uploading...</span>
                   </div>
                 ) : (
                   <>
                     <Upload className="w-6 h-6 text-gray-300 mx-auto mb-2" />
                     <p className="text-[10px] text-gray-400">
-                      Klik untuk pilih file atau drag & drop
+                      Click to select file or drag & drop
                     </p>
                     <p className="text-[9px] text-gray-300 mt-1">
-                      Maks. 10MB per file
+                      Max. 10MB per file
                     </p>
                   </>
                 )}
@@ -1775,7 +1775,7 @@ export const SessionManager: React.FC = () => {
             </div>
 
             <div className="bg-gray-50 p-3 rounded-lg">
-              <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Lokasi & Kelas Terpilih</p>
+              <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Selected Location & Class</p>
               <p className="text-xs font-bold text-gray-900 flex items-center gap-1">
                 <MapPin className="w-3 h-3 text-orange-500" /> {selectedSchool} - {selectedClass}
               </p>
@@ -1784,14 +1784,14 @@ export const SessionManager: React.FC = () => {
             {/* Summary */}
             {scheduleForm.dates.length > 0 && scheduleForm.startTime && scheduleForm.endTime && (
               <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                <p className="text-[9px] font-black text-blue-600 uppercase mb-1">Ringkasan</p>
+                <p className="text-[9px] font-black text-blue-600 uppercase mb-1">Summary</p>
                 <p className="text-xs text-blue-800">
-                  <span className="font-bold">{scheduleForm.dates.length}</span> sesi akan dibuat
+                  <span className="font-bold">{scheduleForm.dates.length}</span> session(s) will be created
                   {calculateDuration() && (
-                    <span> • Total <span className="font-bold">{(scheduleForm.dates.length * (calculateDuration() || 0)).toFixed(1)}</span> jam</span>
+                    <span> • Total <span className="font-bold">{(scheduleForm.dates.length * (calculateDuration() || 0)).toFixed(1)}</span> hours</span>
                   )}
                   {uploadedFiles.length > 0 && (
-                    <span> • <span className="font-bold">{uploadedFiles.length}</span> file materi</span>
+                    <span> • <span className="font-bold">{uploadedFiles.length}</span> material file(s)</span>
                   )}
                 </p>
               </div>
@@ -1803,7 +1803,7 @@ export const SessionManager: React.FC = () => {
                 disabled={isSubmitting || isUploading}
                 className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50"
               >
-                Batal
+                Cancel
               </button>
               <Button
                 onClick={handleCreateSchedule}
@@ -1813,10 +1813,10 @@ export const SessionManager: React.FC = () => {
                 {isSubmitting ? (
                   <span className="flex items-center justify-center gap-2">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Menyimpan...
+                    Saving...
                   </span>
                 ) : (
-                  `Simpan ${scheduleForm.dates.length > 1 ? `${scheduleForm.dates.length} Jadwal` : 'Jadwal'}`
+                  `Save ${scheduleForm.dates.length > 1 ? `${scheduleForm.dates.length} Schedule(s)` : 'Schedule'}`
                 )}
               </Button>
             </div>

@@ -35,7 +35,7 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
   // Get current location
   const getCurrentLocation = () => {
     if (!navigator.geolocation) {
-      setLocationError('Geolocation tidak didukung browser ini');
+      setLocationError('Geolocation is not supported by this browser');
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -47,7 +47,7 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
         setLocationError(null);
       },
       (error) => {
-        setLocationError('Gagal mendapatkan lokasi. Pastikan GPS aktif.');
+        setLocationError('Failed to get location. Make sure GPS is active.');
         console.error('Geolocation error:', error);
       }
     );
@@ -78,7 +78,7 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
       setSelectedLocation('');
     } catch (err) {
       console.error('Check-in error:', err);
-      alert('Gagal check-in. Silakan coba lagi.');
+      alert('Check-in failed. Please try again.');
     } finally {
       setIsCheckingIn(false);
     }
@@ -91,7 +91,7 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
       await checkOut(todayAttendance.id);
     } catch (err) {
       console.error('Check-out error:', err);
-      alert('Gagal check-out. Silakan coba lagi.');
+      alert('Check-out failed. Please try again.');
     } finally {
       setIsCheckingIn(false);
     }
@@ -175,7 +175,7 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
                {todayAttendance && !todayAttendance.check_out_time ? <LogOut className="w-5 h-5" /> : <LogIn className="w-5 h-5" />}
              </div>
              <div>
-               <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Absensi Hari Ini</div>
+               <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Today's Attendance</div>
                {todayAttendance ? (
                  <div>
                    <div className="text-sm font-bold text-gray-900">
@@ -191,14 +191,14 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
                    </div>
                  </div>
                ) : (
-                 <div className="text-sm font-bold text-gray-900">Belum check-in hari ini</div>
+                 <div className="text-sm font-bold text-gray-900">Not checked in today</div>
                )}
              </div>
            </div>
            <div className="flex items-center gap-2">
              {currentPosition && (
                <div className="text-[9px] text-green-600 bg-green-50 px-2 py-1 rounded-full flex items-center gap-1">
-                 <Navigation className="w-3 h-3" /> GPS Aktif
+                 <Navigation className="w-3 h-3" /> GPS Active
                </div>
              )}
              {!todayAttendance ? (
@@ -220,7 +220,7 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
                </Button>
              ) : (
                <span className="text-[10px] font-bold text-green-600 bg-green-100 px-3 py-1.5 rounded-full">
-                 Selesai
+                 Done
                </span>
              )}
            </div>
@@ -233,20 +233,20 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
            <Card className="w-full max-w-md !p-4 space-y-4">
              <div className="flex items-center justify-between">
                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                 <MapPin className="w-4 h-4 text-orange-600" /> Pilih Lokasi Check-in
+                 <MapPin className="w-4 h-4 text-orange-600" /> Select Check-in Location
                </h3>
                <button onClick={() => setShowLocationSelect(false)} className="p-1 text-gray-400 hover:text-gray-600">
                  ✕
                </button>
              </div>
              <div className="space-y-2">
-               <label className="text-[9px] font-black text-gray-400 uppercase">Lokasi Sekolah</label>
+               <label className="text-[9px] font-black text-gray-400 uppercase">School Location</label>
                <select
                  value={selectedLocation}
                  onChange={(e) => setSelectedLocation(e.target.value)}
                  className="w-full border rounded-lg px-3 py-2 text-xs bg-white"
                >
-                 <option value="">Pilih lokasi...</option>
+                 <option value="">Select location...</option>
                  {locationsData.map((loc) => (
                    <option key={loc.id} value={loc.id}>{loc.name}</option>
                  ))}
@@ -255,7 +255,7 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
              {currentPosition && (
                <div className="bg-green-50 p-2 rounded-lg border border-green-100">
                  <p className="text-[10px] text-green-700 flex items-center gap-1">
-                   <Navigation className="w-3 h-3" /> Koordinat: {currentPosition.lat.toFixed(6)}, {currentPosition.lng.toFixed(6)}
+                   <Navigation className="w-3 h-3" /> Coordinates: {currentPosition.lat.toFixed(6)}, {currentPosition.lng.toFixed(6)}
                  </p>
                </div>
              )}
@@ -269,14 +269,14 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
                  onClick={() => setShowLocationSelect(false)}
                  className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
                >
-                 Batal
+                 Cancel
                </button>
                <Button
                  onClick={handleCheckIn}
                  disabled={!selectedLocation || isCheckingIn}
                  className="flex-1 text-xs py-2"
                >
-                 {isCheckingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Konfirmasi Check-in'}
+                 {isCheckingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Check-in'}
                </Button>
              </div>
            </Card>

@@ -271,13 +271,13 @@ export const TestManager: React.FC = () => {
 
         // Check file type
         if (!isAllowedFileType(file)) {
-          setUploadError(`File "${file.name}" tidak didukung. Gunakan PDF, DOC, DOCX, PPT, PPTX, atau gambar.`);
+          setUploadError(`File "${file.name}" is not supported. Use PDF, DOC, DOCX, PPT, PPTX, or images.`);
           continue;
         }
 
         // Check file size (max 10MB)
         if (file.size > 10 * 1024 * 1024) {
-          setUploadError(`File "${file.name}" terlalu besar. Maksimal 10MB.`);
+          setUploadError(`File "${file.name}" is too large. Maximum 10MB.`);
           continue;
         }
 
@@ -287,7 +287,7 @@ export const TestManager: React.FC = () => {
       }
     } catch (err) {
       console.error('Upload error:', err);
-      setUploadError('Gagal mengupload file. Silakan coba lagi.');
+      setUploadError('Failed to upload file. Please try again.');
     } finally {
       setIsUploading(false);
       // Reset input
@@ -337,7 +337,7 @@ export const TestManager: React.FC = () => {
   // Handle multi-class test creation
   const handleCreateMultiClassTests = async () => {
     if (multiClassDates.length === 0 || multiClassEntries.length === 0 || !testTitle || !selectedSchool || !testClassType) {
-      alert('Harap lengkapi semua field yang diperlukan.');
+      alert('Please complete all required fields.');
       return;
     }
 
@@ -370,13 +370,13 @@ export const TestManager: React.FC = () => {
         }
       }
 
-      alert(`Berhasil membuat ${multiClassDates.length * multiClassEntries.length} jadwal test!`);
+      alert(`Successfully created ${multiClassDates.length * multiClassEntries.length} test schedules!`);
       setShowMultiClassModal(false);
       resetMultiClassForm();
       refetch();
     } catch (err) {
       console.error('Error creating tests:', err);
-      alert('Gagal membuat jadwal test. Silakan coba lagi.');
+      alert('Failed to create test schedule. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -384,15 +384,15 @@ export const TestManager: React.FC = () => {
 
   // Handle delete test
   const handleDeleteTest = async (testId: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus jadwal test ini?')) return;
+    if (!confirm('Are you sure you want to delete this test schedule?')) return;
 
     try {
       await deleteTest(testId);
       setSelectedTest(null);
-      alert('Jadwal test berhasil dihapus.');
+      alert('Test schedule deleted successfully.');
     } catch (err) {
       console.error('Error deleting test:', err);
-      alert('Gagal menghapus jadwal test.');
+      alert('Failed to delete test schedule.');
     }
   };
 
@@ -418,14 +418,14 @@ export const TestManager: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <ClipboardList className="w-5 h-5 text-purple-600" /> Jadwal Test
+              <ClipboardList className="w-5 h-5 text-purple-600" /> Test Schedule
             </h2>
-            <p className="text-xs text-gray-500">Kelola jadwal Quiz, UTS, dan UAS.</p>
+            <p className="text-xs text-gray-500">Manage Quiz, Mid-term, and Final exam schedules.</p>
           </div>
         </div>
 
         <Card className="!p-4">
-          <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Pilih Sekolah</h3>
+          <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Select School</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {schools.map(school => (
               <button
@@ -449,7 +449,7 @@ export const TestManager: React.FC = () => {
             ))}
             {schools.length === 0 && (
               <p className="text-sm text-gray-400 italic col-span-full text-center py-8">
-                Tidak ada sekolah yang tersedia.
+                No schools available.
               </p>
             )}
           </div>
@@ -465,20 +465,20 @@ export const TestManager: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button variant="outline" onClick={navigateBack} className="text-xs py-1.5 px-3">
-              Kembali
+              Back
             </Button>
             <div>
               <h2 className="text-lg font-bold text-gray-900">{selectedSchool}</h2>
-              <p className="text-xs text-gray-500">Pilih kelas atau buat jadwal test untuk beberapa kelas.</p>
+              <p className="text-xs text-gray-500">Select class or create test schedule.</p>
             </div>
           </div>
           <Button onClick={() => setShowMultiClassModal(true)} className="text-xs py-1.5 px-3">
-            + Buat Jadwal Test
+            + Create Test Schedule
           </Button>
         </div>
 
         <Card className="!p-4">
-          <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Pilih Kelas</h3>
+          <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Select Class</h3>
           <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
             {availableClasses.map(cls => (
               <button
@@ -498,7 +498,7 @@ export const TestManager: React.FC = () => {
           <div className="fixed inset-0 z-[100] overflow-y-auto bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-purple-50 to-white">
-                <h3 className="text-lg font-bold text-gray-900">Buat Jadwal Test</h3>
+                <h3 className="text-lg font-bold text-gray-900">Create Test Schedule</h3>
                 <button onClick={() => { setShowMultiClassModal(false); resetMultiClassForm(); }} className="p-2 hover:bg-gray-100 rounded-full">
                   <X className="w-4 h-4" />
                 </button>
@@ -508,7 +508,7 @@ export const TestManager: React.FC = () => {
                 {/* Academic Year & Semester */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Tahun Ajaran</label>
+                    <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Academic Year</label>
                     <select
                       value={selectedAcademicYear}
                       onChange={(e) => setSelectedAcademicYear(e.target.value)}
@@ -526,15 +526,15 @@ export const TestManager: React.FC = () => {
                       onChange={(e) => setSelectedSemester(e.target.value as '1' | '2')}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                     >
-                      <option value="1">Semester 1 (Ganjil)</option>
-                      <option value="2">Semester 2 (Genap)</option>
+                      <option value="1">Semester 1 (Odd)</option>
+                      <option value="2">Semester 2 (Even)</option>
                     </select>
                   </div>
                 </div>
 
                 {/* Test Type */}
                 <div>
-                  <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Jenis Test</label>
+                  <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Test Type</label>
                   <div className="flex gap-2">
                     {(['QUIZ', 'MID_SEMESTER', 'FINAL_SEMESTER'] as TestType[]).map(type => (
                       <button
@@ -555,7 +555,7 @@ export const TestManager: React.FC = () => {
                 {/* Title & Description */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Judul Test *</label>
+                    <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Test Title *</label>
                     <input
                       type="text"
                       value={testTitle}
@@ -565,7 +565,7 @@ export const TestManager: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Durasi (menit)</label>
+                    <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Duration (minutes)</label>
                     <input
                       type="number"
                       value={testDuration}
@@ -580,7 +580,7 @@ export const TestManager: React.FC = () => {
                 {/* Class Type Selection */}
                 <div>
                   <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">
-                    Jenis Kelas <span className="text-red-500">*</span>
+                    Class Type <span className="text-red-500">*</span>
                   </label>
                   {hasOnlyOneClassType ? (
                     <div className="px-3 py-1.5 bg-gray-100 rounded-lg text-xs text-gray-700 font-medium">
@@ -619,20 +619,20 @@ export const TestManager: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Deskripsi (opsional)</label>
+                  <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Description (optional)</label>
                   <textarea
                     value={testDescription}
                     onChange={(e) => setTestDescription(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
                     rows={2}
-                    placeholder="Materi yang diujikan..."
+                    placeholder="Topics to be tested..."
                   />
                 </div>
 
                 {/* File Upload Section */}
                 <div className="space-y-2">
                   <label className="text-[9px] font-black text-gray-400 uppercase">
-                    Upload Materi (PDF, DOC, PPT, Gambar)
+                    Upload Materials (PDF, DOC, PPT, Images)
                   </label>
 
                   {/* Upload Zone */}
@@ -647,16 +647,16 @@ export const TestManager: React.FC = () => {
                     {isUploading ? (
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="w-5 h-5 text-purple-500 animate-spin" />
-                        <span className="text-xs text-gray-500">Mengupload...</span>
+                        <span className="text-xs text-gray-500">Uploading...</span>
                       </div>
                     ) : (
                       <>
                         <Upload className="w-6 h-6 text-gray-300 mx-auto mb-2" />
                         <p className="text-[10px] text-gray-400">
-                          Klik untuk pilih file atau drag & drop
+                          Click to select file or drag & drop
                         </p>
                         <p className="text-[9px] text-gray-300 mt-1">
-                          Maks. 10MB per file
+                          Max. 10MB per file
                         </p>
                       </>
                     )}
@@ -704,7 +704,7 @@ export const TestManager: React.FC = () => {
 
                 {/* Dates */}
                 <div>
-                  <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Tanggal Test *</label>
+                  <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Test Date *</label>
                   <div className="flex gap-2 mb-2">
                     <input
                       type="date"
@@ -733,7 +733,7 @@ export const TestManager: React.FC = () => {
 
                 {/* Classes */}
                 <div>
-                  <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Pilih Kelas *</label>
+                  <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Select Class *</label>
                   <div className="grid grid-cols-4 md:grid-cols-6 gap-1 mb-2 max-h-32 overflow-y-auto p-2 bg-gray-50 rounded-lg border">
                     {availableClasses.map(cls => {
                       const isSelected = multiClassEntries.some(e => e.classId === cls);
@@ -756,7 +756,7 @@ export const TestManager: React.FC = () => {
                   {/* Class time entries */}
                   {multiClassEntries.length > 0 && (
                     <div className="space-y-2 mt-3">
-                      <p className="text-[9px] font-black text-gray-400 uppercase">Waktu per Kelas</p>
+                      <p className="text-[9px] font-black text-gray-400 uppercase">Time per Class</p>
                       {multiClassEntries.map(entry => (
                         <div key={entry.classId} className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg">
                           <span className="text-xs font-bold text-gray-700 w-12">{entry.classId}</span>
@@ -785,13 +785,13 @@ export const TestManager: React.FC = () => {
 
               <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2 bg-gray-50">
                 <Button variant="outline" onClick={() => { setShowMultiClassModal(false); resetMultiClassForm(); }}>
-                  Batal
+                  Cancel
                 </Button>
                 <Button
                   onClick={handleCreateMultiClassTests}
                   disabled={isSubmitting || multiClassDates.length === 0 || multiClassEntries.length === 0 || !testTitle || !testClassType}
                 >
-                  {isSubmitting ? 'Menyimpan...' : `Buat ${multiClassDates.length * multiClassEntries.length} Jadwal`}
+                  {isSubmitting ? 'Saving...' : `Create ${multiClassDates.length * multiClassEntries.length} Schedules`}
                 </Button>
               </div>
             </div>
@@ -807,10 +807,10 @@ export const TestManager: React.FC = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="outline" onClick={navigateBack} className="text-xs py-1.5 px-3">
-            Ganti Kelas
+            Change Class
           </Button>
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Jadwal Test</h2>
+            <h2 className="text-lg font-bold text-gray-900">Test Schedule</h2>
             <p className="text-xs text-gray-500">{selectedSchool} - {selectedClass}</p>
           </div>
         </div>
@@ -825,7 +825,7 @@ export const TestManager: React.FC = () => {
               activeTab === 'upcoming' ? 'bg-purple-600 text-white' : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
-            Mendatang ({upcomingTests.length})
+            Upcoming ({upcomingTests.length})
           </button>
           <button
             onClick={() => setActiveTab('history')}
@@ -833,7 +833,7 @@ export const TestManager: React.FC = () => {
               activeTab === 'history' ? 'bg-purple-600 text-white' : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
-            Riwayat ({pastTests.length})
+            History ({pastTests.length})
           </button>
         </div>
       </div>
@@ -848,7 +848,7 @@ export const TestManager: React.FC = () => {
           <div className="py-12 text-center">
             <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-sm text-gray-500">
-              {activeTab === 'upcoming' ? 'Tidak ada jadwal test mendatang.' : 'Tidak ada riwayat test.'}
+              {activeTab === 'upcoming' ? 'No upcoming tests.' : 'No test history.'}
             </p>
           </div>
         ) : (
@@ -877,7 +877,7 @@ export const TestManager: React.FC = () => {
                           {TEST_TYPE_LABELS[test.test_type]}
                         </span>
                         <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                          <Clock className="w-3 h-3" /> {test.duration_minutes} menit
+                          <Clock className="w-3 h-3" /> {test.duration_minutes} minutes
                         </span>
                       </div>
                       {test.description && (
@@ -908,7 +908,7 @@ export const TestManager: React.FC = () => {
         <div className="fixed inset-0 z-[100] overflow-y-auto bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">Detail Test</h3>
+              <h3 className="text-lg font-bold text-gray-900">Test Details</h3>
               <button onClick={() => setSelectedTest(null)} className="p-2 hover:bg-gray-100 rounded-full">
                 <X className="w-4 h-4" />
               </button>
@@ -935,30 +935,30 @@ export const TestManager: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase">Tanggal</p>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase">Date</p>
                   <p className="text-sm font-bold text-gray-900">
                     {new Date(selectedTest.date_time).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>
                 </div>
                 <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase">Waktu</p>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase">Time</p>
                   <p className="text-sm font-bold text-gray-900">
                     {new Date(selectedTest.date_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
                 <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase">Durasi</p>
-                  <p className="text-sm font-bold text-gray-900">{selectedTest.duration_minutes} menit</p>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase">Duration</p>
+                  <p className="text-sm font-bold text-gray-900">{selectedTest.duration_minutes} minutes</p>
                 </div>
                 <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase">Periode</p>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase">Period</p>
                   <p className="text-sm font-bold text-gray-900">TA {selectedTest.academic_year} / Sem {selectedTest.semester}</p>
                 </div>
               </div>
 
               {selectedTest.description && (
                 <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase mb-1">Deskripsi</p>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase mb-1">Description</p>
                   <p className="text-sm text-gray-700">{selectedTest.description}</p>
                 </div>
               )}
@@ -966,7 +966,7 @@ export const TestManager: React.FC = () => {
               {/* Materials Section */}
               {selectedTest.materials && selectedTest.materials.length > 0 && (
                 <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase mb-2">Materi ({selectedTest.materials.length} file)</p>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase mb-2">Materials ({selectedTest.materials.length} file)</p>
                   <div className="space-y-1.5">
                     {selectedTest.materials.map((file, idx) => {
                       const fileName = file.split('/').pop() || file;
@@ -1005,10 +1005,10 @@ export const TestManager: React.FC = () => {
                 onClick={() => handleDeleteTest(selectedTest.id)}
                 className="text-red-600 border-red-200 hover:bg-red-50"
               >
-                <Trash2 className="w-4 h-4 mr-1" /> Hapus
+                <Trash2 className="w-4 h-4 mr-1" /> Delete
               </Button>
               <Button onClick={() => setSelectedTest(null)}>
-                Tutup
+                Close
               </Button>
             </div>
           </div>

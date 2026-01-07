@@ -2,12 +2,14 @@
 import React, { useState } from 'react';
 import { User, SkillCategory, DifficultyLevel, ClassSession } from '../../types';
 import { Card } from '../Card';
+import { Button } from '../Button';
 import { LEVEL_COLORS } from '../../constants';
 import { useTodaySessions, useUpcomingSessions, useSessions } from '../../hooks/useSessions';
 import { useModuleProgress, useModules } from '../../hooks/useModules';
 import { useLocations } from '../../hooks/useProfiles';
-import { Calendar, Clock, MapPin, Headphones, BookOpen, PenTool, Mic, AlignLeft, Book, Info, ChevronDown, ChevronUp, History, MonitorPlay, School, Loader2 } from 'lucide-react';
+import { Calendar, Clock, MapPin, Headphones, BookOpen, PenTool, Mic, AlignLeft, Book, Info, ChevronDown, ChevronUp, History, MonitorPlay, School, Loader2, Phone, Edit2, Check, X } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Icon Mapper for Skills
 export const SKILL_ICONS: Record<SkillCategory, React.ElementType> = {
@@ -21,6 +23,7 @@ export const SKILL_ICONS: Record<SkillCategory, React.ElementType> = {
 
 export const StudentView: React.FC<{ student: User }> = ({ student }) => {
   const { t } = useLanguage();
+  const { updateProfile } = useAuth();
   const { sessions: todaySessionsData, loading: todayLoading } = useTodaySessions();
   const { sessions: upcomingSessionsData, loading: upcomingLoading } = useUpcomingSessions();
   const { sessions: allSessionsData, loading: sessionsLoading } = useSessions({ past: true });
@@ -28,10 +31,55 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
   const { modules: modulesData, loading: modulesLoading } = useModules();
   const { locations, loading: locationsLoading } = useLocations();
 
-  // Get school name from assignedLocationId
-  const schoolName = student.assignedLocationId
+  // WhatsApp editing state
+  const [isEditingWhatsApp, setIsEditingWhatsApp] = useState(false);
+  const [whatsAppNumber, setWhatsAppNumber] = useState(student.phone || '');
+  const [isSavingWhatsApp, setIsSavingWhatsApp] = useState(false);
+
+  const handleSaveWhatsApp = async () => {
+    setIsSavingWhatsApp(true);
+    try {
+      const { error } = await updateProfile({ phone: whatsAppNumber || null });
+      if (error) {
+        alert('Failed to save WhatsApp number. Please try again.');
+      } else {
+        setIsEditingWhatsApp(false);
+      }
+    } catch (err) {
+      console.error('Error saving WhatsApp:', err);
+      alert('Failed to save WhatsApp number. Please try again.');
+    } finally {
+      setIsSavingWhatsApp(false);
+    }
+  };
+
+  const handleCancelWhatsApp = () => {
+    setWhatsAppNumber(student.phone || '');
+    setIsEditingWhatsApp(false);
+  };
+
+  // DEBUG: Log student data and locations
+  console.log('StudentView DEBUG:', {
+    studentId: student.id,
+    assignedLocationId: student.assignedLocationId,
+    schoolOrigin: student.schoolOrigin,
+    locationsCount: locations.length,
+    locationsLoading,
+  });
+
+  // Get school name from assignedLocationId (with fallback to schoolOrigin)
+  const locationName = student.assignedLocationId
     ? locations.find(loc => loc.id === student.assignedLocationId)?.name
-    : student.schoolOrigin || null;
+    : null;
+
+  // Use locationName if found, otherwise fallback to schoolOrigin
+  const schoolName = locationName || student.schoolOrigin || null;
+
+  // DEBUG: Log school name result
+  console.log('StudentView schoolName:', { locationName, schoolOrigin: student.schoolOrigin, final: schoolName });
+
+  // Extract base school name for filtering (e.g., "SD ABDI SISWA ARIES" from "SD ABDI SISWA ARIES - 1 BILINGUAL")
+  const baseSchoolName = schoolName?.split(' - ')[0] || student.schoolOrigin?.split(' - ')[0] || null;
 
   const now = new Date();
   const [isSkillsExpanded, setIsSkillsExpanded] = useState(false);
@@ -49,16 +97,24 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
     materials: s.materials || [],
   });
 
-  // Class Logic
-  const todaySession = todaySessionsData.map(mapSession)[0];
+  // Filter sessions to only show those matching student's school
+  const filterByStudentSchool = (sessions: ClassSession[]): ClassSession[] => {
+    if (!baseSchoolName) return sessions;
+    return sessions.filter(s =>
+      s.location?.toLowerCase().includes(baseSchoolName.toLowerCase())
+    );
+  };
 
-  const upcomingSession = upcomingSessionsData
-    .map(mapSession)
+  // Class Logic - filter by student's school
+  const todaySession = filterByStudentSchool(todaySessionsData.map(mapSession))[0];
+
+  const upcomingSession = filterByStudentSchool(upcomingSessionsData
+    .map(mapSession))
     .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime())[0];
 
-  // Recent Offline Activity (Last class attended)
-  const lastOfflineSession = allSessionsData
-    .map(mapSession)
+  // Recent Offline Activity (Last class attended) - filter by student's school
+  const lastOfflineSession = filterByStudentSchool(allSessionsData
+    .map(mapSession))
     .filter(s => new Date(s.dateTime) < now)
     .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime())[0];
 
@@ -114,11 +170,69 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
             <School className="w-5 h-5 text-blue-600" />
           </div>
           <div>
-            <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest">Sekolah</p>
+            <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest">School</p>
             <h3 className="text-sm font-bold text-gray-900">{schoolName}</h3>
           </div>
         </div>
       )}
+
+      {/* WHATSAPP NUMBER SECTION */}
+      <Card className="!p-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-50 rounded-lg">
+              <Phone className="w-5 h-5 text-green-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">WhatsApp Number</p>
+              {isEditingWhatsApp ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="tel"
+                    value={whatsAppNumber}
+                    onChange={(e) => setWhatsAppNumber(e.target.value)}
+                    placeholder="e.g. 08123456789"
+                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleSaveWhatsApp}
+                    disabled={isSavingWhatsApp}
+                    className="p-1.5 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50"
+                  >
+                    {isSavingWhatsApp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  </button>
+                  <button
+                    onClick={handleCancelWhatsApp}
+                    disabled={isSavingWhatsApp}
+                    className="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-900">
+                    {student.phone || <span className="text-gray-400 italic">Not set</span>}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+          {!isEditingWhatsApp && (
+            <button
+              onClick={() => setIsEditingWhatsApp(true)}
+              className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+              title="Edit WhatsApp Number"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <p className="text-[10px] text-gray-400 mt-2 ml-11">
+          Optional - Used for important notifications from school
+        </p>
+      </Card>
 
       {/* SECTION 1: TODAY'S CLASSES */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

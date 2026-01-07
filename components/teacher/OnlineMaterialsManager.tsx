@@ -152,10 +152,10 @@ export const OnlineMaterialsManager: React.FC = () => {
       <div className="max-w-2xl mx-auto space-y-4">
         <div className="flex items-center gap-3">
           <Button variant="outline" onClick={() => setIsEditing(false)} className="text-xs py-1 px-2">
-            Kembali
+            Back
           </Button>
           <h2 className="text-lg font-bold text-gray-900">
-            {currentModule.id ? 'Edit Modul' : 'Buat Modul'}
+            {currentModule.id ? 'Edit Module' : 'Create Module'}
           </h2>
         </div>
 
@@ -185,7 +185,7 @@ export const OnlineMaterialsManager: React.FC = () => {
              {/* Header Info - SIDE BY SIDE CATEGORY & LEVEL */}
              <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded-lg border border-gray-100">
                 <div className="space-y-1">
-                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Kategori Skill</label>
+                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Skill Category</label>
                    <select
                      className="w-full border border-gray-300 rounded px-2 py-1.5 bg-white text-xs"
                      value={currentModule.skillCategory || SkillCategory.GRAMMAR}
@@ -197,7 +197,7 @@ export const OnlineMaterialsManager: React.FC = () => {
                    </select>
                 </div>
                 <div className="space-y-1">
-                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Level Utama</label>
+                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Main Level</label>
                    <select
                      className="w-full border border-gray-300 rounded px-2 py-1.5 bg-white text-xs"
                      value={currentModule.difficultyLevel || DifficultyLevel.INTERMEDIATE}
@@ -212,7 +212,7 @@ export const OnlineMaterialsManager: React.FC = () => {
 
              {/* Title & Description */}
              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Judul Modul</label>
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Module Title</label>
                 <input
                   type="text"
                   className="w-full border rounded px-2 py-1.5 text-xs"
@@ -223,18 +223,18 @@ export const OnlineMaterialsManager: React.FC = () => {
              </div>
 
              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Deskripsi</label>
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Description</label>
                 <textarea
                   rows={3}
                   className="w-full border rounded px-2 py-1.5 text-xs"
                   value={currentModule.description || ''}
                   onChange={e => setCurrentModule({...currentModule, description: e.target.value})}
-                  placeholder="Deskripsi singkat tentang modul ini..."
+                  placeholder="Brief description about this module..."
                 />
              </div>
 
              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">URL Video</label>
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Video URL</label>
                 <input
                   type="text"
                   className="w-full border rounded px-2 py-1.5 text-xs"
@@ -253,7 +253,7 @@ export const OnlineMaterialsManager: React.FC = () => {
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1">
                     <Paperclip className="w-3 h-3 text-blue-500" />
-                    Materi Pembelajaran
+                    Learning Materials
                   </label>
                   <div className="border border-dashed border-gray-300 rounded-lg p-3 bg-gray-50 text-center">
                     <input
@@ -282,7 +282,7 @@ export const OnlineMaterialsManager: React.FC = () => {
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1">
                     <Layers className="w-3 h-3 text-purple-600" />
-                    File Ujian
+                    Exam Files
                   </label>
                   <div className="border border-gray-200 rounded-lg p-2 bg-gray-50">
 
@@ -315,7 +315,7 @@ export const OnlineMaterialsManager: React.FC = () => {
                     </div>
 
                     <div className="space-y-1 pt-2 border-t border-gray-200">
-                      {currentModule.exams?.length === 0 && <p className="text-[10px] text-gray-400 text-center italic">Belum ada file ujian.</p>}
+                      {currentModule.exams?.length === 0 && <p className="text-[10px] text-gray-400 text-center italic">No exam files yet.</p>}
                       {currentModule.exams?.map((ex, idx) => (
                          <div key={idx} className="flex items-center justify-between bg-white px-2 py-1 rounded border border-gray-200">
                             <div className="flex items-center gap-1.5 overflow-hidden">
@@ -324,7 +324,7 @@ export const OnlineMaterialsManager: React.FC = () => {
                                </span>
                                <span className="text-[10px] text-gray-700 truncate">{ex.fileName}</span>
                             </div>
-                            <button onClick={() => handleRemoveExam(ex.fileName)} className="text-red-400 hover:text-red-600 ml-1" title="Hapus">
+                            <button onClick={() => handleRemoveExam(ex.fileName)} className="text-red-400 hover:text-red-600 ml-1" title="Delete">
                                <Trash2 className="w-2.5 h-2.5" />
                             </button>
                          </div>
@@ -335,7 +335,7 @@ export const OnlineMaterialsManager: React.FC = () => {
              </div>
 
              <div className="flex justify-end pt-3">
-               <Button onClick={handleSave} className="text-xs py-1.5 px-4">Simpan Modul</Button>
+               <Button onClick={handleSave} className="text-xs py-1.5 px-4">Save Module</Button>
              </div>
           </div>
         </Card>
@@ -350,10 +350,10 @@ export const OnlineMaterialsManager: React.FC = () => {
            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
              <Video className="w-5 h-5 text-teal-600" /> Afternoon Classes
            </h2>
-           <p className="text-xs text-gray-500">Kelola materi pembelajaran, video, dan ujian.</p>
+           <p className="text-xs text-gray-500">Manage learning materials, videos, and exams.</p>
         </div>
         <Button onClick={handleAddNew} className="text-xs py-1.5 px-3">
-          + Buat Modul
+          + Create Module
         </Button>
       </div>
 
@@ -366,7 +366,7 @@ export const OnlineMaterialsManager: React.FC = () => {
                value={levelFilter}
                onChange={(e) => setLevelFilter(e.target.value === 'all' ? 'all' : e.target.value as DifficultyLevel)}
              >
-               <option value="all">Semua Level</option>
+               <option value="all">All Levels</option>
                {Object.values(DifficultyLevel).map(l => <option key={l} value={l}>{l}</option>)}
              </select>
          </div>
@@ -378,7 +378,7 @@ export const OnlineMaterialsManager: React.FC = () => {
            value={categoryFilter}
            onChange={(e) => setCategoryFilter(e.target.value)}
          >
-           <option value="all">Semua Kategori</option>
+           <option value="all">All Categories</option>
            {Object.values(SkillCategory).map(cat => (
              <option key={cat} value={cat}>{cat}</option>
            ))}
@@ -390,7 +390,7 @@ export const OnlineMaterialsManager: React.FC = () => {
             <Search className="w-3.5 h-3.5 text-gray-400" />
             <input
               type="text"
-              placeholder="Cari judul..."
+              placeholder="Search title..."
               className="text-xs border-none bg-transparent focus:ring-0 text-gray-700 w-full"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -437,12 +437,12 @@ export const OnlineMaterialsManager: React.FC = () => {
 
                     <div className="flex items-center gap-1 text-[10px] text-gray-500">
                       <FileText className="w-3 h-3" />
-                      <span>{module.materials.length} Materi</span>
+                      <span>{module.materials.length} Materials</span>
                     </div>
 
                     <div className="flex items-center gap-1 text-[10px] text-gray-500">
                       <Layers className="w-3 h-3" />
-                      <span>{module.exams.length} Ujian</span>
+                      <span>{module.exams.length} Exams</span>
                     </div>
                  </div>
                </div>
@@ -458,7 +458,7 @@ export const OnlineMaterialsManager: React.FC = () => {
         ))}
 
         {filteredModules.length === 0 && (
-          <div className="text-center py-8 text-gray-400 italic text-xs">Tidak ada modul yang cocok.</div>
+          <div className="text-center py-8 text-gray-400 italic text-xs">No matching modules.</div>
         )}
       </div>
     </div>

@@ -40,7 +40,7 @@ export const TeacherAttendance: React.FC = () => {
   // Get current location
   const getCurrentLocation = () => {
     if (!navigator.geolocation) {
-      setLocationError('Geolocation tidak didukung browser ini');
+      setLocationError('Geolocation is not supported by this browser');
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -52,7 +52,7 @@ export const TeacherAttendance: React.FC = () => {
         setLocationError(null);
       },
       (error) => {
-        setLocationError('Gagal mendapatkan lokasi. Pastikan GPS aktif.');
+        setLocationError('Failed to get location. Make sure GPS is active.');
         console.error('Geolocation error:', error);
       }
     );
@@ -79,7 +79,7 @@ export const TeacherAttendance: React.FC = () => {
       setSelectedLocation('');
     } catch (err) {
       console.error('Check-in error:', err);
-      alert('Gagal check-in. Silakan coba lagi.');
+      alert('Check-in failed. Please try again.');
     } finally {
       setIsCheckingIn(false);
     }
@@ -92,7 +92,7 @@ export const TeacherAttendance: React.FC = () => {
       await checkOut(todayAttendance.id);
     } catch (err) {
       console.error('Check-out error:', err);
-      alert('Gagal check-out. Silakan coba lagi.');
+      alert('Check-out failed. Please try again.');
     } finally {
       setIsCheckingIn(false);
     }
@@ -132,9 +132,9 @@ export const TeacherAttendance: React.FC = () => {
       {/* Header */}
       <div>
         <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-          <Clock className="w-5 h-5 text-orange-600" /> Absensi
+          <Clock className="w-5 h-5 text-orange-600" /> Attendance
         </h2>
-        <p className="text-xs text-gray-500">Kelola kehadiran dan lihat riwayat absensi Anda.</p>
+        <p className="text-xs text-gray-500">Manage attendance and view your attendance history.</p>
       </div>
 
       {/* Today's Attendance Card */}
@@ -145,7 +145,7 @@ export const TeacherAttendance: React.FC = () => {
               {todayAttendance && !todayAttendance.check_out_time ? <LogOut className="w-6 h-6" /> : <LogIn className="w-6 h-6" />}
             </div>
             <div>
-              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Absensi Hari Ini</div>
+              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Today's Attendance</div>
               <div className="text-sm font-bold text-gray-900 mt-1">
                 {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
               </div>
@@ -166,14 +166,14 @@ export const TeacherAttendance: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="text-xs text-gray-500 mt-1">Anda belum check-in hari ini</div>
+                <div className="text-xs text-gray-500 mt-1">You haven't checked in today</div>
               )}
             </div>
           </div>
           <div className="flex flex-col items-end gap-2">
             {currentPosition && (
               <div className="text-[9px] text-green-600 bg-green-50 px-2 py-1 rounded-full flex items-center gap-1">
-                <Navigation className="w-3 h-3" /> GPS Aktif
+                <Navigation className="w-3 h-3" /> GPS Active
               </div>
             )}
             {!todayAttendance ? (
@@ -182,7 +182,7 @@ export const TeacherAttendance: React.FC = () => {
                 disabled={isCheckingIn}
                 className="text-xs py-2 px-6"
               >
-                {isCheckingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Check-in Sekarang'}
+                {isCheckingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Check-in Now'}
               </Button>
             ) : !todayAttendance.check_out_time ? (
               <Button
@@ -191,11 +191,11 @@ export const TeacherAttendance: React.FC = () => {
                 variant="outline"
                 className="text-xs py-2 px-6 border-green-300 text-green-700 hover:bg-green-50"
               >
-                {isCheckingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Check-out Sekarang'}
+                {isCheckingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Check-out Now'}
               </Button>
             ) : (
               <span className="text-xs font-bold text-green-600 bg-green-100 px-4 py-2 rounded-full flex items-center gap-1">
-                <CheckCircle className="w-4 h-4" /> Absensi Selesai
+                <CheckCircle className="w-4 h-4" /> Attendance Complete
               </span>
             )}
           </div>
@@ -206,7 +206,7 @@ export const TeacherAttendance: React.FC = () => {
       <Card className="!p-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-blue-600" /> Statistik Bulanan
+            <Calendar className="w-4 h-4 text-blue-600" /> Monthly Statistics
           </h3>
           <div className="flex items-center gap-2">
             <button onClick={prevMonth} className="p-1 hover:bg-gray-100 rounded">
@@ -226,19 +226,19 @@ export const TeacherAttendance: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-center">
               <div className="text-2xl font-bold text-blue-600">{stats.totalDays}</div>
-              <div className="text-[9px] font-black text-blue-400 uppercase">Total Hari</div>
+              <div className="text-[9px] font-black text-blue-400 uppercase">Total Days</div>
             </div>
             <div className="bg-green-50 p-3 rounded-lg border border-green-100 text-center">
               <div className="text-2xl font-bold text-green-600">{stats.present}</div>
-              <div className="text-[9px] font-black text-green-400 uppercase">Hadir</div>
+              <div className="text-[9px] font-black text-green-400 uppercase">Present</div>
             </div>
             <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 text-center">
               <div className="text-2xl font-bold text-yellow-600">{stats.late}</div>
-              <div className="text-[9px] font-black text-yellow-400 uppercase">Terlambat</div>
+              <div className="text-[9px] font-black text-yellow-400 uppercase">Late</div>
             </div>
             <div className="bg-red-50 p-3 rounded-lg border border-red-100 text-center">
               <div className="text-2xl font-bold text-red-600">{stats.earlyLeave}</div>
-              <div className="text-[9px] font-black text-red-400 uppercase">Pulang Awal</div>
+              <div className="text-[9px] font-black text-red-400 uppercase">Early Leave</div>
             </div>
           </div>
         )}
@@ -248,13 +248,13 @@ export const TeacherAttendance: React.FC = () => {
       <Card className="!p-0 overflow-hidden">
         <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
           <h3 className="text-xs font-black text-gray-700 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-gray-600" /> Riwayat Absensi
+            <Clock className="w-4 h-4 text-gray-600" /> Attendance History
           </h3>
         </div>
         <div className="divide-y divide-gray-100">
           {attendance.length === 0 ? (
             <div className="p-8 text-center text-gray-400 text-xs">
-              Belum ada riwayat absensi.
+              No attendance history yet.
             </div>
           ) : (
             attendance.slice(0, 20).map((record) => (
@@ -297,8 +297,8 @@ export const TeacherAttendance: React.FC = () => {
                       record.status === 'LATE' ? 'bg-yellow-100 text-yellow-700' :
                       'bg-red-100 text-red-700'
                     }`}>
-                      {record.status === 'PRESENT' ? 'Hadir' :
-                       record.status === 'LATE' ? 'Terlambat' : 'Pulang Awal'}
+                      {record.status === 'PRESENT' ? 'Present' :
+                       record.status === 'LATE' ? 'Late' : 'Early Leave'}
                     </span>
                   </div>
                 </div>
@@ -323,13 +323,13 @@ export const TeacherAttendance: React.FC = () => {
 
             <div className="space-y-3">
               <div>
-                <label className="text-[9px] font-black text-gray-400 uppercase">Pilih Lokasi Sekolah</label>
+                <label className="text-[9px] font-black text-gray-400 uppercase">Select School Location</label>
                 <select
                   value={selectedLocation}
                   onChange={(e) => setSelectedLocation(e.target.value)}
                   className="w-full border rounded-lg px-3 py-2 text-xs bg-white mt-1"
                 >
-                  <option value="">Pilih lokasi...</option>
+                  <option value="">Select location...</option>
                   {locationsData.map((loc) => (
                     <option key={loc.id} value={loc.id}>{loc.name}</option>
                   ))}
@@ -339,10 +339,10 @@ export const TeacherAttendance: React.FC = () => {
               {currentPosition ? (
                 <div className="bg-green-50 p-3 rounded-lg border border-green-100">
                   <p className="text-[10px] text-green-700 flex items-center gap-1 font-medium">
-                    <Navigation className="w-3 h-3" /> GPS Aktif
+                    <Navigation className="w-3 h-3" /> GPS Active
                   </p>
                   <p className="text-[9px] text-green-600 mt-1">
-                    Koordinat: {currentPosition.lat.toFixed(6)}, {currentPosition.lng.toFixed(6)}
+                    Coordinates: {currentPosition.lat.toFixed(6)}, {currentPosition.lng.toFixed(6)}
                   </p>
                 </div>
               ) : locationError ? (
@@ -352,13 +352,13 @@ export const TeacherAttendance: React.FC = () => {
                     onClick={getCurrentLocation}
                     className="text-[10px] text-yellow-600 font-bold mt-1 hover:underline"
                   >
-                    Coba lagi
+                    Try again
                   </button>
                 </div>
               ) : (
                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
                   <p className="text-[10px] text-gray-500 flex items-center gap-1">
-                    <Loader2 className="w-3 h-3 animate-spin" /> Mendapatkan lokasi...
+                    <Loader2 className="w-3 h-3 animate-spin" /> Getting location...
                   </p>
                 </div>
               )}
@@ -369,14 +369,14 @@ export const TeacherAttendance: React.FC = () => {
                 onClick={() => setShowCheckInModal(false)}
                 className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
               >
-                Batal
+                Cancel
               </button>
               <Button
                 onClick={handleCheckIn}
                 disabled={!selectedLocation || isCheckingIn}
                 className="flex-1 text-xs py-2"
               >
-                {isCheckingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Konfirmasi Check-in'}
+                {isCheckingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Check-in'}
               </Button>
             </div>
           </Card>

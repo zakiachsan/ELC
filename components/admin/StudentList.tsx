@@ -1,8 +1,8 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../Card';
-import { useStudents, useLocations } from '../../hooks/useProfiles';
+import { useStudents, useStudentsPaginated, useLocations } from '../../hooks/useProfiles';
 import { useSessions } from '../../hooks/useSessions';
 import { useReports } from '../../hooks/useReports';
 import type { Database } from '../../lib/database.types';
@@ -11,7 +11,8 @@ import {
   List as ListIcon, Eye,
   User as UserIcon, School,
   BarChart3, Users, GraduationCap,
-  Trophy, Calendar
+  Trophy, Calendar,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
 } from 'lucide-react';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -26,14 +27,58 @@ const LEVEL_OPTIONS: { value: DifficultyLevel | ''; label: string }[] = [
   { value: 'Advanced', label: 'Advanced' },
 ];
 
+const PAGE_SIZE = 20;
+
 export const StudentList: React.FC = () => {
   const navigate = useNavigate();
 
-  // Data Hooks
-  const { profiles: students, loading: studentsLoading } = useStudents();
+  // UI State
+  const [activeSubTab, setActiveSubTab] = useState<'directory' | 'statistics'>('directory');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [schoolFilter, setSchoolFilter] = useState('');
+  const [levelFilter, setLevelFilter] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setCurrentPage(1); // Reset to page 1 when search changes
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [schoolFilter]);
+
+  // Data Hooks - Statistics tab uses all students
+  const { profiles: allStudents, loading: allStudentsLoading } = useStudents();
   const { sessions, loading: sessionsLoading } = useSessions();
   const { reports, loading: reportsLoading } = useReports();
   const { locations, loading: locationsLoading } = useLocations();
+
+  // Find location ID from school filter
+  const selectedLocationId = useMemo(() => {
+    if (!schoolFilter) return undefined;
+    const location = locations.find(loc => loc.name === schoolFilter);
+    return location?.id;
+  }, [schoolFilter, locations]);
+
+  // Data Hook - Directory tab uses paginated students
+  const {
+    students: paginatedStudents,
+    totalCount,
+    totalPages,
+    loading: paginatedLoading
+  } = useStudentsPaginated({
+    page: currentPage,
+    pageSize: PAGE_SIZE,
+    search: debouncedSearch || undefined,
+    locationId: selectedLocationId,
+  });
 
   // Helper to get school name from assigned_location_id or school_origin
   const getSchoolName = (student: Profile): string => {
@@ -44,21 +89,15 @@ export const StudentList: React.FC = () => {
     return student.school_origin || '';
   };
 
-  // UI State
-  const [activeSubTab, setActiveSubTab] = useState<'directory' | 'statistics'>('directory');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [schoolFilter, setSchoolFilter] = useState('');
-  const [levelFilter, setLevelFilter] = useState('');
-
-  // Calculate unique schools from students
+  // Calculate unique schools from all students (for dropdown filter)
   const uniqueSchools = useMemo(() => {
-    const schools = students
+    const schools = allStudents
       .map(s => getSchoolName(s))
       .filter((school): school is string => !!school);
     return [...new Set(schools)].sort();
-  }, [students, locations]);
+  }, [allStudents, locations]);
 
-  // Calculate student statistics
+  // Calculate student statistics (uses all students for statistics tab)
   const studentStats = useMemo(() => {
     const stats: Record<string, {
       totalSessions: number;
@@ -70,7 +109,7 @@ export const StudentList: React.FC = () => {
     }> = {};
 
     // Initialize stats for each student
-    students.forEach(student => {
+    allStudents.forEach(student => {
       stats[student.id] = {
         totalSessions: 0,
         totalReports: 0,
@@ -110,7 +149,7 @@ export const StudentList: React.FC = () => {
     });
 
     return stats;
-  }, [students, reports]);
+  }, [allStudents, reports]);
 
   // Calculate averages
   const getStudentAverage = (studentId: string) => {
@@ -139,7 +178,7 @@ export const StudentList: React.FC = () => {
       students: Profile[];
     }> = {};
 
-    students.forEach(student => {
+    allStudents.forEach(student => {
       const school = getSchoolName(student) || 'Tidak Diketahui';
       if (!stats[school]) {
         stats[school] = {
@@ -187,7 +226,7 @@ export const StudentList: React.FC = () => {
     });
 
     return stats;
-  }, [students, studentStats, locations]);
+  }, [allStudents, studentStats, locations]);
 
   // Statistics by level
   const levelStats = useMemo(() => {
@@ -197,7 +236,7 @@ export const StudentList: React.FC = () => {
       students: Profile[];
     }> = {};
 
-    students.forEach(student => {
+    allStudents.forEach(student => {
       const level = studentStats[student.id]?.level || 'Belum Ditentukan';
       if (!stats[level]) {
         stats[level] = {
@@ -229,11 +268,11 @@ export const StudentList: React.FC = () => {
     });
 
     return stats;
-  }, [students, studentStats]);
+  }, [allStudents, studentStats]);
 
   // Top performing students
   const topStudents = useMemo(() => {
-    return students
+    return allStudents
       .map(student => ({
         ...student,
         average: getStudentAverage(student.id),
@@ -242,26 +281,12 @@ export const StudentList: React.FC = () => {
       .filter(s => s.average.overall > 0)
       .sort((a, b) => b.average.overall - a.average.overall)
       .slice(0, 10);
-  }, [students, studentStats]);
+  }, [allStudents, studentStats]);
 
-  // Filter students
-  const filteredStudents = useMemo(() => {
-    return students.filter(student => {
-      const matchesSearch =
-        student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        student.email.toLowerCase().includes(searchQuery.toLowerCase());
-
-      const matchesSchool = !schoolFilter || getSchoolName(student) === schoolFilter;
-
-      const studentLevel = studentStats[student.id]?.level || '';
-      const matchesLevel = !levelFilter || studentLevel === levelFilter;
-
-      return matchesSearch && matchesSchool && matchesLevel;
-    });
-  }, [students, searchQuery, schoolFilter, levelFilter, studentStats, locations]);
-
-  // Loading state
-  const isLoading = studentsLoading || sessionsLoading || reportsLoading || locationsLoading;
+  // Loading state for statistics
+  const isStatisticsLoading = allStudentsLoading || sessionsLoading || reportsLoading || locationsLoading;
+  // Loading state for directory
+  const isDirectoryLoading = paginatedLoading || locationsLoading;
 
   const getAttendanceRate = (studentId: string) => {
     const stats = studentStats[studentId];
@@ -301,7 +326,7 @@ export const StudentList: React.FC = () => {
       {/* Statistics Tab */}
       {activeSubTab === 'statistics' && (
         <div className="space-y-4 animate-in fade-in duration-300">
-          {isLoading ? (
+          {isStatisticsLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
@@ -316,7 +341,7 @@ export const StudentList: React.FC = () => {
                     </div>
                     <div>
                       <p className="text-[9px] font-bold text-blue-500 uppercase">Total Siswa</p>
-                      <p className="text-xl font-black text-gray-900">{students.length}</p>
+                      <p className="text-xl font-black text-gray-900">{allStudents.length}</p>
                     </div>
                   </div>
                 </Card>
@@ -494,7 +519,7 @@ export const StudentList: React.FC = () => {
                 </div>
 
                 {/* School Filter */}
-                <div className="w-full sm:w-48">
+                <div className="w-full sm:w-56">
                   <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
                     <School className="w-3 h-3" /> Sekolah
                   </label>
@@ -509,33 +534,17 @@ export const StudentList: React.FC = () => {
                     ))}
                   </select>
                 </div>
-
-                {/* Level Filter */}
-                <div className="w-full sm:w-48">
-                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                    <GraduationCap className="w-3 h-3" /> Level
-                  </label>
-                  <select
-                    value={levelFilter}
-                    onChange={e => setLevelFilter(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-gray-50 focus:bg-white"
-                  >
-                    {LEVEL_OPTIONS.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                </div>
               </div>
 
               {/* Stats & Reset */}
               <div className="flex items-end gap-2 w-full sm:w-auto">
                 <div className="bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
                   <span className="text-[9px] font-bold text-blue-400 uppercase block">Hasil</span>
-                  <span className="text-sm font-bold text-blue-900">{filteredStudents.length} Siswa</span>
+                  <span className="text-sm font-bold text-blue-900">{totalCount.toLocaleString()} Siswa</span>
                 </div>
-                {(schoolFilter || levelFilter || searchQuery) && (
+                {(schoolFilter || searchQuery) && (
                   <button
-                    onClick={() => { setSchoolFilter(''); setLevelFilter(''); setSearchQuery(''); }}
+                    onClick={() => { setSchoolFilter(''); setSearchQuery(''); setCurrentPage(1); }}
                     className="px-4 py-2 h-[42px] bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold text-gray-600 transition-all flex items-center gap-1"
                   >
                     <X className="w-3.5 h-3.5" /> Reset
@@ -547,109 +556,183 @@ export const StudentList: React.FC = () => {
 
           {/* Student Table */}
           <Card className="!p-0 overflow-hidden">
-            {isLoading ? (
+            {isDirectoryLoading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                    <tr>
-                      <th className="px-4 py-3">Siswa</th>
-                      <th className="px-4 py-3">Sekolah</th>
-                      <th className="px-4 py-3">Level</th>
-                      <th className="px-4 py-3 text-center">Rata-rata</th>
-                      <th className="px-4 py-3 text-center">Kehadiran</th>
-                      <th className="px-4 py-3 text-right">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {filteredStudents.map((student) => {
-                      const avg = getStudentAverage(student.id);
-                      const attendance = getAttendanceRate(student.id);
-                      const level = studentStats[student.id]?.level || 'N/A';
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                      <tr>
+                        <th className="px-4 py-3">Siswa</th>
+                        <th className="px-4 py-3">Sekolah</th>
+                        <th className="px-4 py-3">Level</th>
+                        <th className="px-4 py-3 text-center">Rata-rata</th>
+                        <th className="px-4 py-3 text-center">Kehadiran</th>
+                        <th className="px-4 py-3 text-right">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {paginatedStudents.map((student) => {
+                        const avg = getStudentAverage(student.id);
+                        const attendance = getAttendanceRate(student.id);
+                        const level = studentStats[student.id]?.level || 'N/A';
 
-                      return (
-                        <tr key={student.id} className="hover:bg-gray-50 transition-colors group">
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg theme-bg-primary text-white flex items-center justify-center font-bold text-sm">
-                                {student.name.charAt(0)}
+                        return (
+                          <tr key={student.id} className="hover:bg-gray-50 transition-colors group">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg theme-bg-primary text-white flex items-center justify-center font-bold text-sm">
+                                  {student.name.charAt(0)}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-gray-900">{student.name}</p>
+                                  <p className="text-[11px] text-gray-400 flex items-center gap-1">
+                                    <Mail className="w-3 h-3" /> {student.email}
+                                  </p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-sm font-bold text-gray-900">{student.name}</p>
-                                <p className="text-[11px] text-gray-400 flex items-center gap-1">
-                                  <Mail className="w-3 h-3" /> {student.email}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-xs font-medium text-gray-700 bg-gray-100 px-2 py-1 rounded-md">
-                              {getSchoolName(student) || 'N/A'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
-                              level === 'Advanced' ? 'bg-purple-100 text-purple-700' :
-                              level === 'Upper-Intermediate' ? 'bg-blue-100 text-blue-700' :
-                              level === 'Intermediate' ? 'bg-green-100 text-green-700' :
-                              level === 'Elementary' ? 'bg-yellow-100 text-yellow-700' :
-                              level === 'Starter' ? 'bg-orange-100 text-orange-700' :
-                              'bg-gray-100 text-gray-500'
-                            }`}>
-                              {level}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {avg.overall > 0 ? (
-                              <span className={`px-2 py-1 rounded-md text-xs font-bold ${
-                                avg.overall >= 80 ? 'bg-green-100 text-green-700' :
-                                avg.overall >= 60 ? 'bg-yellow-100 text-yellow-700' :
-                                'bg-red-100 text-red-700'
-                              }`}>
-                                {avg.overall.toFixed(1)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-xs font-medium text-gray-700 bg-gray-100 px-2 py-1 rounded-md">
+                                {getSchoolName(student) || 'N/A'}
                               </span>
-                            ) : (
-                              <span className="text-gray-400 text-xs">-</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {attendance > 0 ? (
-                              <span className={`px-2 py-1 rounded-md text-xs font-bold ${
-                                attendance >= 80 ? 'bg-green-100 text-green-700' :
-                                attendance >= 60 ? 'bg-yellow-100 text-yellow-700' :
-                                'bg-red-100 text-red-700'
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
+                                level === 'Advanced' ? 'bg-purple-100 text-purple-700' :
+                                level === 'Upper-Intermediate' ? 'bg-blue-100 text-blue-700' :
+                                level === 'Intermediate' ? 'bg-green-100 text-green-700' :
+                                level === 'Elementary' ? 'bg-yellow-100 text-yellow-700' :
+                                level === 'Starter' ? 'bg-orange-100 text-orange-700' :
+                                'bg-gray-100 text-gray-500'
                               }`}>
-                                {attendance.toFixed(0)}%
+                                {level}
                               </span>
-                            ) : (
-                              <span className="text-gray-400 text-xs">-</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={() => navigate(`/admin/students/${student.id}`)}
-                              className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg transition-all"
-                              title="Lihat Detail"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {avg.overall > 0 ? (
+                                <span className={`px-2 py-1 rounded-md text-xs font-bold ${
+                                  avg.overall >= 80 ? 'bg-green-100 text-green-700' :
+                                  avg.overall >= 60 ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>
+                                  {avg.overall.toFixed(1)}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 text-xs">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {attendance > 0 ? (
+                                <span className={`px-2 py-1 rounded-md text-xs font-bold ${
+                                  attendance >= 80 ? 'bg-green-100 text-green-700' :
+                                  attendance >= 60 ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>
+                                  {attendance.toFixed(0)}%
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 text-xs">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={() => navigate(`/admin/students/${student.id}`)}
+                                className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg transition-all"
+                                title="Lihat Detail"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {paginatedStudents.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-12 text-center text-gray-400 text-sm italic">
+                            Tidak ada siswa ditemukan.
                           </td>
                         </tr>
-                      );
-                    })}
-                    {filteredStudents.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="px-4 py-12 text-center text-gray-400 text-sm italic">
-                          Tidak ada siswa ditemukan.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+                    <div className="text-xs text-gray-500">
+                      Menampilkan {((currentPage - 1) * PAGE_SIZE) + 1} - {Math.min(currentPage * PAGE_SIZE, totalCount)} dari {totalCount.toLocaleString()} siswa
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setCurrentPage(1)}
+                        disabled={currentPage === 1}
+                        className="p-1.5 rounded-md hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        title="Halaman Pertama"
+                      >
+                        <ChevronsLeft className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="p-1.5 rounded-md hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        title="Halaman Sebelumnya"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+
+                      <div className="flex items-center gap-1 mx-2">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let pageNum;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => setCurrentPage(pageNum)}
+                              className={`w-8 h-8 rounded-md text-xs font-bold transition-colors ${
+                                currentPage === pageNum
+                                  ? 'theme-bg-primary text-white'
+                                  : 'hover:bg-gray-200 text-gray-600'
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="p-1.5 rounded-md hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        title="Halaman Berikutnya"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(totalPages)}
+                        disabled={currentPage === totalPages}
+                        className="p-1.5 rounded-md hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        title="Halaman Terakhir"
+                      >
+                        <ChevronsRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </Card>
         </div>

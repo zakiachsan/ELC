@@ -4,11 +4,12 @@ import { Card } from '../Card';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { User } from '../../types';
 import { LEVEL_COLORS } from '../../constants';
-import { TrendingUp, Calendar, CheckCircle, Clock, MapPin, AlertTriangle, BookOpen, Brain, List, Activity, History, Award, FileText, PenLine, Mic, ClipboardCheck, Play, X, Loader2 } from 'lucide-react';
+import { TrendingUp, Calendar, CheckCircle, Clock, MapPin, AlertTriangle, BookOpen, Brain, List, Activity, History, Award, FileText, PenLine, Mic, ClipboardCheck, Play, X, Loader2, Phone, Edit2, Check } from 'lucide-react';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useSessions } from '../../hooks/useSessions';
 import { useReports, useStudentStats } from '../../hooks/useReports';
 import { useHomeworks } from '../../hooks/useHomeworks';
+import { useAuth } from '../../contexts/AuthContext';
 
 // --- SHARED DATA HOOK (using real Supabase data) ---
 const useParentData = (student: User) => {
@@ -118,7 +119,35 @@ const useParentData = (student: User) => {
 export const ParentOverview: React.FC<{ student: User }> = ({ student }) => {
   const { loading, attendanceRate, cefrChartData, pendingHomeworks, latestCefr, avgWritten, avgOral, upcomingClasses } = useParentData(student);
   const { settings } = useSettings();
+  const { user, updateProfile } = useAuth();
   const [showVideoModal, setShowVideoModal] = useState(false);
+
+  // WhatsApp editing state (for parent's own phone)
+  const [isEditingWhatsApp, setIsEditingWhatsApp] = useState(false);
+  const [whatsAppNumber, setWhatsAppNumber] = useState(user?.phone || '');
+  const [isSavingWhatsApp, setIsSavingWhatsApp] = useState(false);
+
+  const handleSaveWhatsApp = async () => {
+    setIsSavingWhatsApp(true);
+    try {
+      const { error } = await updateProfile({ phone: whatsAppNumber || null });
+      if (error) {
+        alert('Failed to save WhatsApp number. Please try again.');
+      } else {
+        setIsEditingWhatsApp(false);
+      }
+    } catch (err) {
+      console.error('Error saving WhatsApp:', err);
+      alert('Failed to save WhatsApp number. Please try again.');
+    } finally {
+      setIsSavingWhatsApp(false);
+    }
+  };
+
+  const handleCancelWhatsApp = () => {
+    setWhatsAppNumber(user?.phone || '');
+    setIsEditingWhatsApp(false);
+  };
 
   const isPortrait = settings.videoOrientation === 'portrait';
 
@@ -202,6 +231,64 @@ export const ParentOverview: React.FC<{ student: User }> = ({ student }) => {
           </div>
         </div>
       </div>
+
+      {/* WHATSAPP NUMBER SECTION */}
+      <Card className="!p-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-50 rounded-lg">
+              <Phone className="w-5 h-5 text-green-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">WhatsApp Number</p>
+              {isEditingWhatsApp ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="tel"
+                    value={whatsAppNumber}
+                    onChange={(e) => setWhatsAppNumber(e.target.value)}
+                    placeholder="e.g. 08123456789"
+                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleSaveWhatsApp}
+                    disabled={isSavingWhatsApp}
+                    className="p-1.5 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50"
+                  >
+                    {isSavingWhatsApp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  </button>
+                  <button
+                    onClick={handleCancelWhatsApp}
+                    disabled={isSavingWhatsApp}
+                    className="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-900">
+                    {user?.phone || <span className="text-gray-400 italic">Not set</span>}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+          {!isEditingWhatsApp && (
+            <button
+              onClick={() => setIsEditingWhatsApp(true)}
+              className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+              title="Edit WhatsApp Number"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <p className="text-[10px] text-gray-400 mt-2 ml-11">
+          Optional - Used for important notifications about your child's progress
+        </p>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* LEFT: Stats Cards */}
