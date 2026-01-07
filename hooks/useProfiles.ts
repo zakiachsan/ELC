@@ -9,12 +9,16 @@ type Location = Database['public']['Tables']['locations']['Row'];
 type LocationInsert = Database['public']['Tables']['locations']['Insert'];
 type LocationUpdate = Database['public']['Tables']['locations']['Update'];
 
-export const useProfiles = (role?: 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT') => {
+export const useProfiles = (role?: 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT', enabled: boolean = true) => {
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchProfiles = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -27,7 +31,7 @@ export const useProfiles = (role?: 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT') =
     } finally {
       setLoading(false);
     }
-  }, [role]);
+  }, [role, enabled]);
 
   useEffect(() => {
     fetchProfiles();
@@ -61,8 +65,49 @@ export const useProfiles = (role?: 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT') =
   };
 };
 
-export const useStudents = () => {
-  return useProfiles('STUDENT');
+export const useStudents = (enabled: boolean = true) => {
+  return useProfiles('STUDENT', enabled);
+};
+
+export const useStudentsPaginated = (options: {
+  page: number;
+  pageSize: number;
+  search?: string;
+  locationId?: string;
+}) => {
+  const [students, setStudents] = useState<Profile[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchStudents = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await profilesService.getStudentsPaginated(options);
+      setStudents(result.data);
+      setTotalCount(result.count);
+    } catch (err) {
+      setError(err as Error);
+    } finally {
+      setLoading(false);
+    }
+  }, [options.page, options.pageSize, options.search, options.locationId]);
+
+  useEffect(() => {
+    fetchStudents();
+  }, [fetchStudents]);
+
+  const totalPages = Math.ceil(totalCount / options.pageSize);
+
+  return {
+    students,
+    totalCount,
+    totalPages,
+    loading,
+    error,
+    refetch: fetchStudents,
+  };
 };
 
 export const useTeachers = () => {
@@ -120,6 +165,63 @@ export const useLocations = () => {
     createLocation,
     updateLocation,
     deleteLocation,
+  };
+};
+
+// Hook to get classes by location
+export type ClassItem = {
+  id: string;
+  location_id: string;
+  name: string;
+  class_type: string | null;
+  created_at: string;
+};
+
+export const useClasses = (locationId?: string) => {
+  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchClasses = useCallback(async () => {
+    if (!locationId) {
+      setClasses([]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await profilesService.getClassesByLocation(locationId);
+      setClasses(data as ClassItem[]);
+    } catch (err) {
+      setError(err as Error);
+      setClasses([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [locationId]);
+
+  useEffect(() => {
+    fetchClasses();
+  }, [fetchClasses]);
+
+  const createClass = async (name: string, classType?: string) => {
+    if (!locationId) throw new Error('Location ID is required');
+    const newClass = await profilesService.createClass({
+      location_id: locationId,
+      name,
+      class_type: classType || 'Regular',
+    });
+    setClasses(prev => [...prev, newClass as ClassItem]);
+    return newClass;
+  };
+
+  return {
+    classes,
+    loading,
+    error,
+    refetch: fetchClasses,
+    createClass,
   };
 };
 

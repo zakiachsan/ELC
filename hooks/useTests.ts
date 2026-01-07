@@ -9,14 +9,20 @@ interface UseTestsOptions {
   semester?: string;
   upcoming?: boolean;
   past?: boolean;
+  enabled?: boolean;
 }
 
 export const useTests = (options: UseTestsOptions = {}) => {
+  const { enabled = true } = options;
   const [tests, setTests] = useState<TestSchedule[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchTests = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -46,7 +52,7 @@ export const useTests = (options: UseTestsOptions = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [options.teacherId, options.location, options.className, options.academicYear, options.semester, options.upcoming, options.past]);
+  }, [options.teacherId, options.location, options.className, options.academicYear, options.semester, options.upcoming, options.past, enabled]);
 
   useEffect(() => {
     fetchTests();

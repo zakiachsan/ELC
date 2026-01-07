@@ -9,14 +9,20 @@ type SessionReportUpdate = Database['public']['Tables']['session_reports']['Upda
 interface UseReportsOptions {
   sessionId?: string;
   studentId?: string;
+  enabled?: boolean;
 }
 
 export const useReports = (options: UseReportsOptions = {}) => {
+  const { enabled = true } = options;
   const [reports, setReports] = useState<SessionReport[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchReports = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -36,7 +42,7 @@ export const useReports = (options: UseReportsOptions = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [options.sessionId, options.studentId]);
+  }, [options.sessionId, options.studentId, enabled]);
 
   useEffect(() => {
     fetchReports();

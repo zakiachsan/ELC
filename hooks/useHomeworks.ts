@@ -10,14 +10,20 @@ interface UseHomeworksOptions {
   sessionId?: string;
   studentId?: string;
   pending?: boolean;
+  enabled?: boolean;
 }
 
 export const useHomeworks = (options: UseHomeworksOptions = {}) => {
+  const { enabled = true } = options;
   const [homeworks, setHomeworks] = useState<Homework[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchHomeworks = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -39,7 +45,7 @@ export const useHomeworks = (options: UseHomeworksOptions = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [options.sessionId, options.studentId, options.pending]);
+  }, [options.sessionId, options.studentId, options.pending, enabled]);
 
   useEffect(() => {
     fetchHomeworks();

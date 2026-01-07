@@ -34,16 +34,78 @@ export const profilesService = {
     return data;
   },
 
-  // Get profiles by role
+  // Get profiles by role (fetches all records, up to 10000)
   async getByRole(role: 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT') {
-    const { data, error } = await supabase
+    // Supabase default limit is 1000, so we need to explicitly set a higher limit
+    // For large datasets, we fetch in batches
+    const batchSize = 1000;
+    let allData: Profile[] = [];
+    let from = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', role)
+        .order('name')
+        .range(from, from + batchSize - 1);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        allData = [...allData, ...data];
+        from += batchSize;
+        hasMore = data.length === batchSize;
+      } else {
+        hasMore = false;
+      }
+    }
+
+    return allData;
+  },
+
+  // Get students with pagination and filters
+  async getStudentsPaginated(options: {
+    page: number;
+    pageSize: number;
+    search?: string;
+    locationId?: string;
+  }) {
+    const { page, pageSize, search, locationId } = options;
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    let query = supabase
       .from('profiles')
-      .select('*')
-      .eq('role', role)
-      .order('name');
+      .select('*', { count: 'exact' })
+      .eq('role', 'STUDENT')
+      .order('name')
+      .range(from, to);
+
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+    }
+
+    if (locationId) {
+      query = query.eq('assigned_location_id', locationId);
+    }
+
+    const { data, error, count } = await query;
 
     if (error) throw error;
-    return data;
+    return { data: data || [], count: count || 0 };
+  },
+
+  // Get total student count
+  async getStudentCount() {
+    const { count, error } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('role', 'STUDENT');
+
+    if (error) throw error;
+    return count || 0;
   },
 
   // Get students
@@ -200,6 +262,71 @@ export const profilesService = {
   async deleteLocation(id: string) {
     const { error } = await supabaseAdmin
       .from('locations')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  // ==================== CLASSES ====================
+
+  // Get classes by location
+  async getClassesByLocation(locationId: string) {
+    const { data, error } = await supabase
+      .from('classes')
+      .select('*')
+      .eq('location_id', locationId)
+      .order('name');
+
+    if (error) {
+      // Table might not exist yet, return empty array
+      console.warn('Classes table query error:', error.message);
+      return [];
+    }
+    return data || [];
+  },
+
+  // Get all classes
+  async getAllClasses() {
+    const { data, error } = await supabase
+      .from('classes')
+      .select('*, locations(name)')
+      .order('name');
+
+    if (error) {
+      console.warn('Classes table query error:', error.message);
+      return [];
+    }
+    return data || [];
+  },
+
+  // Create class (uses admin client to bypass RLS)
+  async createClass(classData: { location_id: string; name: string; class_type?: string }) {
+    const { data, error } = await supabaseAdmin
+      .from('classes')
+      .insert(classData)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Create multiple classes at once
+  async createClasses(classesData: { location_id: string; name: string; class_type?: string }[]) {
+    const { data, error } = await supabaseAdmin
+      .from('classes')
+      .upsert(classesData, { onConflict: 'location_id,name', ignoreDuplicates: true })
+      .select();
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Delete class
+  async deleteClass(id: string) {
+    const { error } = await supabaseAdmin
+      .from('classes')
       .delete()
       .eq('id', id);
 

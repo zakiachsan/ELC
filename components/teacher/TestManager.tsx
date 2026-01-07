@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { useTests } from '../../hooks/useTests';
-import { useLocations } from '../../hooks/useProfiles';
+import { useLocations, useClasses } from '../../hooks/useProfiles';
 import { useAuth } from '../../contexts/AuthContext';
 import { TestSchedule, TestType, TestScheduleInsert } from '../../services/tests.service';
 import { ClassType } from '../../types';
@@ -56,16 +56,30 @@ export const TestManager: React.FC = () => {
   const { schoolId, classId } = useParams<{ schoolId?: string; classId?: string }>();
   const navigate = useNavigate();
   const { user: currentTeacher } = useAuth();
-  const { locations: locationsData, loading: locationsLoading } = useLocations();
 
   // Derive selected school and class from URL params
   const selectedSchool = schoolId ? decodeURIComponent(schoolId) : null;
   const selectedClass = classId ? decodeURIComponent(classId) : null;
 
-  // Fetch tests based on current selection
+  // Only load heavy data when a class is selected (detail view)
+  const isDetailView = !!(selectedSchool && selectedClass);
+
+  // Stage 1: Always load locations (for school/class selection)
+  const { locations: locationsData, loading: locationsLoading } = useLocations();
+
+  // Get location ID for the selected school (needed for class filtering)
+  const selectedLocationId = selectedSchool
+    ? locationsData.find(l => l.name === selectedSchool)?.id
+    : undefined;
+
+  // Stage 1.5: Load classes for the selected school (to filter teacher's assigned classes)
+  const { classes: locationClasses, loading: classesLoading } = useClasses(selectedLocationId);
+
+  // Stage 2: Only load tests when viewing class details
   const { tests: testsData, loading: testsLoading, createTest, deleteTest, refetch } = useTests({
     location: selectedSchool || undefined,
     className: selectedClass || undefined,
+    enabled: isDetailView,
   });
 
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming');
@@ -132,12 +146,18 @@ export const TestManager: React.FC = () => {
     }
   };
 
-  // Map schools/locations
+  // Map schools/locations - filter to only show teacher's assigned schools
   const schools = locationsData
     .filter(l => {
+      // If teacher has assigned locations (array), only show those schools
+      if (currentTeacher?.assignedLocationIds && currentTeacher.assignedLocationIds.length > 0) {
+        return currentTeacher.assignedLocationIds.includes(l.id);
+      }
+      // Fallback to single location if set
       if (currentTeacher?.assignedLocationId) {
         return l.id === currentTeacher.assignedLocationId;
       }
+      // If no assignment, show all schools (flexible teacher)
       return true;
     })
     .map(l => ({
@@ -146,11 +166,33 @@ export const TestManager: React.FC = () => {
       level: l.level || null,
     }));
 
-  // Get available classes based on school level
+  // Get teacher's assigned classes filtered by what's available in the selected school
   const getAvailableClasses = (): string[] => {
+    // Get class names that exist in the selected location from database
+    const locationClassNames = locationClasses.map(c => c.name);
+
+    // If teacher has assigned classes, filter to only show ones in this location
     if (currentTeacher?.assignedClasses && currentTeacher.assignedClasses.length > 0) {
-      return currentTeacher.assignedClasses;
+      // Filter teacher's classes to only show ones that exist in this school's location
+      const filteredClasses = currentTeacher.assignedClasses.filter(teacherClass =>
+        locationClassNames.includes(teacherClass)
+      );
+      // If teacher has classes for this location, return them
+      if (filteredClasses.length > 0) {
+        return filteredClasses;
+      }
+      // If no matching classes, fall back to location classes
+      if (locationClassNames.length > 0) {
+        return locationClassNames;
+      }
     }
+
+    // If location has classes in database, use those
+    if (locationClassNames.length > 0) {
+      return locationClassNames;
+    }
+
+    // Otherwise, generate based on selected school's level
     const selectedSchoolData = schools.find(s => s.name === selectedSchool);
     const level = selectedSchoolData?.level;
     const classes: string[] = [];
@@ -161,6 +203,7 @@ export const TestManager: React.FC = () => {
         });
         break;
       case 'PRIMARY':
+      case 'ELEMENTARY':
         for (let grade = 1; grade <= 6; grade++) {
           for (let section = 1; section <= 3; section++) {
             classes.push(`${grade}.${section}`);
@@ -175,6 +218,7 @@ export const TestManager: React.FC = () => {
         }
         break;
       case 'SENIOR':
+      case 'HIGH':
         for (let grade = 10; grade <= 12; grade++) {
           for (let section = 1; section <= 3; section++) {
             classes.push(`${grade}.${section}`);
@@ -352,12 +396,17 @@ export const TestManager: React.FC = () => {
     }
   };
 
-  // Loading state
-  if (locationsLoading) {
+  // Loading state - only check tests loading when in detail view
+  // Also check classesLoading when school is selected (for class selection view)
+  const isLoading = locationsLoading || (selectedSchool && !selectedClass && classesLoading) || (isDetailView && testsLoading);
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-        <span className="ml-2 text-sm text-gray-500">Loading...</span>
+        <span className="ml-2 text-sm text-gray-500">
+          {isDetailView ? 'Loading tests...' : selectedSchool ? 'Loading classes...' : 'Loading schools...'}
+        </span>
       </div>
     );
   }
@@ -762,7 +811,7 @@ export const TestManager: React.FC = () => {
           </Button>
           <div>
             <h2 className="text-lg font-bold text-gray-900">Jadwal Test</h2>
-            <p className="text-xs text-gray-500">{selectedSchool} - Kelas {selectedClass}</p>
+            <p className="text-xs text-gray-500">{selectedSchool} - {selectedClass}</p>
           </div>
         </div>
       </div>

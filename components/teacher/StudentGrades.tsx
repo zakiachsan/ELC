@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { useStudents, useLocations } from '../../hooks/useProfiles';
+import { useStudents, useLocations, useClasses } from '../../hooks/useProfiles';
 import { useSessions } from '../../hooks/useSessions';
 import { useReports } from '../../hooks/useReports';
 import { useAuth } from '../../contexts/AuthContext';
@@ -47,18 +47,50 @@ const generateAcademicYears = (): string[] => {
   return years;
 };
 
+// Helper to extract class name from school_origin format
+// e.g., "SD SANG TIMUR - KELAS 1 A (Regular)" -> "KELAS 1 A"
+const parseClassFromSchoolOrigin = (schoolOrigin?: string | null): string => {
+  if (!schoolOrigin) return '';
+  // Try format: "SCHOOL NAME - CLASS (TYPE)"
+  const matchWithType = schoolOrigin.match(/^.+?\s*-\s*(.+?)\s*\((.+?)\)$/);
+  if (matchWithType) {
+    return matchWithType[1].trim();
+  }
+  // Try simpler format: "SCHOOL NAME - CLASS"
+  const matchSimple = schoolOrigin.match(/^.+?\s*-\s*(.+?)$/);
+  if (matchSimple) {
+    return matchSimple[1].trim();
+  }
+  return '';
+};
+
 export const StudentGrades: React.FC = () => {
   const { schoolId, classId } = useParams<{ schoolId?: string; classId?: string }>();
   const navigate = useNavigate();
   const { user: currentTeacher } = useAuth();
-  const { profiles: studentsData, loading: studentsLoading, error: studentsError } = useStudents();
-  const { locations: locationsData, loading: locationsLoading } = useLocations();
-  const { sessions: sessionsData } = useSessions();
-  const { reports: reportsData } = useReports();
 
   // Derive selected school and class from URL params
   const selectedSchool = schoolId ? decodeURIComponent(schoolId) : null;
   const selectedClass = classId ? decodeURIComponent(classId) : null;
+
+  // Only load heavy data when a class is selected (detail view)
+  const isDetailView = !!(selectedSchool && selectedClass);
+
+  // Stage 1: Always load locations (for school/class selection)
+  const { locations: locationsData, loading: locationsLoading } = useLocations();
+
+  // Get location ID for the selected school (needed for class filtering)
+  const selectedLocationId = selectedSchool
+    ? locationsData.find(l => l.name === selectedSchool)?.id
+    : undefined;
+
+  // Stage 1.5: Load classes for the selected school (to filter teacher's assigned classes)
+  const { classes: locationClasses, loading: classesLoading } = useClasses(selectedLocationId);
+
+  // Stage 2: Only load students/sessions/reports when viewing class details
+  const { profiles: studentsData, loading: studentsLoading, error: studentsError } = useStudents(isDetailView);
+  const { sessions: sessionsData } = useSessions({ enabled: isDetailView });
+  const { reports: reportsData } = useReports({ enabled: isDetailView });
 
   const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
 
@@ -149,19 +181,52 @@ export const StudentGrades: React.FC = () => {
     }
   }, [dbGradesJson, gradesLoading]);
 
-  // Map schools from database
-  const schools = locationsData.map(l => ({
-    id: l.id,
-    name: l.name,
-    level: l.level || null,
-  }));
+  // Map schools from database - filter to only show teacher's assigned schools
+  const schools = locationsData
+    .filter(l => {
+      // If teacher has assigned locations (array), only show those schools
+      if (currentTeacher?.assignedLocationIds && currentTeacher.assignedLocationIds.length > 0) {
+        return currentTeacher.assignedLocationIds.includes(l.id);
+      }
+      // Fallback to single location if set
+      if (currentTeacher?.assignedLocationId) {
+        return l.id === currentTeacher.assignedLocationId;
+      }
+      // If no assignment, show all schools (flexible teacher)
+      return true;
+    })
+    .map(l => ({
+      id: l.id,
+      name: l.name,
+      level: l.level || null,
+    }));
 
-  // Get teacher's assigned classes, or generate based on school level
+  // Get teacher's assigned classes filtered by what's available in the selected school
   const getAvailableClasses = (): string[] => {
-    // If teacher has assigned classes, use those
+    // Get class names that exist in the selected location from database
+    const locationClassNames = locationClasses.map(c => c.name);
+
+    // If teacher has assigned classes, filter to only show ones in this location
     if (currentTeacher?.assignedClasses && currentTeacher.assignedClasses.length > 0) {
-      return currentTeacher.assignedClasses;
+      // Filter teacher's classes to only show ones that exist in this school's location
+      const filteredClasses = currentTeacher.assignedClasses.filter(teacherClass =>
+        locationClassNames.includes(teacherClass)
+      );
+      // If teacher has classes for this location, return them
+      if (filteredClasses.length > 0) {
+        return filteredClasses;
+      }
+      // If no matching classes, fall back to location classes
+      if (locationClassNames.length > 0) {
+        return locationClassNames;
+      }
     }
+
+    // If location has classes in database, use those
+    if (locationClassNames.length > 0) {
+      return locationClassNames;
+    }
+
     // Otherwise, generate based on selected school's level
     const selectedSchoolData = schools.find(s => s.name === selectedSchool);
     const level = selectedSchoolData?.level;
@@ -173,6 +238,7 @@ export const StudentGrades: React.FC = () => {
         });
         break;
       case 'PRIMARY':
+      case 'ELEMENTARY':
         for (let grade = 1; grade <= 6; grade++) {
           for (let section = 1; section <= 3; section++) {
             classes.push(`${grade}.${section}`);
@@ -187,6 +253,7 @@ export const StudentGrades: React.FC = () => {
         }
         break;
       case 'SENIOR':
+      case 'HIGH':
         for (let grade = 10; grade <= 12; grade++) {
           for (let section = 1; section <= 3; section++) {
             classes.push(`${grade}.${section}`);
@@ -223,19 +290,22 @@ export const StudentGrades: React.FC = () => {
     skillLevels: (s.skill_levels as Partial<Record<SkillCategory, DifficultyLevel>>) || {},
   }));
 
-  // Filter students by selected class (branch) and school (assigned_location_id)
+  // Filter students by selected class and school (assigned_location_id)
   const students = allStudents.filter(student => {
-    // Match class (branch field stores the student's class like "10.1", "7.2", etc.)
-    if (selectedClass && selectedClass !== 'Online') {
-      if (student.branch !== selectedClass) return false;
-    }
-    // Optionally also match school if student has assigned location
+    // First, match school by assigned_location_id
     if (selectedSchool && selectedSchool !== 'Online (Zoom)') {
       const selectedSchoolData = schools.find(s => s.name === selectedSchool);
-      if (selectedSchoolData && student.assignedLocationId) {
+      if (selectedSchoolData) {
         if (student.assignedLocationId !== selectedSchoolData.id) return false;
       }
     }
+
+    // Then, match class - use branch if available, otherwise parse from school_origin
+    if (selectedClass && selectedClass !== 'Online') {
+      const studentClass = student.branch || parseClassFromSchoolOrigin(student.schoolOrigin);
+      if (studentClass !== selectedClass) return false;
+    }
+
     return true;
   });
 
@@ -266,16 +336,22 @@ export const StudentGrades: React.FC = () => {
     difficultyLevel: s.difficulty_level as DifficultyLevel,
   }));
 
-  if (studentsLoading || locationsLoading) {
+  // Show loading spinner - only check student loading when in detail view
+  // Also check classesLoading when school is selected (for class selection view)
+  const isLoading = locationsLoading || (selectedSchool && !selectedClass && classesLoading) || (isDetailView && studentsLoading);
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-        <span className="ml-2 text-sm text-gray-500">Loading data...</span>
+        <span className="ml-2 text-sm text-gray-500">
+          {isDetailView ? 'Loading students...' : selectedSchool ? 'Loading classes...' : 'Loading schools...'}
+        </span>
       </div>
     );
   }
 
-  if (studentsError) {
+  if (isDetailView && studentsError) {
     return (
       <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
         Error loading students: {studentsError.message}
@@ -527,7 +603,7 @@ export const StudentGrades: React.FC = () => {
             <Calendar className="w-5 h-5 text-purple-600" />
             <div>
               <p className="text-xs font-bold text-purple-800">Tahun Ajaran {selectedAcademicYear} - Semester {selectedSemester}</p>
-              <p className="text-[10px] text-purple-600">{selectedSchool} - Kelas {selectedClass}</p>
+              <p className="text-[10px] text-purple-600">{selectedSchool} - {selectedClass}</p>
             </div>
           </div>
         </Card>
@@ -779,18 +855,22 @@ export const StudentGrades: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-          {availableClasses.map((cls) => (
-            <Card
-              key={cls}
-              className="!p-3 cursor-pointer hover:border-orange-400 transition-all group text-center"
-              onClick={() => navigate(`/teacher/grades/${encodeURIComponent(selectedSchool!)}/${encodeURIComponent(cls)}`)}
-            >
-              <div className="w-10 h-10 mx-auto mb-2 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
-                <span className="text-sm font-bold">{cls.split('.')[0]}</span>
-              </div>
-              <h3 className="text-sm font-bold text-gray-900 group-hover:text-orange-600">Kelas {cls}</h3>
-            </Card>
-          ))}
+          {availableClasses.map((cls) => {
+            // Extract short label for icon (e.g., "KELAS 1 A" -> "1A", "1.1" -> "1")
+            const shortLabel = cls.replace(/^KELAS\s*/i, '').replace(/\s+/g, '').split('.')[0];
+            return (
+              <Card
+                key={cls}
+                className="!p-3 cursor-pointer hover:border-orange-400 transition-all group text-center"
+                onClick={() => navigate(`/teacher/grades/${encodeURIComponent(selectedSchool!)}/${encodeURIComponent(cls)}`)}
+              >
+                <div className="w-10 h-10 mx-auto mb-2 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                  <span className="text-xs font-bold truncate px-1">{shortLabel}</span>
+                </div>
+                <h3 className="text-xs font-bold text-gray-900 group-hover:text-orange-600 line-clamp-2">{cls}</h3>
+              </Card>
+            );
+          })}
         </div>
       </div>
     );
@@ -806,7 +886,7 @@ export const StudentGrades: React.FC = () => {
           </Button>
           <div>
             <h2 className="text-lg font-bold text-gray-900">Nilai Semester</h2>
-            <p className="text-xs text-gray-500">{selectedSchool} - Kelas {selectedClass}</p>
+            <p className="text-xs text-gray-500">{selectedSchool} - {selectedClass}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">

@@ -12,14 +12,20 @@ interface UseSessionsOptions {
   upcoming?: boolean;
   past?: boolean;
   today?: boolean;
+  enabled?: boolean;
 }
 
 export const useSessions = (options: UseSessionsOptions = {}) => {
+  const { enabled = true } = options;
   const [sessions, setSessions] = useState<ClassSession[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchSessions = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -45,7 +51,7 @@ export const useSessions = (options: UseSessionsOptions = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [options.teacherId, options.location, options.upcoming, options.past, options.today]);
+  }, [options.teacherId, options.location, options.upcoming, options.past, options.today, enabled]);
 
   useEffect(() => {
     fetchSessions();

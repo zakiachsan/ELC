@@ -5,7 +5,7 @@ import { Card } from '../Card';
 import { Button } from '../Button';
 import { LEVEL_COLORS } from '../../constants';
 import { useSessions } from '../../hooks/useSessions';
-import { useLocations, useStudents } from '../../hooks/useProfiles';
+import { useLocations, useStudents, useClasses } from '../../hooks/useProfiles';
 import { useReports } from '../../hooks/useReports';
 import { useHomeworks } from '../../hooks/useHomeworks';
 import { useAuth } from '../../contexts/AuthContext';
@@ -34,15 +34,30 @@ export const SessionManager: React.FC = () => {
   const { schoolId, classId } = useParams<{ schoolId?: string; classId?: string }>();
   const navigate = useNavigate();
   const { user: currentTeacher } = useAuth();
-  const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError, createSession } = useSessions();
-  const { locations: locationsData, loading: locationsLoading } = useLocations();
-  const { reports: reportsData, loading: reportsLoading, createReport, updateReport } = useReports();
-  const { homeworks: homeworksData, loading: homeworksLoading, createHomework } = useHomeworks();
-  const { profiles: studentsData, loading: studentsLoading } = useStudents();
 
   // Derive selected school and class from URL params
   const selectedSchool = schoolId ? decodeURIComponent(schoolId) : null;
   const selectedClass = classId ? decodeURIComponent(classId) : null;
+
+  // Only load heavy data when a class is selected (detail view)
+  const isDetailView = !!(selectedSchool && selectedClass);
+
+  // Stage 1: Always load locations (for school/class selection)
+  const { locations: locationsData, loading: locationsLoading } = useLocations();
+
+  // Get location ID for the selected school (needed for class filtering)
+  const selectedLocationId = selectedSchool
+    ? locationsData.find(l => l.name === selectedSchool)?.id
+    : undefined;
+
+  // Stage 1.5: Load classes for the selected school (to filter teacher's assigned classes)
+  const { classes: locationClasses, loading: classesLoading } = useClasses(selectedLocationId);
+
+  // Stage 2: Only load sessions/students/reports when viewing class details
+  const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError, createSession } = useSessions({ enabled: isDetailView });
+  const { reports: reportsData, loading: reportsLoading, createReport, updateReport } = useReports({ enabled: isDetailView });
+  const { homeworks: homeworksData, loading: homeworksLoading, createHomework } = useHomeworks({ enabled: isDetailView });
+  const { profiles: studentsData, loading: studentsLoading } = useStudents(isDetailView);
 
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming');
   const [selectedSession, setSelectedSession] = useState<ClassSession | null>(null);
@@ -62,6 +77,10 @@ export const SessionManager: React.FC = () => {
   const [multiClassDifficulty, setMultiClassDifficulty] = useState<DifficultyLevel | ''>('');
   const [multiClassDescription, setMultiClassDescription] = useState('');
   const [multiClassType, setMultiClassType] = useState<ClassType | ''>('');
+  const [multiClassFiles, setMultiClassFiles] = useState<UploadResult[]>([]);
+  const [multiClassUploading, setMultiClassUploading] = useState(false);
+  const [multiClassUploadError, setMultiClassUploadError] = useState<string | null>(null);
+  const multiClassFileInputRef = useRef<HTMLInputElement>(null);
 
   // Get teacher's available class types
   const teacherClassTypes: ClassType[] = (currentTeacher as any)?.classTypes || [];
@@ -152,10 +171,14 @@ export const SessionManager: React.FC = () => {
     materials: s.materials || [],
   }));
 
-  // Map schools/locations - filter to only show teacher's assigned school
+  // Map schools/locations - filter to only show teacher's assigned schools
   const schools = locationsData
     .filter(l => {
-      // If teacher has assigned location, only show that school
+      // If teacher has assigned locations (array), only show those schools
+      if (currentTeacher?.assignedLocationIds && currentTeacher.assignedLocationIds.length > 0) {
+        return currentTeacher.assignedLocationIds.includes(l.id);
+      }
+      // Fallback to single location if set
       if (currentTeacher?.assignedLocationId) {
         return l.id === currentTeacher.assignedLocationId;
       }
@@ -168,12 +191,32 @@ export const SessionManager: React.FC = () => {
       level: l.level || null,
     }));
 
-  // Get teacher's assigned classes, or generate based on school level
+  // Get teacher's assigned classes filtered by what's available in the selected school
   const getAvailableClasses = (): string[] => {
-    // If teacher has assigned classes, use those
+    // Get class names that exist in the selected location from database
+    const locationClassNames = locationClasses.map(c => c.name);
+
+    // If teacher has assigned classes, filter to only show ones in this location
     if (currentTeacher?.assignedClasses && currentTeacher.assignedClasses.length > 0) {
-      return currentTeacher.assignedClasses;
+      // Filter teacher's classes to only show ones that exist in this school's location
+      const filteredClasses = currentTeacher.assignedClasses.filter(teacherClass =>
+        locationClassNames.includes(teacherClass)
+      );
+      // If teacher has classes for this location, return them
+      if (filteredClasses.length > 0) {
+        return filteredClasses;
+      }
+      // If no matching classes, fall back to location classes
+      if (locationClassNames.length > 0) {
+        return locationClassNames;
+      }
     }
+
+    // If location has classes in database, use those
+    if (locationClassNames.length > 0) {
+      return locationClassNames;
+    }
+
     // Otherwise, generate based on selected school's level
     const selectedSchoolData = schools.find(s => s.name === selectedSchool);
     const level = selectedSchoolData?.level;
@@ -185,6 +228,7 @@ export const SessionManager: React.FC = () => {
         });
         break;
       case 'PRIMARY':
+      case 'ELEMENTARY':
         for (let grade = 1; grade <= 6; grade++) {
           for (let section = 1; section <= 3; section++) {
             classes.push(`${grade}.${section}`);
@@ -199,6 +243,7 @@ export const SessionManager: React.FC = () => {
         }
         break;
       case 'SENIOR':
+      case 'HIGH':
         for (let grade = 10; grade <= 12; grade++) {
           for (let section = 1; section <= 3; section++) {
             classes.push(`${grade}.${section}`);
@@ -288,17 +333,23 @@ export const SessionManager: React.FC = () => {
 
   // Filter sessions by selected school and class
   const filteredSessions = (selectedSchool && selectedClass)
-    ? sessions.filter(s => s.location.includes(selectedSchool) && s.location.includes(`Kelas ${selectedClass}`))
+    ? sessions.filter(s => s.location.includes(selectedSchool) && s.location.includes(selectedClass))
     : sessions;
 
   const upcomingSessions = filteredSessions.filter(s => new Date(s.dateTime) > now);
   const pastSessions = filteredSessions.filter(s => new Date(s.dateTime) <= now);
 
-  if (sessionsLoading || locationsLoading || reportsLoading || homeworksLoading || studentsLoading) {
+  // Show loading spinner - only check heavy data loading when in detail view
+  // Also check classesLoading when school is selected (for class selection view)
+  const isLoading = locationsLoading || (selectedSchool && !selectedClass && classesLoading) || (isDetailView && (sessionsLoading || reportsLoading || homeworksLoading || studentsLoading));
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-        <span className="ml-2 text-sm text-gray-500">Loading sessions...</span>
+        <span className="ml-2 text-sm text-gray-500">
+          {isDetailView ? 'Loading sessions...' : selectedSchool ? 'Loading classes...' : 'Loading schools...'}
+        </span>
       </div>
     );
   }
@@ -451,6 +502,51 @@ export const SessionManager: React.FC = () => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Handle file selection for multi-class modal
+  const handleMultiClassFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setMultiClassUploadError(null);
+    setMultiClassUploading(true);
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+
+        // Check file type
+        if (!isAllowedFileType(file)) {
+          setMultiClassUploadError(`File "${file.name}" tidak didukung. Gunakan PDF, DOC, DOCX, PPT, PPTX, atau gambar.`);
+          continue;
+        }
+
+        // Check file size (max 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+          setMultiClassUploadError(`File "${file.name}" terlalu besar. Maksimal 10MB.`);
+          continue;
+        }
+
+        // Upload file
+        const result = await uploadFile(file, 'sessions');
+        setMultiClassFiles(prev => [...prev, result]);
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      setMultiClassUploadError('Gagal mengupload file. Silakan coba lagi.');
+    } finally {
+      setMultiClassUploading(false);
+      // Reset input
+      if (multiClassFileInputRef.current) {
+        multiClassFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Remove uploaded file for multi-class modal
+  const handleRemoveMultiClassFile = (index: number) => {
+    setMultiClassFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleCreateSchedule = async () => {
     if (scheduleForm.dates.length === 0 || !scheduleForm.startTime || !scheduleForm.endTime || !scheduleForm.topic || !selectedSchool) {
       alert('Silakan lengkapi semua field yang wajib diisi!');
@@ -476,7 +572,7 @@ export const SessionManager: React.FC = () => {
           teacher_id: currentTeacher?.id || '',
           topic: scheduleForm.topic,
           date_time: dateTime,
-          location: `${selectedSchool} - Kelas ${selectedClass}`,
+          location: `${selectedSchool} - ${selectedClass}`,
           skill_category: scheduleForm.skillCategory as any || 'Grammar',
           difficulty_level: scheduleForm.difficultyLevel as any || 'Elementary',
           description: scheduleForm.description || null,
@@ -595,18 +691,22 @@ export const SessionManager: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-          {availableClasses.map((cls) => (
-            <Card
-              key={cls}
-              className="!p-3 cursor-pointer hover:border-orange-400 transition-all group text-center"
-              onClick={() => navigateToClass(cls)}
-            >
-              <div className="w-10 h-10 mx-auto mb-2 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
-                <span className="text-sm font-bold">{cls.split('.')[0]}</span>
-              </div>
-              <h3 className="text-sm font-bold text-gray-900 group-hover:text-orange-600">Kelas {cls}</h3>
-            </Card>
-          ))}
+          {availableClasses.map((cls) => {
+            // Extract short label for icon (e.g., "KELAS 1 A" -> "1A", "1.1" -> "1")
+            const shortLabel = cls.replace(/^KELAS\s*/i, '').replace(/\s+/g, '').split('.')[0];
+            return (
+              <Card
+                key={cls}
+                className="!p-3 cursor-pointer hover:border-orange-400 transition-all group text-center"
+                onClick={() => navigateToClass(cls)}
+              >
+                <div className="w-10 h-10 mx-auto mb-2 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                  <span className="text-xs font-bold truncate px-1">{shortLabel}</span>
+                </div>
+                <h3 className="text-xs font-bold text-gray-900 group-hover:text-orange-600 line-clamp-2">{cls}</h3>
+              </Card>
+            );
+          })}
         </div>
 
         {/* Multi-Class Schedule Modal */}
@@ -617,7 +717,7 @@ export const SessionManager: React.FC = () => {
                 <h3 className="text-sm font-bold text-gray-900">
                   Tambah Jadwal Multi-Kelas
                 </h3>
-                <button onClick={() => { setShowMultiClassModal(false); setMultiClassEntries([]); setMultiClassDates([]); setTempDate(''); setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : ''); }} className="p-1 text-gray-400 hover:text-gray-600">
+                <button onClick={() => { setShowMultiClassModal(false); setMultiClassEntries([]); setMultiClassDates([]); setTempDate(''); setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : ''); setMultiClassFiles([]); setMultiClassUploadError(null); }} className="p-1 text-gray-400 hover:text-gray-600">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -760,6 +860,79 @@ export const SessionManager: React.FC = () => {
                       placeholder="Deskripsi materi..."
                     />
                   </div>
+
+                  {/* File Upload Section */}
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-gray-400 uppercase">
+                      Upload Materi (PDF, DOC, PPT, Gambar)
+                    </label>
+
+                    {/* Upload Zone */}
+                    <div
+                      onClick={() => !multiClassUploading && multiClassFileInputRef.current?.click()}
+                      className={`border-2 border-dashed rounded-lg p-3 text-center cursor-pointer transition-colors ${
+                        multiClassUploading
+                          ? 'border-gray-300 bg-gray-50 cursor-not-allowed'
+                          : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50'
+                      }`}
+                    >
+                      {multiClassUploading ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+                          <span className="text-xs text-gray-500">Mengupload...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="w-5 h-5 text-gray-300 mx-auto mb-1" />
+                          <p className="text-[10px] text-gray-400">
+                            Klik untuk pilih file
+                          </p>
+                          <p className="text-[9px] text-gray-300">
+                            Maks. 10MB per file
+                          </p>
+                        </>
+                      )}
+                    </div>
+
+                    <input
+                      ref={multiClassFileInputRef}
+                      type="file"
+                      multiple
+                      accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.gif"
+                      onChange={handleMultiClassFileSelect}
+                      className="hidden"
+                    />
+
+                    {/* Upload Error */}
+                    {multiClassUploadError && (
+                      <div className="text-[10px] text-red-600 bg-red-50 p-2 rounded border border-red-100">
+                        {multiClassUploadError}
+                      </div>
+                    )}
+
+                    {/* Uploaded Files List */}
+                    {multiClassFiles.length > 0 && (
+                      <div className="space-y-1">
+                        {multiClassFiles.map((file, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-2 p-1.5 bg-gray-50 rounded border border-gray-100"
+                          >
+                            <File className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                            <span className="text-[10px] text-gray-700 truncate flex-1">
+                              {file.fileName}
+                            </span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleRemoveMultiClassFile(idx); }}
+                              className="p-0.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -788,7 +961,7 @@ export const SessionManager: React.FC = () => {
                                 }}
                                 className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                               />
-                              <span className="text-sm font-bold text-gray-900">Kelas {cls}</span>
+                              <span className="text-sm font-bold text-gray-900">{cls}</span>
                             </label>
                             {isSelected && (
                               <div className="flex items-center gap-2">
@@ -835,6 +1008,9 @@ export const SessionManager: React.FC = () => {
                   <p className="text-xs text-blue-800">
                     <span className="font-bold">{multiClassEntries.length * multiClassDates.length}</span> jadwal akan dibuat:{' '}
                     <span className="font-bold">{multiClassEntries.length}</span> kelas × <span className="font-bold">{multiClassDates.length}</span> tanggal
+                    {multiClassFiles.length > 0 && (
+                      <span> • <span className="font-bold">{multiClassFiles.length}</span> file materi</span>
+                    )}
                   </p>
                 </div>
               )}
@@ -842,8 +1018,8 @@ export const SessionManager: React.FC = () => {
               {/* Actions */}
               <div className="flex gap-2 pt-2">
                 <button
-                  onClick={() => { setShowMultiClassModal(false); setMultiClassEntries([]); setMultiClassDates([]); setTempDate(''); setMultiClassTopic(''); setMultiClassSkill(''); setMultiClassDifficulty(''); setMultiClassDescription(''); setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : ''); }}
-                  disabled={isSubmitting}
+                  onClick={() => { setShowMultiClassModal(false); setMultiClassEntries([]); setMultiClassDates([]); setTempDate(''); setMultiClassTopic(''); setMultiClassSkill(''); setMultiClassDifficulty(''); setMultiClassDescription(''); setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : ''); setMultiClassFiles([]); setMultiClassUploadError(null); }}
+                  disabled={isSubmitting || multiClassUploading}
                   className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50"
                 >
                   Batal
@@ -861,6 +1037,9 @@ export const SessionManager: React.FC = () => {
                     }
                     setIsSubmitting(true);
                     try {
+                      // Collect material URLs from uploaded files
+                      const materialUrls = multiClassFiles.map(f => f.url);
+
                       // Create session for each date × class combination
                       for (const date of multiClassDates) {
                         for (const entry of multiClassEntries) {
@@ -869,11 +1048,11 @@ export const SessionManager: React.FC = () => {
                             teacher_id: currentTeacher?.id || '',
                             topic: multiClassTopic,
                             date_time: dateTime,
-                            location: `${selectedSchool} - Kelas ${entry.classId}`,
+                            location: `${selectedSchool} - ${entry.classId}`,
                             skill_category: multiClassSkill as any || 'Grammar',
                             difficulty_level: multiClassDifficulty as any || 'Elementary',
                             description: multiClassDescription || null,
-                            materials: [],
+                            materials: materialUrls,
                             class_type: multiClassType || 'REGULAR',
                           });
                         }
@@ -889,6 +1068,8 @@ export const SessionManager: React.FC = () => {
                       setMultiClassDifficulty('');
                       setMultiClassDescription('');
                       setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : '');
+                      setMultiClassFiles([]);
+                      setMultiClassUploadError(null);
                     } catch (error) {
                       console.error('Error creating sessions:', error);
                       alert('Gagal menyimpan jadwal. Silakan coba lagi.');
@@ -896,7 +1077,7 @@ export const SessionManager: React.FC = () => {
                       setIsSubmitting(false);
                     }
                   }}
-                  disabled={isSubmitting || multiClassEntries.length === 0 || multiClassDates.length === 0 || !multiClassTopic || !multiClassType}
+                  disabled={isSubmitting || multiClassUploading || multiClassEntries.length === 0 || multiClassDates.length === 0 || !multiClassTopic || !multiClassType}
                   className="flex-1 text-xs py-2 disabled:opacity-50"
                 >
                   {isSubmitting ? (
@@ -1291,7 +1472,7 @@ export const SessionManager: React.FC = () => {
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-blue-600" /> Jadwal Mengajar
             </h2>
-            <p className="text-xs text-gray-500">{selectedSchool} - Kelas {selectedClass}</p>
+            <p className="text-xs text-gray-500">{selectedSchool} - {selectedClass}</p>
           </div>
         </div>
         <Button onClick={() => setShowCreateModal(true)} className="text-xs py-1.5 px-3">
@@ -1596,7 +1777,7 @@ export const SessionManager: React.FC = () => {
             <div className="bg-gray-50 p-3 rounded-lg">
               <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Lokasi & Kelas Terpilih</p>
               <p className="text-xs font-bold text-gray-900 flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-orange-500" /> {selectedSchool} - Kelas {selectedClass}
+                <MapPin className="w-3 h-3 text-orange-500" /> {selectedSchool} - {selectedClass}
               </p>
             </div>
 
