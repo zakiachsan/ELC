@@ -59,7 +59,7 @@ export const SessionManager: React.FC = () => {
 
   // Stage 2: Only load sessions/students/reports when viewing class details
   // OPTIMIZED: Filter at database level instead of loading all data
-  const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError, createSession } = useSessions({
+  const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError, createSession, deleteSession } = useSessions({
     schoolName: selectedSchool || undefined,
     className: selectedClass || undefined,
     enabled: isDetailView
@@ -75,8 +75,10 @@ export const SessionManager: React.FC = () => {
   const [showHomeworkModal, setShowHomeworkModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showMultiClassModal, setShowMultiClassModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [detailTab, setDetailTab] = useState<'students' | 'materials'>('materials');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Multi-class schedule form state
   const [multiClassDates, setMultiClassDates] = useState<string[]>([]);
@@ -426,6 +428,27 @@ export const SessionManager: React.FC = () => {
     setHomeworks([...homeworks, ...newHomeworks]);
     setHwForm({ title: '', description: '', dueDate: '' });
     setShowHomeworkModal(false);
+  };
+
+  // Handle delete schedule
+  const handleDeleteSchedule = async () => {
+    if (!selectedSession) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteSession(selectedSession.id);
+      setShowDeleteModal(false);
+      setSelectedSession(null);
+      // Navigate back to list
+      if (sessionIdFromUrl) {
+        navigate(`/teacher/schedule/${encodeURIComponent(selectedSchool!)}/${encodeURIComponent(selectedClass!)}`, { replace: true });
+      }
+    } catch (error) {
+      console.error('Error deleting schedule:', error);
+      alert('Failed to delete schedule. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // handleAddDate removed - dates are now auto-added on selection
@@ -1122,11 +1145,20 @@ export const SessionManager: React.FC = () => {
                 <p className="text-xs text-gray-500">Input nilai dan materi pembelajaran</p>
              </div>
            </div>
-           {isPast && (
-             <Button onClick={() => setShowHomeworkModal(true)} className="text-xs py-1.5 px-3">
-               Assign Homework
+           <div className="flex items-center gap-2">
+             <Button
+               variant="outline"
+               onClick={() => setShowDeleteModal(true)}
+               className="text-xs py-1.5 px-3 text-red-600 border-red-200 hover:bg-red-50"
+             >
+               Delete
              </Button>
-           )}
+             {isPast && (
+               <Button onClick={() => setShowHomeworkModal(true)} className="text-xs py-1.5 px-3">
+                 Assign Homework
+               </Button>
+             )}
+           </div>
         </div>
 
         {/* Session Info Card */}
@@ -1457,6 +1489,58 @@ export const SessionManager: React.FC = () => {
                   className="flex-1 text-xs py-2"
                 >
                   Assign to All Students
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <Card className="w-full max-w-sm !p-4 space-y-4">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <h3 className="text-base font-bold text-gray-900">Delete Schedule?</h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  Are you sure you want to delete this schedule? This action cannot be undone.
+                </p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs font-bold text-gray-900">{selectedSession.topic}</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  {new Date(selectedSession.dateTime).toLocaleDateString('id-ID', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  })} • {new Date(selectedSession.dateTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                </p>
+                <p className="text-[10px] text-gray-500">{selectedSession.location}</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={isDeleting}
+                  className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <Button
+                  onClick={handleDeleteSchedule}
+                  disabled={isDeleting}
+                  className="flex-1 text-xs py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50"
+                >
+                  {isDeleting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Deleting...
+                    </span>
+                  ) : (
+                    'Delete Schedule'
+                  )}
                 </Button>
               </div>
             </Card>

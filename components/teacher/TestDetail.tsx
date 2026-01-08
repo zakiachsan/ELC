@@ -5,7 +5,7 @@ import { Button } from '../Button';
 import { testsService, TestSchedule, TestType } from '../../services/tests.service';
 import {
   ArrowLeft, Loader2, FileText, Clock, Calendar, Download,
-  Trash2, Edit, Users, CheckCircle, AlertCircle, Play, Eye
+  Trash2, Edit, Users, CheckCircle, AlertCircle, Play, Eye, X
 } from 'lucide-react';
 import type { Database } from '../../lib/database.types';
 
@@ -32,6 +32,7 @@ export const TestDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     if (testId) {
@@ -60,12 +61,12 @@ export const TestDetail: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (!test || !confirm('Are you sure you want to delete this test schedule?')) return;
+    if (!test) return;
 
     setDeleting(true);
     try {
       await testsService.delete(test.id);
-      alert('Test schedule deleted successfully.');
+      setShowDeleteModal(false);
       navigate(-1);
     } catch (err) {
       console.error('Error deleting test:', err);
@@ -132,11 +133,10 @@ export const TestDetail: React.FC = () => {
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
-              onClick={handleDelete}
-              disabled={deleting}
+              onClick={() => setShowDeleteModal(true)}
               className="text-red-600 border-red-200 hover:bg-red-50 text-xs"
             >
-              {deleting ? 'Deleting...' : 'Delete'}
+              Delete
             </Button>
             <Button onClick={handleEdit} className="text-xs">
               Edit Test
@@ -368,6 +368,63 @@ export const TestDetail: React.FC = () => {
           </Card>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <Card className="w-full max-w-sm !p-4 space-y-4">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900">Delete Test Schedule?</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Are you sure you want to delete this test? This action cannot be undone.
+              </p>
+            </div>
+            <div className="p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${TEST_TYPE_COLORS[test.test_type]}`}>
+                  {TEST_TYPE_LABELS[test.test_type]}
+                </span>
+              </div>
+              <p className="text-xs font-bold text-gray-900">{test.title}</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                {new Date(test.date_time).toLocaleDateString('id-ID', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric'
+                })} • {new Date(test.date_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+              <p className="text-[10px] text-gray-500">{test.location} - {test.class_name}</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <Button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 text-xs py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Deleting...
+                  </span>
+                ) : (
+                  'Delete Test'
+                )}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
