@@ -29,6 +29,34 @@ const LEVEL_OPTIONS: { value: DifficultyLevel | ''; label: string }[] = [
 
 const PAGE_SIZE = 20;
 
+// Helper function to get school level priority for sorting
+const getSchoolLevelPriority = (schoolName: string): number => {
+  const name = schoolName.toUpperCase();
+
+  // Check by name prefix
+  if (name.startsWith('TK ') || name.startsWith('TK-')) return 1;
+  if (name.startsWith('SD ') || name.startsWith('SDK ')) return 2;
+  if (name.startsWith('SMP ')) return 3;
+  if (name.startsWith('SMA ') || name.startsWith('SMK ')) return 4;
+
+  return 5; // Other schools at the end
+};
+
+// Sort schools by level (TK → SD → SMP → SMA/SMK) then by name
+const sortSchoolsByLevel = (schools: string[]): string[] => {
+  return [...schools].sort((a, b) => {
+    const priorityA = getSchoolLevelPriority(a);
+    const priorityB = getSchoolLevelPriority(b);
+
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB;
+    }
+
+    // Same level, sort alphabetically by name
+    return a.localeCompare(b);
+  });
+};
+
 export const StudentList: React.FC = () => {
   const navigate = useNavigate();
 
@@ -37,6 +65,7 @@ export const StudentList: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [schoolFilter, setSchoolFilter] = useState('');
+  const [classFilter, setClassFilter] = useState('');
   const [levelFilter, setLevelFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -49,10 +78,16 @@ export const StudentList: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Reset page when filters change
+  // Reset page and class filter when school filter changes
   useEffect(() => {
     setCurrentPage(1);
+    setClassFilter(''); // Reset class filter when school changes
   }, [schoolFilter]);
+
+  // Reset page when class filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [classFilter]);
 
   // Data Hooks - Statistics tab uses all students
   const { profiles: allStudents, loading: allStudentsLoading } = useStudents();
@@ -86,7 +121,32 @@ export const StudentList: React.FC = () => {
       const location = locations.find(loc => loc.id === student.assigned_location_id);
       if (location) return location.name;
     }
-    return student.school_origin || '';
+    // school_origin format: "SCHOOL_NAME - CLASS_NAME", extract school part
+    if (student.school_origin) {
+      const parts = student.school_origin.split(' - ');
+      return parts[0] || student.school_origin;
+    }
+    return '';
+  };
+
+  // Helper to get class name from school_origin or assigned_classes
+  const getClassName = (student: Profile): string => {
+    // First check assigned_classes array
+    if (student.assigned_classes && student.assigned_classes.length > 0) {
+      return student.assigned_classes.join(', ');
+    }
+    // Then check class_name field
+    if (student.class_name) {
+      return student.class_name;
+    }
+    // Finally, try to parse from school_origin (format: "SCHOOL - CLASS")
+    if (student.school_origin && student.school_origin.includes(' - ')) {
+      const parts = student.school_origin.split(' - ');
+      if (parts.length > 1) {
+        return parts.slice(1).join(' - '); // Get everything after first " - "
+      }
+    }
+    return '';
   };
 
   // Calculate unique schools from all students (for dropdown filter)
@@ -94,8 +154,27 @@ export const StudentList: React.FC = () => {
     const schools = allStudents
       .map(s => getSchoolName(s))
       .filter((school): school is string => !!school);
-    return [...new Set(schools)].sort();
+    return sortSchoolsByLevel([...new Set(schools)]);
   }, [allStudents, locations]);
+
+  // Calculate unique classes based on selected school (for dropdown filter)
+  const uniqueClasses = useMemo(() => {
+    // Filter students by selected school first
+    const studentsInSchool = schoolFilter
+      ? allStudents.filter(s => getSchoolName(s) === schoolFilter)
+      : allStudents;
+
+    const classes = studentsInSchool
+      .map(s => getClassName(s))
+      .filter((cls): cls is string => !!cls);
+    return [...new Set(classes)].sort();
+  }, [allStudents, schoolFilter, locations]);
+
+  // Filter paginated students by class (client-side filtering since server doesn't support class filter)
+  const filteredStudents = useMemo(() => {
+    if (!classFilter) return paginatedStudents;
+    return paginatedStudents.filter(s => getClassName(s) === classFilter);
+  }, [paginatedStudents, classFilter]);
 
   // Calculate student statistics (uses all students for statistics tab)
   const studentStats = useMemo(() => {
@@ -519,7 +598,7 @@ export const StudentList: React.FC = () => {
                 </div>
 
                 {/* School Filter */}
-                <div className="w-full sm:w-56">
+                <div className="w-full sm:w-48">
                   <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
                     <School className="w-3 h-3" /> Sekolah
                   </label>
@@ -534,17 +613,36 @@ export const StudentList: React.FC = () => {
                     ))}
                   </select>
                 </div>
+
+                {/* Class Filter */}
+                <div className="w-full sm:w-32">
+                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <GraduationCap className="w-3 h-3" /> Kelas
+                  </label>
+                  <select
+                    value={classFilter}
+                    onChange={e => setClassFilter(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-gray-50 focus:bg-white"
+                  >
+                    <option value="">Semua</option>
+                    {uniqueClasses.map(cls => (
+                      <option key={cls} value={cls}>{cls}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Stats & Reset */}
               <div className="flex items-end gap-2 w-full sm:w-auto">
                 <div className="bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
                   <span className="text-[9px] font-bold text-blue-400 uppercase block">Hasil</span>
-                  <span className="text-sm font-bold text-blue-900">{totalCount.toLocaleString()} Siswa</span>
+                  <span className="text-sm font-bold text-blue-900">
+                    {classFilter ? `${filteredStudents.length} / ${totalCount.toLocaleString()}` : totalCount.toLocaleString()} Siswa
+                  </span>
                 </div>
-                {(schoolFilter || searchQuery) && (
+                {(schoolFilter || classFilter || searchQuery) && (
                   <button
-                    onClick={() => { setSchoolFilter(''); setSearchQuery(''); setCurrentPage(1); }}
+                    onClick={() => { setSchoolFilter(''); setClassFilter(''); setSearchQuery(''); setCurrentPage(1); }}
                     className="px-4 py-2 h-[42px] bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold text-gray-600 transition-all flex items-center gap-1"
                   >
                     <X className="w-3.5 h-3.5" /> Reset
@@ -568,6 +666,7 @@ export const StudentList: React.FC = () => {
                       <tr>
                         <th className="px-4 py-3">Siswa</th>
                         <th className="px-4 py-3">Sekolah</th>
+                        <th className="px-4 py-3">Kelas</th>
                         <th className="px-4 py-3">Level</th>
                         <th className="px-4 py-3 text-center">Rata-rata</th>
                         <th className="px-4 py-3 text-center">Kehadiran</th>
@@ -575,7 +674,7 @@ export const StudentList: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {paginatedStudents.map((student) => {
+                      {filteredStudents.map((student) => {
                         const avg = getStudentAverage(student.id);
                         const attendance = getAttendanceRate(student.id);
                         const level = studentStats[student.id]?.level || 'N/A';
@@ -598,6 +697,11 @@ export const StudentList: React.FC = () => {
                             <td className="px-4 py-3">
                               <span className="text-xs font-medium text-gray-700 bg-gray-100 px-2 py-1 rounded-md">
                                 {getSchoolName(student) || 'N/A'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-xs font-medium text-gray-600">
+                                {getClassName(student) || '-'}
                               </span>
                             </td>
                             <td className="px-4 py-3">
@@ -650,9 +754,9 @@ export const StudentList: React.FC = () => {
                           </tr>
                         );
                       })}
-                      {paginatedStudents.length === 0 && (
+                      {filteredStudents.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="px-4 py-12 text-center text-gray-400 text-sm italic">
+                          <td colSpan={7} className="px-4 py-12 text-center text-gray-400 text-sm italic">
                             Tidak ada siswa ditemukan.
                           </td>
                         </tr>

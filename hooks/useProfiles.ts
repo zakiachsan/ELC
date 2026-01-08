@@ -186,6 +186,41 @@ export const useStudentsBySchoolAndClass = (locationId?: string, className?: str
   };
 };
 
+// Helper function to get school level priority for sorting
+const getSchoolLevelPriority = (location: Location): number => {
+  const name = location.name.toUpperCase();
+  const level = location.level?.toUpperCase() || '';
+
+  // Check by level field first
+  if (level === 'KINDERGARTEN') return 1;
+  if (level === 'ELEMENTARY' || level === 'PRIMARY') return 2;
+  if (level === 'JUNIOR') return 3;
+  if (level === 'SENIOR') return 4;
+
+  // Fallback: check by name prefix
+  if (name.startsWith('TK ') || name.startsWith('TK-')) return 1;
+  if (name.startsWith('SD ') || name.startsWith('SDK ')) return 2;
+  if (name.startsWith('SMP ')) return 3;
+  if (name.startsWith('SMA ') || name.startsWith('SMK ')) return 4;
+
+  return 5; // Other schools at the end
+};
+
+// Sort locations by level (TK → SD → SMP → SMA/SMK) then by name
+const sortLocationsByLevel = (locations: Location[]): Location[] => {
+  return [...locations].sort((a, b) => {
+    const priorityA = getSchoolLevelPriority(a);
+    const priorityB = getSchoolLevelPriority(b);
+
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB;
+    }
+
+    // Same level, sort alphabetically by name
+    return a.name.localeCompare(b.name);
+  });
+};
+
 export const useLocations = () => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
@@ -196,7 +231,7 @@ export const useLocations = () => {
       setLoading(true);
       setError(null);
       const data = await profilesService.getLocations();
-      setLocations(data);
+      setLocations(sortLocationsByLevel(data));
     } catch (err) {
       setError(err as Error);
     } finally {
@@ -210,13 +245,13 @@ export const useLocations = () => {
 
   const createLocation = async (location: LocationInsert) => {
     const newLocation = await profilesService.createLocation(location);
-    setLocations(prev => [...prev, newLocation]);
+    setLocations(prev => sortLocationsByLevel([...prev, newLocation]));
     return newLocation;
   };
 
   const updateLocation = async (id: string, updates: LocationUpdate) => {
     const updated = await profilesService.updateLocation(id, updates);
-    setLocations(prev => prev.map(l => l.id === id ? updated : l));
+    setLocations(prev => sortLocationsByLevel(prev.map(l => l.id === id ? updated : l)));
     return updated;
   };
 
