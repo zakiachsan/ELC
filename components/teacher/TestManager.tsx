@@ -246,10 +246,15 @@ export const TestManager: React.FC = () => {
 
   const availableClasses = getAvailableClasses();
 
-  // Filter tests by date
+  // Filter tests by date - include tests that are in progress (not yet ended)
   const now = new Date();
-  const upcomingTests = testsData.filter(t => new Date(t.date_time) >= now);
-  const pastTests = testsData.filter(t => new Date(t.date_time) < now);
+  const getTestEndTime = (test: any): Date => {
+    const startTime = new Date(test.date_time);
+    return new Date(startTime.getTime() + (test.duration_minutes * 60 * 1000));
+  };
+  
+  const upcomingTests = testsData.filter(t => getTestEndTime(t) > now);
+  const pastTests = testsData.filter(t => getTestEndTime(t) <= now);
   const displayedTests = activeTab === 'upcoming' ? upcomingTests : pastTests;
 
   // Reset multi-class form

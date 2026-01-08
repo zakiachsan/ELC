@@ -334,8 +334,14 @@ export const SessionManager: React.FC = () => {
 
   // Filter sessions by selected school and class
   // Sessions are already filtered at database level by school and class
-  const upcomingSessions = sessions.filter(s => new Date(s.dateTime) > now);
-  const pastSessions = sessions.filter(s => new Date(s.dateTime) <= now);
+  // Include sessions that are in progress (default 90 min duration)
+  const getSessionEndTime = (session: any): Date => {
+    const startTime = new Date(session.dateTime);
+    return new Date(startTime.getTime() + (90 * 60 * 1000)); // Assume 90 min duration
+  };
+  
+  const upcomingSessions = sessions.filter(s => getSessionEndTime(s) > now);
+  const pastSessions = sessions.filter(s => getSessionEndTime(s) <= now);
 
   // Show loading spinner - only check heavy data loading when in detail view
   // Also check classesLoading when school is selected (for class selection view)

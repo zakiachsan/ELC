@@ -86,6 +86,21 @@ export const OnlineTest: React.FC = () => {
         return;
       }
 
+      // Check if test time has started
+      const testDateTime = new Date(testData.date_time);
+      const testEndTime = new Date(testDateTime.getTime() + (testData.duration_minutes * 60 * 1000));
+      const now = new Date();
+      
+      if (now < testDateTime) {
+        setError(`Test belum dimulai. Test akan dimulai pada ${testDateTime.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}`);
+        return;
+      }
+      
+      if (now > testEndTime) {
+        setError(`Test sudah berakhir. Test berakhir pada ${testEndTime.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}`);
+        return;
+      }
+
       // Check for existing submission
       if (user?.id) {
         const existingSubmission = await testsService.getSubmissionByStudent(testId, user.id);
@@ -281,44 +296,48 @@ export const OnlineTest: React.FC = () => {
   if (!testStarted) {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-md mx-auto">
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm">Back</span>
           </button>
 
-          <Card className="!p-8">
-            <div className="text-center mb-8">
-              <div className="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <FileText className="w-8 h-8 text-purple-600" />
+          <Card className="!p-5">
+            {/* Header with icon on left */}
+            <div className="flex items-start gap-4 mb-5">
+              <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                <FileText className="w-6 h-6 text-purple-600" />
               </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">{testInfo?.title}</h1>
-              <p className="text-sm text-gray-500">{testInfo?.location} - {testInfo?.class_name}</p>
+              <div className="min-w-0">
+                <h1 className="text-lg font-bold text-gray-900 mb-1">{testInfo?.title}</h1>
+                <p className="text-sm text-gray-500">{testInfo?.location} - {testInfo?.class_name}</p>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-8">
-              <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <HelpCircle className="w-6 h-6 text-gray-400 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-gray-900">{questions.length}</p>
-                <p className="text-xs text-gray-500">Questions</p>
+            {/* Stats in horizontal layout */}
+            <div className="flex gap-3 mb-5">
+              <div className="flex-1 bg-gray-50 rounded-lg px-3 py-2.5 flex items-center gap-3">
+                <HelpCircle className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                <span className="text-lg font-bold text-gray-900">{questions.length}</span>
+                <span className="text-xs text-gray-500">Questions</span>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <Timer className="w-6 h-6 text-gray-400 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-gray-900">{testInfo?.duration_minutes || 60}</p>
-                <p className="text-xs text-gray-500">Minutes</p>
+              <div className="flex-1 bg-gray-50 rounded-lg px-3 py-2.5 flex items-center gap-3">
+                <Timer className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                <span className="text-lg font-bold text-gray-900">{testInfo?.duration_minutes || 60}</span>
+                <span className="text-xs text-gray-500">Minutes</span>
               </div>
             </div>
 
             {testInfo?.description && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-8">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-5">
                 <p className="text-sm text-yellow-800">{testInfo.description}</p>
               </div>
             )}
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-5">
               <h3 className="text-sm font-bold text-blue-900 mb-2">Instructions:</h3>
               <ul className="text-xs text-blue-800 space-y-1">
                 <li>- Once you start, the timer will begin counting down.</li>
@@ -332,19 +351,21 @@ export const OnlineTest: React.FC = () => {
             <Button
               onClick={handleStartTest}
               disabled={submitting || questions.length === 0}
-              className="w-full py-4 text-lg"
+              className="w-full justify-center"
             >
-              {submitting ? (
-                <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Starting...
-                </>
-              ) : (
-                <>
-                  <Play className="w-5 h-5 mr-2" />
-                  Start Test
-                </>
-              )}
+              <span className="flex items-center gap-2">
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Starting...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-5 h-5" />
+                    Start Test
+                  </>
+                )}
+              </span>
             </Button>
           </Card>
         </div>
@@ -490,7 +511,7 @@ export const OnlineTest: React.FC = () => {
             onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
             disabled={currentIndex === 0}
           >
-            <ArrowLeft className="w-4 h-4 mr-1" /> Previous
+            Previous
           </Button>
 
           <div className="text-center">
@@ -503,7 +524,7 @@ export const OnlineTest: React.FC = () => {
             <Button
               onClick={() => setCurrentIndex(prev => Math.min(questions.length - 1, prev + 1))}
             >
-              Next <ArrowRight className="w-4 h-4 ml-1" />
+              Next
             </Button>
           ) : (
             <Button
