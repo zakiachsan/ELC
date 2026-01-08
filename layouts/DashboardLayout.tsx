@@ -149,6 +149,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <SidebarNavItem to="/teacher/schedule" label={t.nav_schedule} icon={CalendarDays} onClick={closeMobileMenu} />
               <SidebarNavItem to="/teacher/tests" label="Test Schedule" icon={List} onClick={closeMobileMenu} />
               <SidebarNavItem to="/teacher/grades" label="Student Grades" icon={BarChart3} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/teacher/students" label="Students" icon={Users} onClick={closeMobileMenu} />
               <SidebarNavItem to="/teacher/materials" label="Afternoon Classes" icon={BookOpen} onClick={closeMobileMenu} />
             </>
           )}
@@ -158,7 +159,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <SidebarNavItem to="/student/dashboard" label={t.nav_dashboard} icon={LayoutDashboard} onClick={closeMobileMenu} />
               <SidebarNavItem to="/student/schedule" label={t.nav_schedule} icon={CalendarDays} onClick={closeMobileMenu} />
               <SidebarNavItem to="/student/progress" label={t.nav_my_progress} icon={TrendingUp} onClick={closeMobileMenu} />
-              <SidebarNavItem to="/student/grades" label="Semester Grades" icon={BarChart3} onClick={closeMobileMenu} />
               <SidebarNavItem to="/student/review" label="Teacher Review" icon={Star} onClick={closeMobileMenu} />
               {/* Temporarily hidden - Afternoon Classes menu */}
               {/* <SidebarNavItem to="/student/learning" label="Afternoon Classes" icon={BookOpen} onClick={closeMobileMenu} /> */}
@@ -196,7 +196,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <span className="theme-text-primary">{currentUser.name}</span>
             </h1>
           </div>
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+          <div className="hidden sm:flex items-center gap-3 w-auto justify-end">
             <button
               onClick={() => setLanguage(language === 'en' ? 'id' : 'en')}
               className="flex items-center gap-1.5 text-[10px] font-bold bg-white border border-gray-200 px-3 py-1.5 rounded-full hover:bg-gray-50 transition-colors shadow-sm text-gray-800"

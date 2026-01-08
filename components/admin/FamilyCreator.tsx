@@ -7,6 +7,7 @@ import { MOCK_USERS, MOCK_SCHOOLS, MOCK_SESSIONS, MOCK_SESSION_REPORTS } from '.
 import { UserRole, User, ClassType } from '../../types';
 import { useTeachers, useLocations, useParents, useStudentsPaginated, useClasses } from '../../hooks/useProfiles';
 import { supabase } from '../../lib/supabase';
+import { profilesService } from '../../services/profiles.service';
 
 export const AccountManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'families' | 'teachers'>('families');
@@ -46,11 +47,13 @@ export const AccountManager: React.FC = () => {
   const [editStudentId, setEditStudentId] = useState<string | null>(null);
   const [editTeacherId, setEditTeacherId] = useState<string | null>(null);
 
-  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, id: string, name: string }>({
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, id: string, name: string, type: 'student' | 'teacher' }>({
     isOpen: false,
     id: '',
-    name: ''
+    name: '',
+    type: 'student'
   });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [parentName, setParentName] = useState('');
   const [parentEmail, setParentEmail] = useState('');
@@ -508,9 +511,23 @@ export const AccountManager: React.FC = () => {
     setView('form');
   };
 
-  const handleDeleteAccount = () => {
-    setMockUsers(prev => prev.filter(u => u.id !== deleteConfirm.id));
-    setDeleteConfirm({ isOpen: false, id: '', name: '' });
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      await profilesService.delete(deleteConfirm.id);
+      // Refetch the appropriate data based on what was deleted
+      if (deleteConfirm.type === 'student') {
+        refetchStudents();
+      } else {
+        refetchTeachers();
+      }
+      setDeleteConfirm({ isOpen: false, id: '', name: '', type: 'student' });
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      alert('Failed to delete account. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Helper to extract class name from school_origin format
@@ -1142,7 +1159,7 @@ export const AccountManager: React.FC = () => {
                                               <Pencil className="w-3.5 h-3.5" />
                                             </button>
                                             <button
-                                              onClick={() => setDeleteConfirm({ isOpen: true, id: fam.student.id, name: fam.student.name })}
+                                              onClick={() => setDeleteConfirm({ isOpen: true, id: fam.student.id, name: fam.student.name, type: 'student' })}
                                               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all" title="Delete"
                                             >
                                               <Trash2 className="w-3.5 h-3.5" />
@@ -1476,7 +1493,7 @@ export const AccountManager: React.FC = () => {
                                                 <button onClick={() => handleEditTeacher(t)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all">
                                                   <Pencil className="w-3.5 h-3.5" />
                                                 </button>
-                                                <button onClick={() => setDeleteConfirm({ isOpen: true, id: t.id, name: t.name })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all">
+                                                <button onClick={() => setDeleteConfirm({ isOpen: true, id: t.id, name: t.name, type: 'teacher' })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all">
                                                   <Trash2 className="w-3.5 h-3.5" />
                                                 </button>
                                               </div>
@@ -1788,12 +1805,32 @@ export const AccountManager: React.FC = () => {
                      <ShieldAlert className="w-5 h-5" />
                   </div>
                   <div className="space-y-1">
-                     <h3 className="text-sm font-bold text-gray-900">Hapus Akun</h3>
-                     <p className="text-[10px] text-gray-500">Hapus akun <span className="font-bold">"{deleteConfirm.name}"</span>?</p>
+                     <h3 className="text-sm font-bold text-gray-900">Delete Account</h3>
+                     <p className="text-[10px] text-gray-500">Are you sure you want to delete <span className="font-bold">"{deleteConfirm.name}"</span>?</p>
+                     <p className="text-[9px] text-red-500">This action cannot be undone.</p>
                   </div>
                   <div className="flex gap-2 pt-1">
-                     <button onClick={() => setDeleteConfirm({...deleteConfirm, isOpen: false})} className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg font-bold text-[10px] uppercase">Batal</button>
-                     <button onClick={handleDeleteAccount} className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-[10px] uppercase">Hapus</button>
+                     <button 
+                       onClick={() => setDeleteConfirm({ isOpen: false, id: '', name: '', type: 'student' })} 
+                       disabled={isDeleting}
+                       className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg font-bold text-[10px] uppercase disabled:opacity-50"
+                     >
+                       Cancel
+                     </button>
+                     <button 
+                       onClick={handleDeleteAccount} 
+                       disabled={isDeleting}
+                       className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-[10px] uppercase disabled:opacity-50 flex items-center justify-center gap-1"
+                     >
+                       {isDeleting ? (
+                         <>
+                           <Loader2 className="w-3 h-3 animate-spin" />
+                           Deleting...
+                         </>
+                       ) : (
+                         'Delete'
+                       )}
+                     </button>
                   </div>
                </div>
             </div>

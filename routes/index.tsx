@@ -52,6 +52,7 @@ import { TeacherAttendance } from '../components/teacher/TeacherAttendance';
 import { TestManager } from '../components/teacher/TestManager';
 import { TestCreator } from '../components/teacher/TestCreator';
 import { TestDetail } from '../components/teacher/TestDetail';
+import { StudentManager as TeacherStudentManager } from '../components/teacher/StudentManager';
 
 // Student Components
 import { StudentView } from '../components/student/StudentView';
@@ -506,6 +507,16 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
           <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.TEACHER]}>
             <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
               <TeacherAttendance />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teacher/students"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.TEACHER]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <TeacherStudentManager />
             </DashboardWrapper>
           </ProtectedRoute>
         }

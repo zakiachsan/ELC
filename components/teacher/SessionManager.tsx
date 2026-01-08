@@ -59,7 +59,7 @@ export const SessionManager: React.FC = () => {
 
   // Stage 2: Only load sessions/students/reports when viewing class details
   // OPTIMIZED: Filter at database level instead of loading all data
-  const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError, createSession, deleteSession } = useSessions({
+  const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError, createSession, updateSession, deleteSession } = useSessions({
     schoolName: selectedSchool || undefined,
     className: selectedClass || undefined,
     enabled: isDetailView
@@ -76,6 +76,20 @@ export const SessionManager: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showMultiClassModal, setShowMultiClassModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showEditSessionModal, setShowEditSessionModal] = useState(false);
+  const [editSessionForm, setEditSessionForm] = useState({
+    date: '',
+    startTime: '',
+    endTime: '',
+    topic: '',
+    skillCategories: [] as SkillCategory[],
+    description: '',
+    materials: [] as string[]
+  });
+  const [editSessionFiles, setEditSessionFiles] = useState<UploadResult[]>([]);
+  const [editSessionUploading, setEditSessionUploading] = useState(false);
+  const [editSessionUploadError, setEditSessionUploadError] = useState<string | null>(null);
+  const editSessionFileInputRef = useRef<HTMLInputElement>(null);
   const [detailTab, setDetailTab] = useState<'students' | 'materials'>('materials');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -87,23 +101,17 @@ export const SessionManager: React.FC = () => {
   const [multiClassTopic, setMultiClassTopic] = useState('');
   const [multiClassSkills, setMultiClassSkills] = useState<SkillCategory[]>([]);
   // multiClassDifficulty removed - no longer needed
+  // multiClassType removed - auto-detected from selected class
   const [multiClassDescription, setMultiClassDescription] = useState('');
-  const [multiClassType, setMultiClassType] = useState<ClassType | ''>('');
   const [multiClassFiles, setMultiClassFiles] = useState<UploadResult[]>([]);
   const [multiClassUploading, setMultiClassUploading] = useState(false);
   const [multiClassUploadError, setMultiClassUploadError] = useState<string | null>(null);
   const multiClassFileInputRef = useRef<HTMLInputElement>(null);
-
-  // Get teacher's available class types
-  const teacherClassTypes: ClassType[] = (currentTeacher as any)?.classTypes || [];
-  const hasOnlyOneClassType = teacherClassTypes.length === 1;
-
-  // Auto-select class type if teacher only has one
-  useEffect(() => {
-    if (hasOnlyOneClassType && !multiClassType) {
-      setMultiClassType(teacherClassTypes[0]);
-    }
-  }, [hasOnlyOneClassType, teacherClassTypes, multiClassType]);
+  
+  // Custom calendar picker state
+  const [showCalendarPicker, setShowCalendarPicker] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const calendarRef = useRef<HTMLDivElement>(null);
 
   // Navigation helpers
   const navigateToSchool = (schoolName: string) => {
@@ -127,6 +135,19 @@ export const SessionManager: React.FC = () => {
   // Build reports by session from database - use local state for now
   const [reports, setReports] = useState<Record<string, StudentSessionReport[]>>({});
   const [homeworks, setHomeworks] = useState<Homework[]>(homeworksData || []);
+
+  // Close calendar picker on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (calendarRef.current && !calendarRef.current.contains(event.target as Node)) {
+        setShowCalendarPicker(false);
+      }
+    };
+    if (showCalendarPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCalendarPicker]);
 
   // Sync homeworks from database
   useEffect(() => {
@@ -213,8 +234,109 @@ export const SessionManager: React.FC = () => {
       level: l.level || null,
     }));
 
+  // Calendar helper functions
+  const getCalendarDays = (date: Date): (Date | null)[] => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const days: (Date | null)[] = [];
+    
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < firstDay.getDay(); i++) {
+      days.push(null);
+    }
+    
+    // Add all days in the month
+    for (let day = 1; day <= lastDay.getDate(); day++) {
+      days.push(new Date(year, month, day));
+    }
+    
+    return days;
+  };
+
+  const formatDateForInput = (date: Date): string => {
+    // Use local date components to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const isDateSelected = (date: Date): boolean => {
+    return multiClassDates.includes(formatDateForInput(date));
+  };
+
+  const toggleDate = (date: Date) => {
+    const dateStr = formatDateForInput(date);
+    if (multiClassDates.includes(dateStr)) {
+      setMultiClassDates(multiClassDates.filter(d => d !== dateStr));
+    } else {
+      setMultiClassDates([...multiClassDates, dateStr].sort());
+    }
+  };
+
+  // Type for available class with class_type info
+  type AvailableClass = { name: string; classType: string | null };
+
+  // Helper function to sort classes with inconsistent naming (handles "KELAS 2 B" vs "KELAS 2A")
+  const sortClasses = (classes: AvailableClass[]): AvailableClass[] => {
+    return [...classes].sort((a, b) => {
+      // Extract grade number and section from class name
+      const parseClassName = (name: string): { prefix: string; grade: number; section: string } => {
+        const upperName = name.toUpperCase().trim();
+        
+        // Handle TK/KB classes - put them at the beginning
+        if (upperName.includes('TK') || upperName.includes('KB')) {
+          // Extract any number/letter after TK/KB for sub-sorting
+          const match = upperName.match(/(?:TK|KB)[\s-]*([A-Z])?[\s-]*(\d)?/i);
+          const section = match?.[1] || '';
+          const num = match?.[2] || '0';
+          return { prefix: 'A', grade: 0, section: section + num };
+        }
+        
+        // Pattern: "KELAS 2 B", "KELAS 2A", "2A", "2 B", "1 BILINGUAL", etc.
+        // Extract the grade number
+        const gradeMatch = upperName.match(/(\d+)/);
+        const grade = gradeMatch ? parseInt(gradeMatch[1], 10) : 999;
+        
+        // Extract section letter (last letter that follows the number)
+        // Handle patterns like "2 B", "2A", "KELAS 2D", "1 BILINGUAL"
+        let section = '';
+        
+        // Check if it's a bilingual class (no section letter)
+        if (upperName.includes('BILINGUAL')) {
+          section = 'ZZBILINGUAL'; // Put bilingual at end of grade group
+        } else {
+          // Find section letter - look for single letter after the grade number
+          const afterNumber = upperName.substring(upperName.indexOf(String(grade)) + String(grade).length);
+          const sectionMatch = afterNumber.match(/^\s*([A-Z])\b/i);
+          section = sectionMatch ? sectionMatch[1].toUpperCase() : '';
+        }
+        
+        return { prefix: 'B', grade, section };
+      };
+      
+      const parsedA = parseClassName(a.name);
+      const parsedB = parseClassName(b.name);
+      
+      // Compare prefix first (TK/KB before regular classes)
+      if (parsedA.prefix !== parsedB.prefix) {
+        return parsedA.prefix.localeCompare(parsedB.prefix);
+      }
+      
+      // Then compare by grade number
+      if (parsedA.grade !== parsedB.grade) {
+        return parsedA.grade - parsedB.grade;
+      }
+      
+      // Finally compare by section letter
+      return parsedA.section.localeCompare(parsedB.section);
+    });
+  };
+
   // Get teacher's assigned classes filtered by what's available in the selected school
-  const getAvailableClasses = (): string[] => {
+  const getAvailableClasses = (): AvailableClass[] => {
     // Get class names that exist in the selected location from database
     const locationClassNames = locationClasses.map(c => c.name);
 
@@ -224,43 +346,46 @@ export const SessionManager: React.FC = () => {
       const filteredClasses = currentTeacher.assignedClasses.filter(teacherClass =>
         locationClassNames.includes(teacherClass)
       );
-      // If teacher has classes for this location, return them
+      // If teacher has classes for this location, return them with class_type
       if (filteredClasses.length > 0) {
-        return filteredClasses;
+        return sortClasses(filteredClasses.map(className => {
+          const classData = locationClasses.find(c => c.name === className);
+          return { name: className, classType: classData?.class_type || null };
+        }));
       }
       // If no matching classes, fall back to location classes
       if (locationClassNames.length > 0) {
-        return locationClassNames;
+        return sortClasses(locationClasses.map(c => ({ name: c.name, classType: c.class_type })));
       }
     }
 
     // If location has classes in database, use those
     if (locationClassNames.length > 0) {
-      return locationClassNames;
+      return sortClasses(locationClasses.map(c => ({ name: c.name, classType: c.class_type })));
     }
 
     // Otherwise, generate based on selected school's level
     const selectedSchoolData = schools.find(s => s.name === selectedSchool);
     const level = selectedSchoolData?.level;
-    const classes: string[] = [];
+    const classes: AvailableClass[] = [];
     switch (level?.toUpperCase()) {
       case 'KINDERGARTEN':
         ['TK-A', 'TK-B'].forEach(c => {
-          for (let i = 1; i <= 3; i++) classes.push(`${c}.${i}`);
+          for (let i = 1; i <= 3; i++) classes.push({ name: `${c}.${i}`, classType: null });
         });
         break;
       case 'PRIMARY':
       case 'ELEMENTARY':
         for (let grade = 1; grade <= 6; grade++) {
           for (let section = 1; section <= 3; section++) {
-            classes.push(`${grade}.${section}`);
+            classes.push({ name: `${grade}.${section}`, classType: null });
           }
         }
         break;
       case 'JUNIOR':
         for (let grade = 7; grade <= 9; grade++) {
           for (let section = 1; section <= 3; section++) {
-            classes.push(`${grade}.${section}`);
+            classes.push({ name: `${grade}.${section}`, classType: null });
           }
         }
         break;
@@ -268,7 +393,7 @@ export const SessionManager: React.FC = () => {
       case 'HIGH':
         for (let grade = 10; grade <= 12; grade++) {
           for (let section = 1; section <= 3; section++) {
-            classes.push(`${grade}.${section}`);
+            classes.push({ name: `${grade}.${section}`, classType: null });
           }
         }
         break;
@@ -276,7 +401,7 @@ export const SessionManager: React.FC = () => {
         // General - show common classes
         for (let grade = 1; grade <= 12; grade++) {
           for (let section = 1; section <= 3; section++) {
-            classes.push(`${grade}.${section}`);
+            classes.push({ name: `${grade}.${section}`, classType: null });
           }
         }
     }
@@ -284,6 +409,48 @@ export const SessionManager: React.FC = () => {
   };
 
   const availableClasses = getAvailableClasses();
+
+  // Extract unique time presets from teacher's existing sessions
+  const getTimePresets = (): { startTime: string; endTime: string; label: string }[] => {
+    const presets: Map<string, { startTime: string; endTime: string; count: number }> = new Map();
+    
+    for (const session of sessionsData) {
+      if (!session.date_time) continue;
+      
+      // Parse the datetime to extract time
+      const dateObj = new Date(session.date_time);
+      const startHour = dateObj.getHours().toString().padStart(2, '0');
+      const startMin = dateObj.getMinutes().toString().padStart(2, '0');
+      const startTime = `${startHour}:${startMin}`;
+      
+      // Estimate end time (assume 45 min default if not stored)
+      // For now, use common class durations: 45 min
+      const endDate = new Date(dateObj.getTime() + 45 * 60 * 1000);
+      const endHour = endDate.getHours().toString().padStart(2, '0');
+      const endMin = endDate.getMinutes().toString().padStart(2, '0');
+      const endTime = `${endHour}:${endMin}`;
+      
+      const key = `${startTime}-${endTime}`;
+      const existing = presets.get(key);
+      if (existing) {
+        existing.count++;
+      } else {
+        presets.set(key, { startTime, endTime, count: 1 });
+      }
+    }
+    
+    // Sort by frequency (most used first) and convert to array
+    return Array.from(presets.entries())
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 5) // Limit to top 5 presets
+      .map(([_, preset]) => ({
+        startTime: preset.startTime,
+        endTime: preset.endTime,
+        label: `${preset.startTime} - ${preset.endTime}`
+      }));
+  };
+
+  const timePresets = getTimePresets();
 
   // Map students from database - already filtered by school and class at database level
   const enrolledStudents: User[] = studentsData.map(s => ({
@@ -457,6 +624,53 @@ export const SessionManager: React.FC = () => {
     }
   };
 
+  // Handle update session
+  const handleUpdateSession = async () => {
+    if (!selectedSession) return;
+    if (!editSessionForm.date || !editSessionForm.startTime || !editSessionForm.topic) {
+      alert('Please fill in all required fields (date, time, topic)');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const dateTime = `${editSessionForm.date}T${editSessionForm.startTime}:00${getTimezoneOffset()}`;
+      
+      // Combine existing materials with newly uploaded files
+      const allMaterials = [
+        ...editSessionForm.materials,
+        ...editSessionFiles.map(f => f.url)
+      ];
+      
+      await updateSession(selectedSession.id, {
+        topic: editSessionForm.topic,
+        date_time: dateTime,
+        skill_category: editSessionForm.skillCategories.length > 0 ? editSessionForm.skillCategories : ['Grammar'],
+        description: editSessionForm.description || null,
+        materials: allMaterials,
+      });
+
+      // Update selected session locally
+      setSelectedSession({
+        ...selectedSession,
+        topic: editSessionForm.topic,
+        dateTime: dateTime,
+        skillCategories: editSessionForm.skillCategories.length > 0 ? editSessionForm.skillCategories : [SkillCategory.GRAMMAR],
+        description: editSessionForm.description || undefined,
+        materials: allMaterials,
+      });
+
+      setShowEditSessionModal(false);
+      setEditSessionFiles([]);
+      alert('Schedule updated successfully!');
+    } catch (error) {
+      console.error('Error updating schedule:', error);
+      alert('Failed to update schedule. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // handleAddDate removed - dates are now auto-added on selection
 
   const handleRemoveDate = (dateToRemove: string) => {
@@ -565,6 +779,59 @@ export const SessionManager: React.FC = () => {
   // Remove uploaded file for multi-class modal
   const handleRemoveMultiClassFile = (index: number) => {
     setMultiClassFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Handle file upload for edit session modal
+  const handleEditSessionFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setEditSessionUploadError(null);
+    setEditSessionUploading(true);
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+
+        // Check file type
+        if (!isAllowedFileType(file)) {
+          setEditSessionUploadError(`File "${file.name}" is not supported. Use PDF, DOC, DOCX, PPT, PPTX, or images.`);
+          continue;
+        }
+
+        // Check file size (max 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+          setEditSessionUploadError(`File "${file.name}" is too large. Maximum 10MB.`);
+          continue;
+        }
+
+        // Upload file
+        const result = await uploadFile(file, 'sessions');
+        setEditSessionFiles(prev => [...prev, result]);
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      setEditSessionUploadError('Failed to upload file. Please try again.');
+    } finally {
+      setEditSessionUploading(false);
+      // Reset input
+      if (editSessionFileInputRef.current) {
+        editSessionFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Remove uploaded file for edit session modal
+  const handleRemoveEditSessionFile = (index: number) => {
+    setEditSessionFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Remove existing material from edit session form
+  const handleRemoveExistingMaterial = (index: number) => {
+    setEditSessionForm(prev => ({
+      ...prev,
+      materials: prev.materials.filter((_, i) => i !== index)
+    }));
   };
 
   const handleCreateSchedule = async () => {
@@ -692,37 +959,59 @@ export const SessionManager: React.FC = () => {
   if (!selectedClass) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* Header Row */}
           <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={() => navigate('/teacher/schedule')} className="text-xs py-1.5 px-3">
+            <Button variant="outline" onClick={() => navigate('/teacher/schedule')} className="text-xs py-1.5 px-3 shrink-0">
               Back
             </Button>
-            <div>
+            <div className="min-w-0">
               <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <GraduationCap className="w-5 h-5 text-orange-600" /> Select Class
+                <GraduationCap className="w-5 h-5 text-orange-600 shrink-0" /> 
+                <span className="truncate">Select Class</span>
               </h2>
-              <p className="text-xs text-gray-500">{selectedSchool} - Select class to manage</p>
+              <p className="text-xs text-gray-500 truncate">{selectedSchool}</p>
             </div>
           </div>
-          <Button onClick={() => setShowMultiClassModal(true)} className="text-xs py-1.5 px-3">
-            Add Multi-Class Schedule
+          {/* Action Button */}
+          <Button onClick={() => setShowMultiClassModal(true)} className="w-full sm:w-auto text-xs py-2 px-4 flex items-center justify-center gap-1.5 shrink-0">
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Multi-Class Schedule</span>
           </Button>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
           {availableClasses.map((cls) => {
             // Extract short label for icon (e.g., "KELAS 1 A" -> "1A", "1.1" -> "1")
-            const shortLabel = cls.replace(/^KELAS\s*/i, '').replace(/\s+/g, '').split('.')[0];
+            const shortLabel = cls.name.replace(/^KELAS\s*/i, '').replace(/\s+/g, '').split('.')[0];
+            // Determine if bilingual (check for various formats)
+            const isBilingual = cls.classType?.toLowerCase().includes('bilingual') ||
+                               cls.name.toLowerCase().includes('bilingual');
             return (
               <Card
-                key={cls}
+                key={cls.name}
                 className="!p-3 cursor-pointer hover:border-orange-400 transition-all group text-center"
-                onClick={() => navigateToClass(cls)}
+                onClick={() => navigateToClass(cls.name)}
               >
-                <div className="w-10 h-10 mx-auto mb-2 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                <div className={`w-10 h-10 mx-auto mb-2 rounded-xl flex items-center justify-center transition-colors ${
+                  isBilingual
+                    ? 'bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'
+                    : 'bg-orange-50 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'
+                }`}>
                   <span className="text-xs font-bold truncate px-1">{shortLabel}</span>
                 </div>
-                <h3 className="text-xs font-bold text-gray-900 group-hover:text-orange-600 line-clamp-2">{cls}</h3>
+                <h3 className={`text-xs font-bold group-hover:text-orange-600 line-clamp-2 ${
+                  isBilingual ? 'text-purple-900' : 'text-gray-900'
+                }`}>{cls.name}</h3>
+                {cls.classType && (
+                  <span className={`mt-1 inline-block px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                    isBilingual
+                      ? 'bg-purple-100 text-purple-700'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {isBilingual ? 'Bilingual' : 'Regular'}
+                  </span>
+                )}
               </Card>
             );
           })}
@@ -736,7 +1025,7 @@ export const SessionManager: React.FC = () => {
                 <h3 className="text-sm font-bold text-gray-900">
                   Add Multi-Class Schedule
                 </h3>
-                <button onClick={() => { setShowMultiClassModal(false); setMultiClassEntries([]); setMultiClassDates([]); setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : ''); setMultiClassFiles([]); setMultiClassUploadError(null); }} className="p-1 text-gray-400 hover:text-gray-600">
+                <button onClick={() => { setShowMultiClassModal(false); setMultiClassEntries([]); setMultiClassDates([]); setMultiClassFiles([]); setMultiClassUploadError(null); setShowCalendarPicker(false); }} className="p-1 text-gray-400 hover:text-gray-600">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -746,22 +1035,98 @@ export const SessionManager: React.FC = () => {
               {/* Step 1: Multiple Dates */}
               <div className="space-y-2">
                 <label className="text-[9px] font-black text-gray-400 uppercase">1. Select Dates (can select multiple)</label>
-                <input
-                  type="date"
-                  value=""
-                  onChange={e => {
-                    const selectedDate = e.target.value;
-                    if (selectedDate && !multiClassDates.includes(selectedDate)) {
-                      setMultiClassDates([...multiClassDates, selectedDate].sort());
-                    }
-                  }}
-                  className="w-full border rounded-lg px-3 py-2 text-xs"
-                />
+                
+                {/* Inline Calendar */}
+                <div className="border rounded-lg p-3 bg-white">
+                  {/* Month Navigation */}
+                  <div className="flex items-center justify-between mb-3">
+                    <button
+                      type="button"
+                      onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}
+                      className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      <ChevronRight className="w-4 h-4 rotate-180 text-gray-600" />
+                    </button>
+                    <span className="text-sm font-semibold text-gray-700">
+                      {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
+                      className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      <ChevronRight className="w-4 h-4 text-gray-600" />
+                    </button>
+                  </div>
+                  
+                  {/* Day Labels */}
+                  <div className="grid grid-cols-7 gap-1 mb-2">
+                    {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                      <div key={day} className="text-center text-[10px] font-semibold text-gray-400 py-1">
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Calendar Grid */}
+                  <div className="grid grid-cols-7 gap-1">
+                    {getCalendarDays(calendarMonth).map((date, idx) => (
+                      <div key={idx} className="aspect-square">
+                        {date ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleDate(date)}
+                            className={`w-full h-full rounded-lg text-xs font-medium flex items-center justify-center transition-all ${
+                              isDateSelected(date)
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : formatDateForInput(date) === formatDateForInput(new Date())
+                                  ? 'bg-blue-50 text-blue-600 hover:bg-blue-100 ring-1 ring-blue-200'
+                                  : 'hover:bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            {date.getDate()}
+                          </button>
+                        ) : (
+                          <div className="w-full h-full" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Quick Actions & Selected Count */}
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                    <div className="text-[10px] text-gray-500">
+                      {multiClassDates.length === 0 
+                        ? 'Click dates to select' 
+                        : <span className="text-blue-600 font-semibold">{multiClassDates.length} date(s) selected</span>}
+                    </div>
+                    <div className="flex gap-2">
+                      {multiClassDates.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setMultiClassDates([])}
+                          className="text-[10px] text-gray-500 hover:text-red-600 transition-colors"
+                        >
+                          Clear all
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setCalendarMonth(new Date())}
+                        className="text-[10px] text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        Today
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Selected Dates Display */}
                 {multiClassDates.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {multiClassDates.map(date => (
                       <span key={date} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-medium border border-blue-100">
-                        {new Date(date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {new Date(date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
                         <button
                           onClick={() => setMultiClassDates(multiClassDates.filter(d => d !== date))}
                           className="p-0.5 hover:bg-blue-200 rounded"
@@ -771,9 +1136,6 @@ export const SessionManager: React.FC = () => {
                       </span>
                     ))}
                   </div>
-                )}
-                {multiClassDates.length === 0 && (
-                  <p className="text-[10px] text-gray-400 italic">No dates selected</p>
                 )}
               </div>
 
@@ -818,47 +1180,6 @@ export const SessionManager: React.FC = () => {
                         </label>
                       ))}
                     </div>
-                  </div>
-
-                  {/* Class Type Selection */}
-                  <div>
-                    <label className="text-[9px] font-black text-gray-400 uppercase">
-                      Class Type <span className="text-red-500">*</span>
-                    </label>
-                    {hasOnlyOneClassType ? (
-                      <div className="mt-1 px-3 py-1.5 bg-gray-100 rounded-lg text-xs text-gray-700 font-medium">
-                        {multiClassType === ClassType.BILINGUAL ? (
-                          <span className="flex items-center gap-1"><Globe className="w-3 h-3 text-blue-500" /> Bilingual</span>
-                        ) : (
-                          <span className="flex items-center gap-1"><UserCheck className="w-3 h-3 text-teal-500" /> Regular</span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 gap-2 mt-1">
-                        <button
-                          type="button"
-                          onClick={() => setMultiClassType(ClassType.BILINGUAL)}
-                          className={`flex items-center justify-center gap-1.5 px-3 py-2 border rounded-lg text-xs font-bold transition-all ${
-                            multiClassType === ClassType.BILINGUAL
-                              ? 'bg-blue-600 text-white border-blue-600'
-                              : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
-                          }`}
-                        >
-                          <Globe className="w-3 h-3" /> Bilingual
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setMultiClassType(ClassType.REGULAR)}
-                          className={`flex items-center justify-center gap-1.5 px-3 py-2 border rounded-lg text-xs font-bold transition-all ${
-                            multiClassType === ClassType.REGULAR
-                              ? 'bg-teal-600 text-white border-teal-600'
-                              : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
-                          }`}
-                        >
-                          <UserCheck className="w-3 h-3" /> Regular
-                        </button>
-                      </div>
-                    )}
                   </div>
 
                   <div>
@@ -951,16 +1272,52 @@ export const SessionManager: React.FC = () => {
               {multiClassDates.length > 0 && (
                 <div className="space-y-2">
                   <label className="text-[9px] font-black text-gray-400 uppercase">2. Select Classes & Time</label>
+                  
+                  {/* Time Presets */}
+                  {timePresets.length > 0 && (
+                    <div className="p-2 bg-gray-50 rounded-lg border border-gray-100">
+                      <p className="text-[9px] text-gray-500 mb-1.5">Frequently used times:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {timePresets.map((preset, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              // Apply preset to all selected classes
+                              if (multiClassEntries.length > 0) {
+                                setMultiClassEntries(multiClassEntries.map(entry => ({
+                                  ...entry,
+                                  startTime: preset.startTime,
+                                  endTime: preset.endTime
+                                })));
+                              }
+                            }}
+                            className="px-2 py-1 text-[10px] font-medium bg-white border border-gray-200 rounded-md hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                            title={`Apply ${preset.label} to all selected classes`}
+                          >
+                            <Clock className="w-3 h-3 inline mr-1 opacity-50" />
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                      {multiClassEntries.length === 0 && (
+                        <p className="text-[9px] text-gray-400 mt-1 italic">Select classes first, then click preset to fill time</p>
+                      )}
+                    </div>
+                  )}
+                  
                   <div className="space-y-2 max-h-[300px] overflow-y-auto">
                     {availableClasses.map((cls, classIndex) => {
-                      const entry = multiClassEntries.find(e => e.classId === cls);
+                      const entry = multiClassEntries.find(e => e.classId === cls.name);
                       const isSelected = !!entry;
-                      const entryIndex = multiClassEntries.findIndex(e => e.classId === cls);
+                      const entryIndex = multiClassEntries.findIndex(e => e.classId === cls.name);
                       const previousEntry = entryIndex > 0 ? multiClassEntries[entryIndex - 1] : null;
                       const canCopyFromAbove = isSelected && previousEntry && previousEntry.startTime && previousEntry.endTime;
+                      const isBilingual = cls.classType?.toLowerCase().includes('bilingual') ||
+                                         cls.name.toLowerCase().includes('bilingual');
 
                       return (
-                        <div key={cls} className={`p-3 rounded-lg border transition-all ${isSelected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                        <div key={cls.name} className={`p-3 rounded-lg border transition-all ${isSelected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
                           <div className="flex items-center justify-between flex-wrap gap-2">
                             <label className="flex items-center gap-2 cursor-pointer">
                               <input
@@ -968,14 +1325,21 @@ export const SessionManager: React.FC = () => {
                                 checked={isSelected}
                                 onChange={(e) => {
                                   if (e.target.checked) {
-                                    setMultiClassEntries([...multiClassEntries, { classId: cls, startTime: '', endTime: '' }]);
+                                    setMultiClassEntries([...multiClassEntries, { classId: cls.name, startTime: '', endTime: '' }]);
                                   } else {
-                                    setMultiClassEntries(multiClassEntries.filter(ent => ent.classId !== cls));
+                                    setMultiClassEntries(multiClassEntries.filter(ent => ent.classId !== cls.name));
                                   }
                                 }}
                                 className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                               />
-                              <span className="text-sm font-bold text-gray-900">{cls}</span>
+                              <span className="text-sm font-bold text-gray-900">{cls.name}</span>
+                              {cls.classType && (
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                                  isBilingual ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {isBilingual ? 'Bilingual' : 'Regular'}
+                                </span>
+                              )}
                             </label>
                             {isSelected && (
                               <div className="flex items-center gap-2">
@@ -985,7 +1349,7 @@ export const SessionManager: React.FC = () => {
                                     type="button"
                                     onClick={() => {
                                       setMultiClassEntries(multiClassEntries.map(ent =>
-                                        ent.classId === cls ? { ...ent, startTime: previousEntry.startTime, endTime: previousEntry.endTime } : ent
+                                        ent.classId === cls.name ? { ...ent, startTime: previousEntry.startTime, endTime: previousEntry.endTime } : ent
                                       ));
                                     }}
                                     className="flex items-center gap-1 px-2 py-1 text-[9px] font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-100 rounded transition-colors"
@@ -1002,7 +1366,7 @@ export const SessionManager: React.FC = () => {
                                     value={entry?.startTime || ''}
                                     onChange={e => {
                                       setMultiClassEntries(multiClassEntries.map(ent =>
-                                        ent.classId === cls ? { ...ent, startTime: e.target.value } : ent
+                                        ent.classId === cls.name ? { ...ent, startTime: e.target.value } : ent
                                       ));
                                     }}
                                     className="border rounded px-2 py-1 text-xs w-24"
@@ -1015,7 +1379,7 @@ export const SessionManager: React.FC = () => {
                                     value={entry?.endTime || ''}
                                     onChange={e => {
                                       setMultiClassEntries(multiClassEntries.map(ent =>
-                                        ent.classId === cls ? { ...ent, endTime: e.target.value } : ent
+                                        ent.classId === cls.name ? { ...ent, endTime: e.target.value } : ent
                                       ));
                                     }}
                                     className="border rounded px-2 py-1 text-xs w-24"
@@ -1048,7 +1412,7 @@ export const SessionManager: React.FC = () => {
               {/* Actions */}
               <div className="flex gap-2 pt-2">
                 <button
-                  onClick={() => { setShowMultiClassModal(false); setMultiClassEntries([]); setMultiClassDates([]); setMultiClassTopic(''); setMultiClassSkills([]); setMultiClassDescription(''); setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : ''); setMultiClassFiles([]); setMultiClassUploadError(null); }}
+                  onClick={() => { setShowMultiClassModal(false); setMultiClassEntries([]); setMultiClassDates([]); setMultiClassTopic(''); setMultiClassSkills([]); setMultiClassDescription(''); setMultiClassFiles([]); setMultiClassUploadError(null); setShowCalendarPicker(false); }}
                   disabled={isSubmitting || multiClassUploading}
                   className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50"
                 >
@@ -1056,8 +1420,8 @@ export const SessionManager: React.FC = () => {
                 </button>
                 <Button
                   onClick={async () => {
-                    if (multiClassDates.length === 0 || multiClassEntries.length === 0 || !multiClassTopic || !multiClassType) {
-                      alert('Please select dates, classes, class type (Bilingual/Regular), and fill in the topic!');
+                    if (multiClassDates.length === 0 || multiClassEntries.length === 0 || !multiClassTopic) {
+                      alert('Please select dates, classes, and fill in the topic!');
                       return;
                     }
                     const invalidEntries = multiClassEntries.filter(e => !e.startTime || !e.endTime);
@@ -1073,6 +1437,12 @@ export const SessionManager: React.FC = () => {
                       // Create session for each date × class combination
                       for (const date of multiClassDates) {
                         for (const entry of multiClassEntries) {
+                          // Auto-detect class_type from selected class
+                          const selectedClass = availableClasses.find(c => c.name === entry.classId);
+                          const isBilingual = selectedClass?.classType?.toLowerCase().includes('bilingual') ||
+                                             entry.classId.toLowerCase().includes('bilingual');
+                          const classType = isBilingual ? 'BILINGUAL' : 'REGULAR';
+
                           const dateTime = `${date}T${entry.startTime}:00${getTimezoneOffset()}`;
                           await createSession({
                             teacher_id: currentTeacher?.id || '',
@@ -1083,7 +1453,7 @@ export const SessionManager: React.FC = () => {
                             difficulty_level: 'Elementary', // Default value - field removed from UI
                             description: multiClassDescription || null,
                             materials: materialUrls,
-                            class_type: multiClassType || 'REGULAR',
+                            class_type: classType,
                           });
                         }
                       }
@@ -1095,7 +1465,6 @@ export const SessionManager: React.FC = () => {
                       setMultiClassTopic('');
                       setMultiClassSkills([]);
                       setMultiClassDescription('');
-                      setMultiClassType(hasOnlyOneClassType ? teacherClassTypes[0] : '');
                       setMultiClassFiles([]);
                       setMultiClassUploadError(null);
                     } catch (error) {
@@ -1105,7 +1474,7 @@ export const SessionManager: React.FC = () => {
                       setIsSubmitting(false);
                     }
                   }}
-                  disabled={isSubmitting || multiClassUploading || multiClassEntries.length === 0 || multiClassDates.length === 0 || !multiClassTopic || !multiClassType}
+                  disabled={isSubmitting || multiClassUploading || multiClassEntries.length === 0 || multiClassDates.length === 0 || !multiClassTopic}
                   className="flex-1 text-xs py-2 disabled:opacity-50"
                 >
                   {isSubmitting ? (
@@ -1148,10 +1517,38 @@ export const SessionManager: React.FC = () => {
              </Button>
              <div>
                 <h2 className="text-lg font-bold text-gray-900">Class Report</h2>
-                <p className="text-xs text-gray-500">Input nilai dan materi pembelajaran</p>
+                <p className="text-xs text-gray-500">Input grades and learning materials</p>
              </div>
            </div>
            <div className="flex items-center gap-2">
+             <Button
+               variant="outline"
+               onClick={() => {
+                 // Pre-fill the edit form with selected session data
+                 const sessionDate = new Date(selectedSession.dateTime);
+                 const dateStr = formatDateForInput(sessionDate);
+                 const startTime = sessionDate.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                 // Calculate end time (default 45 min after start)
+                 const endDate = new Date(sessionDate.getTime() + 45 * 60 * 1000);
+                 const endTime = endDate.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                 
+                 setEditSessionForm({
+                   date: dateStr,
+                   startTime: startTime,
+                   endTime: endTime,
+                   topic: selectedSession.topic,
+                   skillCategories: selectedSession.skillCategories,
+                   description: selectedSession.description || '',
+                   materials: selectedSession.materials || []
+                 });
+                 setEditSessionFiles([]);
+                 setEditSessionUploadError(null);
+                 setShowEditSessionModal(true);
+               }}
+               className="text-xs py-1.5 px-3"
+             >
+               Edit
+             </Button>
              <Button
                variant="outline"
                onClick={() => setShowDeleteModal(true)}
@@ -1167,8 +1564,9 @@ export const SessionManager: React.FC = () => {
            </div>
         </div>
 
-        {/* Session Info Card */}
-        <Card className="!p-4">
+        {/* Session Info Card - Combined with Materials */}
+        <Card className="!p-4 space-y-4">
+          {/* Session Info */}
           <div className="flex flex-col md:flex-row md:items-center gap-4">
             <div className="flex items-center gap-2 shrink-0">
               <span className="flex items-center gap-1 bg-gray-800 text-white px-2 py-1 rounded text-[9px] uppercase font-bold">
@@ -1187,25 +1585,60 @@ export const SessionManager: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Description */}
           {selectedSession.description && (
-            <div className="mt-3 pt-3 border-t border-gray-100">
+            <div className="pt-3 border-t border-gray-100">
               <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Description</p>
               <p className="text-xs text-gray-600">{selectedSession.description}</p>
             </div>
           )}
+
+          {/* Materials Section */}
+          <div className={`pt-3 border-t border-gray-100 ${!selectedSession.description ? 'mt-0' : ''}`}>
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Learning Materials</p>
+            {selectedSession.materials && selectedSession.materials.length > 0 ? (
+              <div className="space-y-1.5">
+                {selectedSession.materials.map((file, idx) => {
+                  const fileName = file.split('/').pop() || file;
+                  const isUrl = file.startsWith('http://') || file.startsWith('https://');
+                  return (
+                    <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 rounded text-xs group hover:bg-blue-50 transition-colors">
+                      <FileText className="w-4 h-4 text-red-500 shrink-0" />
+                      {isUrl ? (
+                        <a
+                          href={file}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="truncate flex-1 text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                          title={fileName}
+                        >
+                          {fileName}
+                        </a>
+                      ) : (
+                        <span className="truncate flex-1 text-gray-700">{file}</span>
+                      )}
+                      <a
+                        href={file}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-400 hover:text-blue-600 p-1"
+                        title="Download"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[10px] text-gray-400 italic">No materials yet. Click Edit to add materials.</p>
+            )}
+          </div>
         </Card>
 
-        {/* Detail Tabs */}
-        <div className="flex gap-1 border-b border-gray-200">
-          <button onClick={() => setDetailTab('materials')} className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${detailTab === 'materials' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
-            Materials
-          </button>
-          <button onClick={() => setDetailTab('students')} className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${detailTab === 'students' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
-            Student Reports
-          </button>
-        </div>
-
-        {detailTab === 'students' && (
+        {/* Student Reports section - temporarily hidden */}
+        {false && detailTab === 'students' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Student Reports Table */}
             <div className="lg:col-span-2">
@@ -1384,61 +1817,7 @@ export const SessionManager: React.FC = () => {
           </div>
         )}
 
-        {detailTab === 'materials' && (
-          <Card className="!p-4">
-            <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">
-              Learning Materials
-            </h4>
-            <div className="space-y-3">
-              {selectedSession.materials && selectedSession.materials.length > 0 ? (
-                <div className="space-y-2">
-                  {selectedSession.materials.map((file, idx) => {
-                    // Extract filename from URL for display
-                    const fileName = file.split('/').pop() || file;
-                    const isUrl = file.startsWith('http://') || file.startsWith('https://');
-                    return (
-                      <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 rounded text-xs group hover:bg-blue-50 transition-colors">
-                        <FileText className="w-4 h-4 text-red-500 shrink-0" />
-                        {isUrl ? (
-                          <a
-                            href={file}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="truncate flex-1 text-blue-600 hover:text-blue-800 hover:underline font-medium"
-                            title={fileName}
-                          >
-                            {fileName}
-                          </a>
-                        ) : (
-                          <span className="truncate flex-1 text-gray-700">{file}</span>
-                        )}
-                        <a
-                          href={file}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-gray-400 hover:text-blue-600 p-1"
-                          title="Download"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                        </a>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-[10px] text-gray-400 italic">No materials yet.</p>
-              )}
-              <div className="border-2 border-dashed border-gray-200 rounded-lg p-4 text-center">
-                <Upload className="w-6 h-6 text-gray-300 mx-auto mb-2" />
-                <p className="text-[10px] text-gray-400">Drag & drop or click to upload</p>
-                <input type="file" className="hidden" />
-              </div>
-              <Button variant="outline" className="text-xs py-1.5 px-3 w-full">
-                Add Materials
-              </Button>
-            </div>
-          </Card>
-        )}
+        {/* Materials tab content removed - now integrated in main card above */}
 
         {/* Homework Modal */}
         {showHomeworkModal && (
@@ -1517,7 +1896,7 @@ export const SessionManager: React.FC = () => {
               <div className="p-3 bg-gray-50 rounded-lg">
                 <p className="text-xs font-bold text-gray-900">{selectedSession.topic}</p>
                 <p className="text-[10px] text-gray-500 mt-0.5">
-                  {new Date(selectedSession.dateTime).toLocaleDateString('id-ID', {
+                  {new Date(selectedSession.dateTime).toLocaleDateString('en-US', {
                     weekday: 'long',
                     day: 'numeric',
                     month: 'long',
@@ -1546,6 +1925,246 @@ export const SessionManager: React.FC = () => {
                     </span>
                   ) : (
                     'Delete Schedule'
+                  )}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Edit Session Modal */}
+        {showEditSessionModal && (
+          <div className="fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <Card className="w-full max-w-md !p-4 space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <PenLine className="w-4 h-4 text-blue-600" />
+                  Edit Schedule
+                </h3>
+                <button 
+                  onClick={() => setShowEditSessionModal(false)} 
+                  className="p-1 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {/* Date */}
+                <div>
+                  <label className="text-[9px] font-black text-gray-400 uppercase">Date</label>
+                  <input
+                    type="date"
+                    value={editSessionForm.date}
+                    onChange={e => setEditSessionForm({ ...editSessionForm, date: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 text-xs mt-1"
+                  />
+                </div>
+
+                {/* Time */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase">Start Time</label>
+                    <input
+                      type="time"
+                      value={editSessionForm.startTime}
+                      onChange={e => setEditSessionForm({ ...editSessionForm, startTime: e.target.value })}
+                      className="w-full border rounded-lg px-3 py-2 text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase">End Time</label>
+                    <input
+                      type="time"
+                      value={editSessionForm.endTime}
+                      onChange={e => setEditSessionForm({ ...editSessionForm, endTime: e.target.value })}
+                      className="w-full border rounded-lg px-3 py-2 text-xs mt-1"
+                    />
+                  </div>
+                </div>
+
+                {/* Topic */}
+                <div>
+                  <label className="text-[9px] font-black text-gray-400 uppercase">Topic/Material</label>
+                  <input
+                    type="text"
+                    value={editSessionForm.topic}
+                    onChange={e => setEditSessionForm({ ...editSessionForm, topic: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 text-xs mt-1"
+                    placeholder="e.g. Business English: Negotiation"
+                  />
+                </div>
+
+                {/* Skill Categories */}
+                <div>
+                  <label className="text-[9px] font-black text-gray-400 uppercase">Skill Categories</label>
+                  <div className="flex flex-wrap gap-2 mt-1.5">
+                    {Object.values(SkillCategory).map(cat => (
+                      <label
+                        key={cat}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                          editSessionForm.skillCategories.includes(cat)
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={editSessionForm.skillCategories.includes(cat)}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              setEditSessionForm({ ...editSessionForm, skillCategories: [...editSessionForm.skillCategories, cat] });
+                            } else {
+                              setEditSessionForm({ ...editSessionForm, skillCategories: editSessionForm.skillCategories.filter(c => c !== cat) });
+                            }
+                          }}
+                          className="sr-only"
+                        />
+                        {cat}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="text-[9px] font-black text-gray-400 uppercase">Description (optional)</label>
+                  <textarea
+                    value={editSessionForm.description}
+                    onChange={e => setEditSessionForm({ ...editSessionForm, description: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 text-xs mt-1"
+                    rows={3}
+                    placeholder="Material description..."
+                  />
+                </div>
+
+                {/* Materials */}
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black text-gray-400 uppercase">
+                    Materials (PDF, DOC, PPT, Images)
+                  </label>
+
+                  {/* Existing Materials */}
+                  {editSessionForm.materials.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[9px] text-gray-500">Existing materials:</p>
+                      {editSessionForm.materials.map((url, idx) => {
+                        const fileName = url.split('/').pop() || url;
+                        return (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-2 p-1.5 bg-gray-50 rounded border border-gray-100"
+                          >
+                            <File className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] text-blue-600 hover:text-blue-800 truncate flex-1"
+                            >
+                              {fileName}
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveExistingMaterial(idx)}
+                              className="p-0.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Newly Uploaded Files */}
+                  {editSessionFiles.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[9px] text-gray-500">New uploads:</p>
+                      {editSessionFiles.map((file, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-2 p-1.5 bg-green-50 rounded border border-green-100"
+                        >
+                          <File className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                          <span className="text-[10px] text-gray-700 truncate flex-1">
+                            {file.fileName}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveEditSessionFile(idx)}
+                            className="p-0.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Upload Zone */}
+                  <div
+                    onClick={() => !editSessionUploading && editSessionFileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-lg p-3 text-center cursor-pointer transition-colors ${
+                      editSessionUploading
+                        ? 'border-gray-300 bg-gray-50 cursor-not-allowed'
+                        : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50'
+                    }`}
+                  >
+                    {editSessionUploading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+                        <span className="text-xs text-gray-500">Uploading...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5 text-gray-300 mx-auto mb-1" />
+                        <p className="text-[10px] text-gray-400">
+                          Click to add material
+                        </p>
+                      </>
+                    )}
+                  </div>
+
+                  <input
+                    ref={editSessionFileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.gif"
+                    onChange={handleEditSessionFileSelect}
+                    className="hidden"
+                  />
+
+                  {/* Upload Error */}
+                  {editSessionUploadError && (
+                    <div className="text-[10px] text-red-600 bg-red-50 p-2 rounded border border-red-100">
+                      {editSessionUploadError}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => setShowEditSessionModal(false)}
+                  disabled={isSubmitting}
+                  className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <Button
+                  onClick={handleUpdateSession}
+                  disabled={isSubmitting || editSessionUploading || !editSessionForm.date || !editSessionForm.startTime || !editSessionForm.topic}
+                  className="flex-1 text-xs py-2 disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Saving...
+                    </span>
+                  ) : (
+                    'Save Changes'
                   )}
                 </Button>
               </div>
@@ -1698,7 +2317,7 @@ export const SessionManager: React.FC = () => {
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {scheduleForm.dates.map(date => (
                     <span key={date} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-medium border border-blue-100">
-                      {new Date(date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {new Date(date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
                       <button
                         onClick={() => handleRemoveDate(date)}
                         className="p-0.5 hover:bg-blue-200 rounded"
@@ -1713,6 +2332,36 @@ export const SessionManager: React.FC = () => {
                 <p className="text-[10px] text-gray-400 italic">No dates selected</p>
               )}
             </div>
+
+            {/* Time Presets */}
+            {timePresets.length > 0 && (
+              <div className="p-2 bg-gray-50 rounded-lg border border-gray-100">
+                <p className="text-[9px] text-gray-500 mb-1.5">Frequently used times:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {timePresets.map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setScheduleForm({
+                          ...scheduleForm,
+                          startTime: preset.startTime,
+                          endTime: preset.endTime
+                        });
+                      }}
+                      className={`px-2 py-1 text-[10px] font-medium border rounded-md transition-colors ${
+                        scheduleForm.startTime === preset.startTime && scheduleForm.endTime === preset.endTime
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white border-gray-200 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700'
+                      }`}
+                    >
+                      <Clock className="w-3 h-3 inline mr-1 opacity-50" />
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Start & End Time */}
             <div className="grid grid-cols-2 gap-3">
