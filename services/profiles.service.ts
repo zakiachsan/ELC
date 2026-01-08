@@ -66,6 +66,7 @@ export const profilesService = {
   },
 
   // Get students with pagination and filters
+  // Note: class filter is done client-side because class data comes from multiple sources
   async getStudentsPaginated(options: {
     page: number;
     pageSize: number;
@@ -76,20 +77,24 @@ export const profilesService = {
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
+    // Start with base query
     let query = supabase
       .from('profiles')
       .select('*', { count: 'exact' })
-      .eq('role', 'STUDENT')
-      .order('name')
-      .range(from, to);
+      .eq('role', 'STUDENT');
 
+    // Apply location filter
+    if (locationId) {
+      query = query.eq('assigned_location_id', locationId);
+    }
+
+    // Apply search filter
     if (search) {
       query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
     }
 
-    if (locationId) {
-      query = query.eq('assigned_location_id', locationId);
-    }
+    // Apply ordering and pagination LAST
+    query = query.order('name').range(from, to);
 
     const { data, error, count } = await query;
 

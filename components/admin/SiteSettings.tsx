@@ -1,12 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { useSettings } from '../../contexts/SettingsContext';
-import { Video, Layout, Monitor, Smartphone } from 'lucide-react';
+import { Video, Layout, Monitor, Smartphone, Loader2 } from 'lucide-react';
 
 export const SiteSettings: React.FC = () => {
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings, loading } = useSettings();
   
   const [primary, setPrimary] = useState(settings.primaryColor);
   const [accent, setAccent] = useState(settings.accentColor);
@@ -17,19 +17,87 @@ export const SiteSettings: React.FC = () => {
   const [orientation, setOrientation] = useState<'landscape' | 'portrait'>(settings.videoOrientation);
   
   const [success, setSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = (e: React.FormEvent) => {
+  // Sync local state when settings load from database
+  useEffect(() => {
+    if (!loading) {
+      setPrimary(settings.primaryColor);
+      setAccent(settings.accentColor);
+      setVideoUrl(settings.videoUrl);
+      setPreviewUrl(settings.videoUrl);
+      setVideoTitle(settings.videoTitle);
+      setVideoDesc(settings.videoDescription);
+      setOrientation(settings.videoOrientation);
+    }
+  }, [loading, settings]);
+
+  // Convert YouTube URL to embed format
+  const convertToEmbedUrl = (url: string): string => {
+    if (!url) return url;
+    
+    // Already embed format
+    if (url.includes('youtube.com/embed/')) {
+      return url;
+    }
+    
+    // Regular YouTube URL formats
+    // https://www.youtube.com/watch?v=VIDEO_ID
+    // https://youtu.be/VIDEO_ID
+    // https://www.youtube.com/shorts/VIDEO_ID
+    
+    let videoId = '';
+    
+    if (url.includes('youtube.com/watch')) {
+      const urlParams = new URL(url).searchParams;
+      videoId = urlParams.get('v') || '';
+    } else if (url.includes('youtu.be/')) {
+      videoId = url.split('youtu.be/')[1]?.split('?')[0] || '';
+    } else if (url.includes('youtube.com/shorts/')) {
+      videoId = url.split('youtube.com/shorts/')[1]?.split('?')[0] || '';
+    }
+    
+    if (videoId) {
+      return `https://www.youtube.com/embed/${videoId}`;
+    }
+    
+    return url;
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateSettings({
-      primaryColor: primary,
-      accentColor: accent,
-      videoUrl: videoUrl,
-      videoTitle,
-      videoDescription: videoDesc,
-      videoOrientation: orientation
-    });
-    setSuccess(true);
-    setTimeout(() => setSuccess(false), 2000);
+    setSaving(true);
+    
+    try {
+      const embedUrl = convertToEmbedUrl(videoUrl);
+      
+      await updateSettings({
+        primaryColor: primary,
+        accentColor: accent,
+        videoUrl: embedUrl,
+        videoTitle,
+        videoDescription: videoDesc,
+        videoOrientation: orientation
+      });
+      
+      // Update local state with converted URL
+      setVideoUrl(embedUrl);
+      setPreviewUrl(embedUrl);
+      
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+      
+      console.log('Settings saved to database:', {
+        videoUrl: embedUrl,
+        videoTitle,
+        videoDescription: videoDesc
+      });
+    } catch (err) {
+      console.error('Error saving settings:', err);
+      alert('Failed to save settings. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleReset = () => {
@@ -139,7 +207,16 @@ export const SiteSettings: React.FC = () => {
           </Card>
 
           <div className="flex justify-end gap-3 sticky bottom-6 z-10">
-             <Button type="submit" className="shadow-xl">Save All Settings</Button>
+             <Button type="submit" className="shadow-xl" disabled={saving || loading}>
+               {saving ? (
+                 <span className="flex items-center gap-2">
+                   <Loader2 className="w-4 h-4 animate-spin" />
+                   Saving...
+                 </span>
+               ) : (
+                 'Save All Settings'
+               )}
+             </Button>
           </div>
        </form>
        

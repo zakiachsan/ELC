@@ -103,14 +103,15 @@ export const StudentList: React.FC = () => {
   }, [schoolFilter, locations]);
 
   // Data Hook - Directory tab uses paginated students
+  // Note: className filter is done client-side because class data comes from multiple sources
   const {
     students: paginatedStudents,
-    totalCount,
-    totalPages,
+    totalCount: serverTotalCount,
+    totalPages: serverTotalPages,
     loading: paginatedLoading
   } = useStudentsPaginated({
-    page: currentPage,
-    pageSize: PAGE_SIZE,
+    page: classFilter ? 1 : currentPage, // When class filter active, get page 1 first
+    pageSize: classFilter ? 1000 : PAGE_SIZE, // Get more data when filtering by class
     search: debouncedSearch || undefined,
     locationId: selectedLocationId,
   });
@@ -170,11 +171,25 @@ export const StudentList: React.FC = () => {
     return [...new Set(classes)].sort();
   }, [allStudents, schoolFilter, locations]);
 
-  // Filter paginated students by class (client-side filtering since server doesn't support class filter)
-  const filteredStudents = useMemo(() => {
+  // Apply class filter client-side (data comes from multiple sources)
+  const classFilteredStudents = useMemo(() => {
     if (!classFilter) return paginatedStudents;
     return paginatedStudents.filter(s => getClassName(s) === classFilter);
   }, [paginatedStudents, classFilter]);
+
+  // Calculate pagination for class-filtered results
+  const totalCount = classFilter ? classFilteredStudents.length : serverTotalCount;
+  const totalPages = classFilter
+    ? Math.ceil(classFilteredStudents.length / PAGE_SIZE)
+    : serverTotalPages;
+
+  // Get the current page of students (client-side pagination when class filter active)
+  const filteredStudents = useMemo(() => {
+    if (!classFilter) return paginatedStudents;
+    const startIdx = (currentPage - 1) * PAGE_SIZE;
+    const endIdx = startIdx + PAGE_SIZE;
+    return classFilteredStudents.slice(startIdx, endIdx);
+  }, [classFilter, classFilteredStudents, paginatedStudents, currentPage]);
 
   // Calculate student statistics (uses all students for statistics tab)
   const studentStats = useMemo(() => {
@@ -637,7 +652,7 @@ export const StudentList: React.FC = () => {
                 <div className="bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
                   <span className="text-[9px] font-bold text-blue-400 uppercase block">Hasil</span>
                   <span className="text-sm font-bold text-blue-900">
-                    {classFilter ? `${filteredStudents.length} / ${totalCount.toLocaleString()}` : totalCount.toLocaleString()} Siswa
+                    {totalCount.toLocaleString()} Siswa
                   </span>
                 </div>
                 {(schoolFilter || classFilter || searchQuery) && (
