@@ -140,12 +140,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSession(session);
 
         if (session?.user) {
-          const profile = await fetchUserProfile(session.user.id);
-          // If profile fetch failed, sign out to clear the broken session
-          if (!profile) {
-            console.warn('Profile fetch failed, signing out...');
-            await supabase.auth.signOut();
-          }
+          await fetchUserProfile(session.user.id);
+          // Don't sign out on profile fetch failure - just show error state
+          // User can retry or contact admin
         }
       } catch (err) {
         console.error('Error in getInitialSession:', err);
@@ -171,11 +168,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // Only refresh profile on token refresh
           await fetchUserProfile(session.user.id);
           setLoading(false);
-        } else {
-          // For SIGNED_IN and other events, just set loading to false
-          // Profile is already fetched in getInitialSession or signIn
+        } else if (!session) {
+          // No session means no need to fetch profile
           setLoading(false);
         }
+        // For SIGNED_IN and INITIAL_SESSION with session, let getInitialSession handle it
+        // signIn function already fetches profile, so we don't need to fetch again here
       }
     );
 
