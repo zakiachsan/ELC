@@ -1,8 +1,8 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { Award, Plus, Pencil, Trash2, Upload, ChevronLeft, Save, User as UserIcon, Loader2 } from 'lucide-react';
+import { Award, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { useStudentsOfMonth } from '../../hooks/useContent';
 import { StudentOfTheMonth } from '../../types';
 
@@ -16,17 +16,19 @@ export const StudentOfMonthManager: React.FC = () => {
   const students: StudentOfTheMonth[] = studentsData.map(s => ({
     id: s.id,
     name: s.name,
+    school: s.school || '',
+    className: s.class_name || '',
     achievement: s.achievement,
     monthYear: s.month_year,
-    image: s.image || '',
   }));
 
   const handleCreate = () => {
     setEditingItem({
       name: '',
+      school: '',
+      className: '',
       achievement: '',
       monthYear: '',
-      image: ''
     });
     setView('editor');
   };
@@ -57,9 +59,10 @@ export const StudentOfMonthManager: React.FC = () => {
       }
       await createStudent({
         name: item.name,
+        school: item.school,
+        class_name: item.className,
         achievement: item.achievement,
         month_year: item.monthYear,
-        image: item.image,
       });
       setView('list');
     } catch (err) {
@@ -117,12 +120,10 @@ export const StudentOfMonthManager: React.FC = () => {
               {students.map(student => (
                 <tr key={student.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-4">
-                       <img src={student.image} className="w-12 h-12 rounded-full object-cover bg-gray-100" alt="" />
-                       <div>
-                          <div className="text-sm font-bold text-gray-900">{student.name}</div>
-                          <div className="text-[10px] text-gray-400 line-clamp-1 max-w-xs uppercase tracking-tight">{student.achievement}</div>
-                       </div>
+                    <div>
+                       <div className="text-sm font-bold text-gray-900">{student.name}</div>
+                       <div className="text-xs text-gray-500">{student.school} - Kelas {student.className}</div>
+                       <div className="text-[10px] text-gray-400 line-clamp-1 max-w-xs uppercase tracking-tight mt-1">{student.achievement}</div>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-xs font-bold text-teal-600">
@@ -154,23 +155,6 @@ const StudentEditor: React.FC<{ item: StudentOfTheMonth, onSave: (s: StudentOfTh
     id: item.id || 'sm' + Date.now()
   });
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = error => reject(error);
-  });
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const base64 = await toBase64(file);
-      setFormData(prev => ({ ...prev, image: base64 }));
-    }
-  };
-
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave(formData);
@@ -183,68 +167,64 @@ const StudentEditor: React.FC<{ item: StudentOfTheMonth, onSave: (s: StudentOfTh
           <Button type="submit">Save Student</Button>
        </div>
 
-       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2 space-y-6">
-             <Card title="Student Information">
-                <div className="space-y-4">
-                   <div className="space-y-1">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Student Name</label>
-                      <input 
-                         required
-                         type="text" 
-                         className="w-full border rounded-xl px-4 py-3 text-lg font-bold focus:ring-2 focus:ring-teal-500 outline-none"
-                         placeholder="Full Name"
-                         value={formData.name}
-                         onChange={e => setFormData({...formData, name: e.target.value})}
-                      />
-                   </div>
-                   <div className="space-y-1">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Month & Year</label>
-                      <input 
-                         required
-                         type="text" 
-                         className="w-full border rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-teal-500 outline-none"
-                         placeholder="e.g. October 2024"
-                         value={formData.monthYear}
-                         onChange={e => setFormData({...formData, monthYear: e.target.value})}
-                      />
-                   </div>
-                   <div className="space-y-1">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Achievement Description</label>
-                      <textarea 
-                         required
-                         className="w-full border rounded-xl p-4 text-sm focus:ring-2 focus:ring-teal-500 outline-none min-h-[120px]"
-                         placeholder="Why is this student featured? Describe their outstanding achievement..."
-                         value={formData.achievement}
-                         onChange={e => setFormData({...formData, achievement: e.target.value})}
-                      />
-                   </div>
-                </div>
-             </Card>
+       <Card title="Student Information">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Student Name</label>
+                <input 
+                   required
+                   type="text" 
+                   className="w-full border rounded-xl px-4 py-3 text-lg font-bold focus:ring-2 focus:ring-teal-500 outline-none"
+                   placeholder="Full Name"
+                   value={formData.name}
+                   onChange={e => setFormData({...formData, name: e.target.value})}
+                />
+             </div>
+             <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Month & Year</label>
+                <input 
+                   required
+                   type="text" 
+                   className="w-full border rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                   placeholder="e.g. January 2025"
+                   value={formData.monthYear}
+                   onChange={e => setFormData({...formData, monthYear: e.target.value})}
+                />
+             </div>
+             <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">School</label>
+                <input 
+                   required
+                   type="text" 
+                   className="w-full border rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                   placeholder="e.g. SMP Abdi Siswa Bintaro"
+                   value={formData.school}
+                   onChange={e => setFormData({...formData, school: e.target.value})}
+                />
+             </div>
+             <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Class</label>
+                <input 
+                   required
+                   type="text" 
+                   className="w-full border rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                   placeholder="e.g. 7A"
+                   value={formData.className}
+                   onChange={e => setFormData({...formData, className: e.target.value})}
+                />
+             </div>
+             <div className="md:col-span-2 space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Achievement Description</label>
+                <textarea 
+                   required
+                   className="w-full border rounded-xl p-4 text-sm focus:ring-2 focus:ring-teal-500 outline-none min-h-[100px]"
+                   placeholder="Why is this student featured? Describe their outstanding achievement..."
+                   value={formData.achievement}
+                   onChange={e => setFormData({...formData, achievement: e.target.value})}
+                />
+             </div>
           </div>
-
-          <div className="space-y-6">
-             <Card title="Profile Photo">
-                <div className="space-y-4 text-center">
-                   <div 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="mx-auto w-48 h-48 border-2 border-dashed border-gray-200 rounded-full flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors relative overflow-hidden bg-gray-50"
-                   >
-                      {formData.image ? (
-                         <img src={formData.image} className="w-full h-full object-cover" alt="Student preview" />
-                      ) : (
-                         <>
-                            <UserIcon className="w-12 h-12 text-gray-300 mb-2" />
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Upload Photo</span>
-                         </>
-                      )}
-                      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                   </div>
-                   <p className="text-[10px] text-gray-400 italic leading-relaxed">Best results with square images.</p>
-                </div>
-             </Card>
-          </div>
-       </div>
+       </Card>
     </form>
   );
 };

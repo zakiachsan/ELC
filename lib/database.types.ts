@@ -808,7 +808,8 @@ export interface Database {
         Row: {
           id: string
           name: string
-          image: string
+          school: string
+          class_name: string
           achievement: string
           month_year: string
           created_at: string
@@ -816,7 +817,8 @@ export interface Database {
         Insert: {
           id?: string
           name: string
-          image: string
+          school: string
+          class_name: string
           achievement: string
           month_year: string
           created_at?: string
@@ -824,7 +826,8 @@ export interface Database {
         Update: {
           id?: string
           name?: string
-          image?: string
+          school?: string
+          class_name?: string
           achievement?: string
           month_year?: string
         }
@@ -832,6 +835,7 @@ export interface Database {
       featured_teachers: {
         Row: {
           id: string
+          user_id: string | null
           name: string
           country: string
           country_flag: string | null
@@ -842,11 +846,13 @@ export interface Database {
           specialty: string | null
           quote: string | null
           is_active: boolean
+          display_order: number | null
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
+          user_id?: string | null
           name: string
           country: string
           country_flag?: string | null
@@ -857,11 +863,13 @@ export interface Database {
           specialty?: string | null
           quote?: string | null
           is_active?: boolean
+          display_order?: number | null
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
+          user_id?: string | null
           name?: string
           country?: string
           country_flag?: string | null
@@ -872,6 +880,7 @@ export interface Database {
           specialty?: string | null
           quote?: string | null
           is_active?: boolean
+          display_order?: number | null
           updated_at?: string
         }
       }

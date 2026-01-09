@@ -139,6 +139,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               {/* Settings */}
               <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Settings</div>
               <SidebarNavItem to="/admin/settings" label="Site Settings" icon={Palette} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/admin/star-teachers" label="Star Teachers" icon={Star} onClick={closeMobileMenu} />
             </>
           )}
 
@@ -151,6 +152,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <SidebarNavItem to="/teacher/grades" label="Student Grades" icon={BarChart3} onClick={closeMobileMenu} />
               <SidebarNavItem to="/teacher/students" label="Students" icon={Users} onClick={closeMobileMenu} />
               <SidebarNavItem to="/teacher/materials" label="Afternoon Classes" icon={BookOpen} onClick={closeMobileMenu} />
+              
+              <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Settings</div>
+              <SidebarNavItem to="/teacher/profile" label="Profile" icon={Star} highlight onClick={closeMobileMenu} />
             </>
           )}
 

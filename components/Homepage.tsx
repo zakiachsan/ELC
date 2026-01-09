@@ -4,7 +4,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from './Button';
 import {
   CheckCircle, Zap, Users, Trophy, Star, Globe,
-  Calendar, Award, ShieldCheck, Lock, Smartphone, Mail, X, ChevronRight, Brain, AlertCircle, Clock, Sparkles, XCircle, ArrowLeft, Newspaper, Medal, MonitorPlay, Video, Briefcase, Flag, UserPlus, FileText, Send, DollarSign, TrendingUp, Play, Target, Timer, Crown, Gamepad2, MapPin, GraduationCap, BadgeCheck, Quote, Loader2, BookOpen, Menu
+  Calendar, Award, ShieldCheck, Lock, Smartphone, Mail, X, ChevronRight, ChevronLeft, Brain, AlertCircle, Clock, Sparkles, XCircle, ArrowLeft, Newspaper, Medal, MonitorPlay, Video, Briefcase, Flag, UserPlus, FileText, Send, DollarSign, TrendingUp, Play, Target, Timer, Crown, Gamepad2, MapPin, GraduationCap, BadgeCheck, Quote, Loader2, BookOpen, Menu
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -1677,63 +1677,135 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
                <h3 className="text-center text-xs font-black text-gray-400 uppercase tracking-widest">
                   Meet Our Star Teachers
                </h3>
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {featuredTeachers.map((teacher) => (
-                     <div key={teacher.id} className="group bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300">
-                        {/* Photo */}
-                        <div className="relative h-48 overflow-hidden">
-                           <img
-                              src={teacher.photo_url || ''}
-                              alt={teacher.name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                           />
-                           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-                           {/* Country Flag */}
-                           <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
-                              <span className="text-base">{teacher.country_flag}</span>
-                              <span className="text-gray-700">{teacher.country}</span>
-                           </div>
-                           {/* Type Badge */}
-                           <div className={`absolute bottom-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${
-                              teacher.type === 'native'
-                                 ? 'bg-yellow-400 text-yellow-900'
-                                 : 'bg-teal-500 text-white'
-                           }`}>
-                              {teacher.type === 'native' ? 'Native Speaker' : 'Local Expert'}
-                           </div>
-                        </div>
-
-                        {/* Info */}
-                        <div className="p-4 space-y-3">
-                           <div>
-                              <h4 className="font-bold text-gray-900">{teacher.name}</h4>
-                              <p className="text-xs text-gray-500">{teacher.specialty}</p>
-                           </div>
-
-                           {/* Certifications */}
-                           <div className="flex flex-wrap gap-1">
-                              {(teacher.certifications as string[] || []).map((cert, i) => (
-                                 <span key={i} className="text-[9px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">
-                                    {cert}
-                                 </span>
-                              ))}
-                           </div>
-
-                           {/* Experience */}
-                           <div className="flex items-center gap-2 text-xs text-gray-500">
-                              <Clock className="w-3.5 h-3.5" />
-                              <span>{teacher.experience} tahun pengalaman</span>
-                           </div>
-
-                           {/* Quote */}
-                           <div className="pt-2 border-t border-gray-100">
-                              <p className="text-[11px] text-gray-500 italic leading-relaxed line-clamp-2">
-                                 "{teacher.quote}"
-                              </p>
+               
+               {/* Mobile Carousel */}
+               <div className="md:hidden">
+                  <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide px-4 pb-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                     {featuredTeachers.map((teacher) => (
+                        <div key={teacher.id} className="snap-start shrink-0 w-[85%]">
+                           <div className="group bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+                              <div className="relative h-44 overflow-hidden">
+                                 <img src={teacher.photo_url || ''} alt={teacher.name} className="w-full h-full object-cover" />
+                                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+                                 <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
+                                    <span className="text-base">{teacher.country_flag}</span>
+                                    <span className="text-gray-700">{teacher.country}</span>
+                                 </div>
+                                 <div className={`absolute bottom-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${teacher.type === 'native' ? 'bg-yellow-400 text-yellow-900' : 'bg-teal-500 text-white'}`}>
+                                    {teacher.type === 'native' ? 'Native Speaker' : 'Local Expert'}
+                                 </div>
+                              </div>
+                              <div className="p-4 space-y-2">
+                                 <div>
+                                    <h4 className="font-bold text-gray-900">{teacher.name}</h4>
+                                    <p className="text-xs text-gray-500">{teacher.specialty}</p>
+                                 </div>
+                                 <div className="flex flex-wrap gap-1">
+                                    {(teacher.certifications as string[] || []).slice(0, 2).map((cert, i) => (
+                                       <span key={i} className="text-[9px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">{cert}</span>
+                                    ))}
+                                 </div>
+                                 <div className="flex items-center gap-2 text-xs text-gray-500">
+                                    <Clock className="w-3.5 h-3.5" />
+                                    <span>{teacher.experience} tahun pengalaman</span>
+                                 </div>
+                              </div>
                            </div>
                         </div>
-                     </div>
-                  ))}
+                     ))}
+                  </div>
+                  <p className="text-center text-[10px] text-gray-400 mt-2">Geser untuk melihat lebih banyak →</p>
+               </div>
+
+               {/* Desktop Carousel - 3 visible at a time */}
+               <div className="hidden md:block relative">
+                  {featuredTeachers.length > 3 && (
+                     <>
+                        <button
+                           onClick={() => {
+                              const container = document.getElementById('teacher-carousel-desktop');
+                              if (container) container.scrollBy({ left: -400, behavior: 'smooth' });
+                           }}
+                           className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white border border-gray-200 rounded-full shadow-lg flex items-center justify-center text-gray-600 hover:bg-gray-50 hover:text-teal-600 transition-all"
+                        >
+                           <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <button
+                           onClick={() => {
+                              const container = document.getElementById('teacher-carousel-desktop');
+                              if (container) container.scrollBy({ left: 400, behavior: 'smooth' });
+                           }}
+                           className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white border border-gray-200 rounded-full shadow-lg flex items-center justify-center text-gray-600 hover:bg-gray-50 hover:text-teal-600 transition-all"
+                        >
+                           <ChevronRight className="w-5 h-5" />
+                        </button>
+                     </>
+                  )}
+                  <div 
+                     id="teacher-carousel-desktop"
+                     className={`${featuredTeachers.length > 3 ? 'flex gap-5 overflow-x-auto snap-x snap-mandatory scrollbar-hide' : 'grid grid-cols-3 gap-5'}`}
+                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                  >
+                     {(featuredTeachers.length > 3 ? featuredTeachers : featuredTeachers.slice(0, 3)).map((teacher) => (
+                        <div
+                           key={teacher.id}
+                           className={`group bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 ${featuredTeachers.length > 3 ? 'snap-start shrink-0 w-[calc(33.333%-14px)]' : ''}`}
+                        >
+                           {/* Photo */}
+                           <div className="relative h-48 overflow-hidden">
+                              <img
+                                 src={teacher.photo_url || ''}
+                                 alt={teacher.name}
+                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+                              {/* Country Flag */}
+                              <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
+                                 <span className="text-base">{teacher.country_flag}</span>
+                                 <span className="text-gray-700">{teacher.country}</span>
+                              </div>
+                              {/* Type Badge */}
+                              <div className={`absolute bottom-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                                 teacher.type === 'native'
+                                    ? 'bg-yellow-400 text-yellow-900'
+                                    : 'bg-teal-500 text-white'
+                              }`}>
+                                 {teacher.type === 'native' ? 'Native Speaker' : 'Local Expert'}
+                              </div>
+                           </div>
+
+                           {/* Info */}
+                           <div className="p-4 space-y-3">
+                              <div>
+                                 <h4 className="font-bold text-gray-900">{teacher.name}</h4>
+                                 <p className="text-xs text-gray-500">{teacher.specialty}</p>
+                              </div>
+
+                              {/* Certifications */}
+                              <div className="flex flex-wrap gap-1">
+                                 {(teacher.certifications as string[] || []).map((cert, i) => (
+                                    <span key={i} className="text-[9px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">
+                                       {cert}
+                                    </span>
+                                 ))}
+                              </div>
+
+                              {/* Experience */}
+                              <div className="flex items-center gap-2 text-xs text-gray-500">
+                                 <Clock className="w-3.5 h-3.5" />
+                                 <span>{teacher.experience} tahun pengalaman</span>
+                              </div>
+
+                              {/* Quote */}
+                              <div className="pt-2 border-t border-gray-100">
+                                 <p className="text-[11px] text-gray-500 italic leading-relaxed line-clamp-2">
+                                    "{teacher.quote}"
+                                 </p>
+                              </div>
+                           </div>
+                        </div>
+                     ))}
+                  </div>
                </div>
             </div>
          </div>
@@ -1952,22 +2024,23 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
                <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide pl-4 pr-8 pb-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                   {studentsOfMonth.map((student, idx) => (
                      <div key={student.id} className="snap-start shrink-0 w-[75%]">
-                        <Card className="h-full bg-white border border-gray-100 rounded-2xl p-6 flex flex-col items-center text-center shadow-sm">
-                           {/* Avatar */}
-                           <div className="relative mb-4">
-                              <div className="w-20 h-20 rounded-full overflow-hidden border-3 border-white shadow-md">
-                                 <img src={student.image || ''} className="w-full h-full object-cover" alt={student.name} />
-                              </div>
-                              <div className="absolute -bottom-1 -right-1 bg-yellow-400 text-white p-1.5 rounded-lg shadow-md">
-                                 <Medal className="w-4 h-4" />
+                        <Card className="h-full bg-white border border-gray-100 rounded-2xl p-6 flex flex-col text-center shadow-sm">
+                           {/* Medal Icon */}
+                           <div className="flex justify-center mb-3">
+                              <div className="bg-yellow-400 text-white p-2 rounded-xl shadow-md">
+                                 <Medal className="w-5 h-5" />
                               </div>
                            </div>
 
                            {/* Info */}
                            <div className="space-y-2">
                               <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">{student.month_year}</p>
-                              <h3 className="text-base font-bold text-gray-900">{student.name}</h3>
-                              <p className="text-gray-500 text-sm leading-relaxed italic line-clamp-2">"{student.achievement}"</p>
+                              <h3 className="text-lg font-bold text-gray-900">{student.name}</h3>
+                              <div className="text-xs text-gray-500">
+                                 <p className="font-medium">{student.school}</p>
+                                 <p>Kelas {student.class_name}</p>
+                              </div>
+                              <p className="text-gray-600 text-sm leading-relaxed italic line-clamp-2 pt-1">"{student.achievement}"</p>
                            </div>
                         </Card>
                      </div>
@@ -1981,22 +2054,23 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
             <div className="hidden md:grid md:grid-cols-3 gap-5 px-4 sm:px-0">
                {studentsOfMonth.map((student) => (
                   <div key={student.id} className="group">
-                     <Card className="h-full bg-white border border-gray-100 rounded-2xl p-6 flex flex-col items-center text-center transition-all hover:shadow-lg hover:-translate-y-1 duration-300">
-                        {/* Avatar */}
-                        <div className="relative mb-4">
-                           <div className="w-20 h-20 rounded-full overflow-hidden border-3 border-white shadow-md">
-                              <img src={student.image || ''} className="w-full h-full object-cover" alt={student.name} />
-                           </div>
-                           <div className="absolute -bottom-1 -right-1 bg-yellow-400 text-white p-1.5 rounded-lg shadow-md">
-                              <Medal className="w-4 h-4" />
+                     <Card className="h-full bg-white border border-gray-100 rounded-2xl p-6 flex flex-col text-center transition-all hover:shadow-lg hover:-translate-y-1 duration-300">
+                        {/* Medal Icon */}
+                        <div className="flex justify-center mb-3">
+                           <div className="bg-yellow-400 text-white p-2.5 rounded-xl shadow-md group-hover:scale-110 transition-transform">
+                              <Medal className="w-5 h-5" />
                            </div>
                         </div>
 
                         {/* Info */}
                         <div className="space-y-2">
                            <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">{student.month_year}</p>
-                           <h3 className="text-base font-bold text-gray-900">{student.name}</h3>
-                           <p className="text-gray-500 text-sm leading-relaxed italic line-clamp-2">"{student.achievement}"</p>
+                           <h3 className="text-lg font-bold text-gray-900">{student.name}</h3>
+                           <div className="text-xs text-gray-500">
+                              <p className="font-medium">{student.school}</p>
+                              <p>Kelas {student.class_name}</p>
+                           </div>
+                           <p className="text-gray-600 text-sm leading-relaxed italic line-clamp-2 pt-1">"{student.achievement}"</p>
                         </div>
                      </Card>
                   </div>

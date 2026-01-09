@@ -126,7 +126,8 @@ export interface News {
 export interface StudentOfTheMonth {
   id: string;
   name: string;
-  image: string;
+  school: string;
+  className: string;
   achievement: string;
   monthYear: string; 
 }

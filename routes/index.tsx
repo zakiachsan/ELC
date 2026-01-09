@@ -42,6 +42,7 @@ import { KahootManager } from '../components/admin/KahootManager';
 import { TeacherManager } from '../components/admin/TeacherManager';
 import { ReviewManager } from '../components/admin/ReviewManager';
 import { TestScheduleManager } from '../components/admin/TestScheduleManager';
+import { StarTeacherManager } from '../components/admin/StarTeacherManager';
 
 // Teacher Components
 import { TeacherView } from '../components/teacher/TeacherView';
@@ -53,6 +54,7 @@ import { TestManager } from '../components/teacher/TestManager';
 import { TestCreator } from '../components/teacher/TestCreator';
 import { TestDetail } from '../components/teacher/TestDetail';
 import { StudentManager as TeacherStudentManager } from '../components/teacher/StudentManager';
+import { TeacherProfile } from '../components/teacher/TeacherProfile';
 
 // Student Components
 import { StudentView } from '../components/student/StudentView';
@@ -357,6 +359,16 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/admin/star-teachers"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.ADMIN]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <StarTeacherManager />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Teacher Routes */}
       <Route
@@ -517,6 +529,16 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
           <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.TEACHER]}>
             <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
               <TeacherStudentManager />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teacher/profile"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.TEACHER]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <TeacherProfile />
             </DashboardWrapper>
           </ProtectedRoute>
         }

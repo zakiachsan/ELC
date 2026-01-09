@@ -149,6 +149,7 @@ export const contentService = {
     const { data, error } = await supabase
       .from('featured_teachers')
       .select('*')
+      .order('display_order', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -161,6 +162,7 @@ export const contentService = {
       .from('featured_teachers')
       .select('*')
       .eq('is_active', true)
+      .order('display_order', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -217,6 +219,48 @@ export const contentService = {
   // Toggle featured teacher active
   async toggleFeaturedTeacherActive(id: string, isActive: boolean) {
     return this.updateFeaturedTeacher(id, { is_active: isActive });
+  },
+
+  // Get teacher profile by user ID
+  async getTeacherProfileByUserId(userId: string) {
+    const { data, error } = await supabase
+      .from('featured_teachers')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) throw error;
+    return data?.[0] || null;
+  },
+
+  // Create or update teacher profile (upsert by user_id)
+  async upsertTeacherProfile(userId: string, profile: FeaturedTeacherInsert) {
+    // Check if profile exists
+    const existing = await this.getTeacherProfileByUserId(userId);
+
+    if (existing) {
+      // Update existing profile by ID (more reliable than user_id)
+      const { data, error } = await supabaseAdmin
+        .from('featured_teachers')
+        .update({ ...profile, user_id: userId, updated_at: new Date().toISOString() } as any)
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as FeaturedTeacher;
+    } else {
+      // Create new profile
+      const { data, error } = await supabaseAdmin
+        .from('featured_teachers')
+        .insert({ ...profile, user_id: userId } as any)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as FeaturedTeacher;
+    }
   },
 
   // ==================== TEACHER APPLICATIONS ====================
