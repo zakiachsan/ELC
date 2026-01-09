@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { useAuth } from '../../contexts/AuthContext';
-import { useTeachers } from '../../hooks/useProfiles';
+import { useTeachers, useLocations } from '../../hooks/useProfiles';
 import { useTeacherReviews } from '../../hooks/useTeacherReviews';
+import { supabase } from '../../lib/supabase';
 import {
   teacherReviewsService,
   TeacherReviewInsert,
@@ -76,7 +77,8 @@ const RatingDisplay: React.FC<{ value: number }> = ({ value }) => (
 
 export const TeacherReview: React.FC = () => {
   const { user } = useAuth();
-  const { profiles: teachers, loading: teachersLoading } = useTeachers();
+  const { profiles: allTeachers, loading: teachersLoading } = useTeachers();
+  const { locations, loading: locationsLoading } = useLocations();
   const { reviews: myReviews, loading: reviewsLoading, createReview } = useTeacherReviews({
     reviewerId: user?.id,
   });
@@ -87,6 +89,84 @@ export const TeacherReview: React.FC = () => {
   const [existingReview, setExistingReview] = useState<any>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [studentProfile, setStudentProfile] = useState<{ school: string; className: string; locationId: string | null } | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  // Fetch student profile to get school and class info
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user?.id) return;
+      
+      const { data } = await supabase
+        .from('profiles')
+        .select('school_origin, assigned_location_id')
+        .eq('id', user.id)
+        .single();
+
+      if (data) {
+        let school = '';
+        let className = '';
+        
+        if (data.school_origin && data.school_origin.includes(' - ')) {
+          const parts = data.school_origin.split(' - ');
+          school = parts[0];
+          className = parts.slice(1).join(' - ').split(' ')[0]; // Get base class like "2A" from "2A (Regular)"
+        } else {
+          school = data.school_origin || '';
+        }
+        
+        setStudentProfile({ 
+          school, 
+          className,
+          locationId: data.assigned_location_id 
+        });
+      }
+      setProfileLoading(false);
+    };
+    fetchProfile();
+  }, [user?.id]);
+
+  // Filter teachers based on student's school and class
+  const teachers = allTeachers.filter(teacher => {
+    if (!studentProfile) return false;
+    
+    // Check if teacher is assigned to student's location
+    const teacherLocationIds = (teacher as any).assigned_location_ids || [];
+    const teacherLocationId = (teacher as any).assigned_location_id;
+    const allTeacherLocations = [...teacherLocationIds, teacherLocationId].filter(Boolean);
+    
+    // Check if any of teacher's locations match student's location
+    let locationMatch = false;
+    if (studentProfile.locationId) {
+      locationMatch = allTeacherLocations.includes(studentProfile.locationId);
+    }
+    
+    // Also check by school name if location ID doesn't match
+    if (!locationMatch && studentProfile.school) {
+      // Find location ID by school name
+      const matchingLocation = locations.find(loc => 
+        loc.name?.toLowerCase().includes(studentProfile.school.toLowerCase())
+      );
+      if (matchingLocation) {
+        locationMatch = allTeacherLocations.includes(matchingLocation.id);
+      }
+    }
+    
+    if (!locationMatch) return false;
+    
+    // Check if teacher teaches student's class
+    const teacherClasses = (teacher as any).assigned_classes || [];
+    if (teacherClasses.length === 0) return true; // If no classes assigned, show teacher
+    
+    // Match class (handle variations like "2A" matching "2A", "2A Bilingual", etc.)
+    const studentClassBase = studentProfile.className?.toLowerCase() || '';
+    const classMatch = teacherClasses.some((tc: string) => {
+      const teacherClassBase = tc?.toLowerCase().split(' ')[0] || '';
+      return teacherClassBase === studentClassBase || tc?.toLowerCase().includes(studentClassBase);
+    });
+    
+    return classMatch;
+  });
 
   // Form state
   const [ratings, setRatings] = useState({
@@ -199,7 +279,7 @@ export const TeacherReview: React.FC = () => {
     }
   };
 
-  if (teachersLoading || reviewsLoading) {
+  if (teachersLoading || reviewsLoading || profileLoading || locationsLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -361,7 +441,7 @@ export const TeacherReview: React.FC = () => {
         <div className="divide-y divide-gray-100">
           {teachers.length === 0 ? (
             <div className="p-6 text-center text-gray-400 text-sm">
-              Tidak ada guru yang tersedia
+              Tidak ada guru yang mengajar di kelas Anda
             </div>
           ) : (
             teachers.map((teacher) => {

@@ -2,16 +2,17 @@
 import React, { useState } from 'react';
 import { User, SkillCategory, DifficultyLevel, ClassSession } from '../../types';
 import { Card } from '../Card';
-import { Button } from '../Button';
+
 import { LEVEL_COLORS } from '../../constants';
 import { useTodaySessions, useUpcomingSessions, useSessions } from '../../hooks/useSessions';
 import { useModuleProgress, useModules } from '../../hooks/useModules';
 import { useLocations } from '../../hooks/useProfiles';
-import { Calendar, Clock, MapPin, Headphones, BookOpen, PenTool, Mic, AlignLeft, Book, Info, ChevronDown, ChevronUp, History, MonitorPlay, School, Loader2, Phone, Edit2, Check, X } from 'lucide-react';
+import { Calendar, Clock, MapPin, Headphones, BookOpen, PenTool, Mic, AlignLeft, Book, Info, History, MonitorPlay, School, Loader2, Phone, Edit2, Check, X, GraduationCap } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
-// Icon Mapper for Skills
+// Icon Mapper for Skills (exported for use in other components)
 export const SKILL_ICONS: Record<SkillCategory, React.ElementType> = {
   [SkillCategory.LISTENING]: Headphones,
   [SkillCategory.READING]: BookOpen,
@@ -24,6 +25,7 @@ export const SKILL_ICONS: Record<SkillCategory, React.ElementType> = {
 export const StudentView: React.FC<{ student: User }> = ({ student }) => {
   const { t } = useLanguage();
   const { updateProfile } = useAuth();
+  const navigate = useNavigate();
   const { sessions: todaySessionsData, loading: todayLoading } = useTodaySessions();
   const { sessions: upcomingSessionsData, loading: upcomingLoading } = useUpcomingSessions();
   const { sessions: allSessionsData, loading: sessionsLoading } = useSessions({ past: true });
@@ -35,6 +37,17 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
   const [isEditingWhatsApp, setIsEditingWhatsApp] = useState(false);
   const [whatsAppNumber, setWhatsAppNumber] = useState(student.phone || '');
   const [isSavingWhatsApp, setIsSavingWhatsApp] = useState(false);
+
+  // Parse class name from schoolOrigin (format: "SCHOOL - CLASS")
+  const className = (() => {
+    if (student.schoolOrigin && student.schoolOrigin.includes(' - ')) {
+      const parts = student.schoolOrigin.split(' - ');
+      if (parts.length > 1) {
+        return parts.slice(1).join(' - '); // Get everything after first " - "
+      }
+    }
+    return null;
+  })();
 
   const handleSaveWhatsApp = async () => {
     setIsSavingWhatsApp(true);
@@ -82,7 +95,7 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
   const baseSchoolName = schoolName?.split(' - ')[0] || student.schoolOrigin?.split(' - ')[0] || null;
 
   const now = new Date();
-  const [isSkillsExpanded, setIsSkillsExpanded] = useState(false);
+
 
   // Map sessions from database
   const mapSession = (s: any): ClassSession => ({
@@ -136,102 +149,82 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
     );
   }
 
-  // Skill logic
-  const allSkills = Object.values(SkillCategory);
-  const displayedSkills = isSkillsExpanded ? allSkills : allSkills.slice(0, 3);
-
-  // Render Skill Card
-  const renderSkillCard = (skill: SkillCategory) => {
-    const level = student.skillLevels?.[skill];
-    const Icon = SKILL_ICONS[skill] || AlignLeft;
-
-    return (
-      <div key={skill} className="bg-white px-3 py-3 rounded-lg border border-gray-100 shadow-sm flex items-center gap-3 hover:border-blue-200 transition-all">
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${level ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-300'}`}>
-           <Icon className="w-4 h-4" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wide truncate">{skill}</h4>
-          <span className={`text-xs font-bold ${level ? 'text-gray-900' : 'text-gray-400'}`}>
-             {level ? level.replace('-', ' ') : 'Not Assessed'}
-          </span>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-4">
 
       {/* SCHOOL INFO BANNER */}
       {schoolName && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-3 flex items-center gap-3">
-          <div className="p-2 bg-white rounded-lg shadow-sm">
-            <School className="w-5 h-5 text-blue-600" />
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-2 sm:p-3 flex items-center justify-between gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-1.5 sm:p-2 bg-white rounded-lg shadow-sm">
+              <School className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-[8px] sm:text-[9px] font-bold text-blue-600 uppercase tracking-widest">School</p>
+              <h3 className="text-xs sm:text-sm font-bold text-gray-900">{schoolName}</h3>
+            </div>
           </div>
-          <div>
-            <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest">School</p>
-            <h3 className="text-sm font-bold text-gray-900">{schoolName}</h3>
-          </div>
+          {className && (
+            <div className="flex items-center gap-1.5 sm:gap-2 bg-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg shadow-sm border border-blue-100">
+              <GraduationCap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600" />
+              <span className="text-xs sm:text-sm font-bold text-gray-900">{className}</span>
+            </div>
+          )}
         </div>
       )}
 
       {/* WHATSAPP NUMBER SECTION */}
-      <Card className="!p-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-50 rounded-lg">
-              <Phone className="w-5 h-5 text-green-600" />
-            </div>
-            <div className="flex-1">
-              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">WhatsApp Number</p>
-              {isEditingWhatsApp ? (
-                <div className="flex items-center gap-2 mt-1">
-                  <input
-                    type="tel"
-                    value={whatsAppNumber}
-                    onChange={(e) => setWhatsAppNumber(e.target.value)}
-                    placeholder="e.g. 08123456789"
-                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    autoFocus
-                  />
-                  <button
-                    onClick={handleSaveWhatsApp}
-                    disabled={isSavingWhatsApp}
-                    className="p-1.5 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50"
-                  >
-                    {isSavingWhatsApp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  </button>
-                  <button
-                    onClick={handleCancelWhatsApp}
-                    disabled={isSavingWhatsApp}
-                    className="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-900">
-                    {student.phone || <span className="text-gray-400 italic">Not set</span>}
-                  </span>
-                </div>
-              )}
-            </div>
+      <Card className="!p-2 sm:!p-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="p-1.5 sm:p-2 bg-green-50 rounded-lg shrink-0">
+            <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600" />
           </div>
-          {!isEditingWhatsApp && (
-            <button
-              onClick={() => setIsEditingWhatsApp(true)}
-              className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-              title="Edit WhatsApp Number"
-            >
-              <Edit2 className="w-4 h-4" />
-            </button>
-          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-widest">WhatsApp</p>
+            {isEditingWhatsApp ? (
+              <div className="flex items-center gap-1.5 sm:gap-2 mt-1">
+                <input
+                  type="tel"
+                  value={whatsAppNumber}
+                  onChange={(e) => setWhatsAppNumber(e.target.value)}
+                  placeholder="08123456789"
+                  className="w-28 sm:w-36 px-2 py-1 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  autoFocus
+                />
+                <button
+                  onClick={handleSaveWhatsApp}
+                  disabled={isSavingWhatsApp}
+                  className="p-1 sm:p-1.5 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50"
+                >
+                  {isSavingWhatsApp ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> : <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                </button>
+                <button
+                  onClick={handleCancelWhatsApp}
+                  disabled={isSavingWhatsApp}
+                  className="p-1 sm:p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-xs sm:text-sm font-medium text-gray-900">
+                  {student.phone || <span className="text-gray-400 italic text-[10px] sm:text-xs">Not set</span>}
+                </span>
+                <button
+                  onClick={() => setIsEditingWhatsApp(true)}
+                  className="p-0.5 sm:p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                  title="Edit"
+                >
+                  <Edit2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                </button>
+              </div>
+            )}
+            <p className="hidden sm:block text-[10px] text-gray-400 mt-0.5">
+              Optional - Used for important notifications from school
+            </p>
+          </div>
         </div>
-        <p className="text-[10px] text-gray-400 mt-2 ml-11">
-          Optional - Used for important notifications from school
-        </p>
       </Card>
 
       {/* SECTION 1: TODAY'S CLASSES */}
@@ -244,7 +237,10 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
                 <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
                    <Calendar className="w-4 h-4 text-yellow-600" /> {t.st_today_class}
                 </h3>
-                <Card className="!p-3 border-l-4 border-l-yellow-400 bg-yellow-50/50">
+                <Card 
+                  className="!p-3 border-l-4 border-l-yellow-400 bg-yellow-50/50 cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => navigate('/student/schedule')}
+                >
                   <div className="flex flex-col md:flex-row gap-4 items-center">
                      <div className="bg-white rounded-lg p-3 text-center border border-yellow-100 shadow-sm min-w-[90px]">
                         <span className="text-yellow-600 font-bold text-[9px] uppercase block">TODAY</span>
@@ -277,7 +273,10 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
                 <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-blue-600" /> {t.st_upcoming_class}
                 </h3>
-                <Card className="!p-3">
+                <Card 
+                  className="!p-3 cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => navigate('/student/schedule')}
+                >
                     <div className="flex flex-col sm:flex-row gap-4">
                       <div className="bg-blue-50 rounded-lg p-3 flex flex-col items-center justify-center min-w-[80px] text-center border border-blue-100">
                           <span className="text-blue-500 font-bold text-xs uppercase">
@@ -372,32 +371,6 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
               </div>
            </div>
         </div>
-      </div>
-
-      {/* SECTION 2: Skill Levels Grid */}
-      <div className="space-y-3">
-        <div className="flex justify-between items-end">
-           <div>
-              <h2 className="text-base font-bold text-gray-900">{t.st_skill_levels}</h2>
-              <p className="text-[10px] text-gray-500">{t.st_skill_desc}</p>
-           </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-           {displayedSkills.map(skill => renderSkillCard(skill))}
-        </div>
-
-        {/* Tray Toggle Button */}
-        <button
-            onClick={() => setIsSkillsExpanded(!isSkillsExpanded)}
-            className="w-full py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center gap-2 text-[10px] font-black text-gray-500 uppercase tracking-widest transition-colors"
-        >
-            {isSkillsExpanded ? (
-                <>Show Less <ChevronUp className="w-3 h-3" /></>
-            ) : (
-                <>Show All Skills <ChevronDown className="w-3 h-3" /></>
-            )}
-        </button>
       </div>
 
     </div>

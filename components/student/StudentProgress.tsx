@@ -1,61 +1,83 @@
 
-import React, { useState } from 'react';
-import { User, SkillCategory, CEFRLevel, Homework, DifficultyLevel } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { User } from '../../types';
 import { Card } from '../Card';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useSessions } from '../../hooks/useSessions';
-import { useReports } from '../../hooks/useReports';
-import { useHomeworks } from '../../hooks/useHomeworks';
-import { TrendingUp, BookOpen, Clock, CheckCircle, ClipboardCheck, Calendar, Loader2 } from 'lucide-react';
+import { useStudentGrades } from '../../hooks/useStudentGrades';
+import { supabase } from '../../lib/supabase';
+import { TrendingUp, BookOpen, ClipboardCheck, Calendar, Loader2, Award, GraduationCap } from 'lucide-react';
+
+// Generate academic year options
+const generateAcademicYears = (): string[] => {
+  const currentYear = new Date().getFullYear();
+  const years: string[] = [];
+  for (let i = -2; i <= 1; i++) {
+    const startYear = currentYear + i;
+    years.push(`${startYear}/${startYear + 1}`);
+  }
+  return years;
+};
 
 export const StudentProgress: React.FC<{ student: User }> = ({ student }) => {
-  const { sessions: sessionsData, loading: sessionsLoading } = useSessions();
-  const { reports: reportsData, loading: reportsLoading } = useReports();
-  const { homeworks: homeworksData, loading: homeworksLoading } = useHomeworks({ studentId: student.id });
+  const academicYears = generateAcademicYears();
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth();
+  const defaultAcademicYear = currentMonth >= 6 ? `${currentYear}/${currentYear + 1}` : `${currentYear - 1}/${currentYear}`;
+  const defaultSemester = currentMonth >= 6 ? '1' : '2';
 
-  const [activeTab, setActiveTab] = useState<'grades' | 'homework'>('grades');
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>(defaultAcademicYear);
+  const [selectedSemester, setSelectedSemester] = useState<'1' | '2'>(defaultSemester as '1' | '2');
+  const [studentProfile, setStudentProfile] = useState<{ school: string; className: string } | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
 
-  // Build reports map by session
-  const sessionReportsMap: Record<string, any[]> = {};
-  reportsData.forEach(r => {
-    if (!sessionReportsMap[r.session_id]) {
-      sessionReportsMap[r.session_id] = [];
-    }
-    sessionReportsMap[r.session_id].push({
-      studentId: r.student_id,
-      studentName: r.student_name || 'Unknown',
-      writtenScore: r.written_score,
-      oralScore: r.oral_score,
-      cefrLevel: r.cefr_level as CEFRLevel,
-      teacherNotes: r.notes,
-    });
-  });
+  // Fetch student profile
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('school_origin, assigned_location_id')
+        .eq('id', student.id)
+        .single();
 
-  // Map sessions
-  const sessions = sessionsData.map(s => ({
-    id: s.id,
-    dateTime: s.date_time,
-    topic: s.topic,
-    skillCategory: s.skill_category as SkillCategory,
-    difficultyLevel: s.difficulty_level as DifficultyLevel,
-  }));
+      if (data) {
+        let school = '';
+        let className = '';
+        
+        if (data.school_origin && data.school_origin.includes(' - ')) {
+          const parts = data.school_origin.split(' - ');
+          school = parts[0];
+          className = parts.slice(1).join(' - ');
+        } else {
+          school = data.school_origin || '';
+        }
+        
+        setStudentProfile({ school, className });
+      }
+      setProfileLoading(false);
+    };
+    fetchProfile();
+  }, [student.id]);
 
-  // Map homeworks
-  const homeworks: Homework[] = homeworksData.map(h => ({
-    id: h.id,
-    sessionId: h.session_id,
-    studentId: h.student_id,
-    title: h.title,
-    description: h.description || undefined,
-    dueDate: h.due_date,
-    assignedDate: h.assigned_date,
-    status: h.status as 'PENDING' | 'SUBMITTED' | 'GRADED',
-    submissionUrl: h.submission_url || undefined,
-    score: h.score || undefined,
-    feedback: h.feedback || undefined,
-  }));
+  // Get grades from student_grades table
+  const { grades: allGrades, loading: gradesLoading } = useStudentGrades(
+    selectedAcademicYear,
+    selectedSemester,
+    studentProfile?.school || '',
+    studentProfile?.className || ''
+  );
 
-  if (sessionsLoading || reportsLoading || homeworksLoading) {
+  // Find this student's grade
+  const studentGrade = allGrades.find(g => g.student_id === student.id);
+
+  // Calculate average
+  const gradeValues = [
+    studentGrade?.quiz1, studentGrade?.quiz2, studentGrade?.quiz3,
+    studentGrade?.mid, studentGrade?.final
+  ].filter(v => v != null) as number[];
+  const average = gradeValues.length > 0
+    ? Math.round(gradeValues.reduce((a, b) => a + b, 0) / gradeValues.length)
+    : null;
+
+  if (profileLoading || gradesLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -64,286 +86,158 @@ export const StudentProgress: React.FC<{ student: User }> = ({ student }) => {
     );
   }
 
-  // 1. Get all session grades for this student (from teacher input)
-  const sessionGrades = sessions.map(s => {
-    const report = sessionReportsMap[s.id]?.find((r: any) => r.studentId === student.id);
-    if (!report) return null;
-    return {
-      sessionId: s.id,
-      date: s.dateTime,
-      topic: s.topic,
-      skillCategory: s.skillCategory,
-      writtenScore: report.writtenScore,
-      oralScore: report.oralScore,
-      cefrLevel: report.cefrLevel,
-      teacherNotes: report.teacherNotes
-    };
-  }).filter(Boolean);
+  const getScoreColor = (score: number | null | undefined) => {
+    if (score == null) return 'text-gray-400';
+    if (score >= 80) return 'text-green-600';
+    if (score >= 70) return 'text-blue-600';
+    if (score >= 60) return 'text-yellow-600';
+    return 'text-red-600';
+  };
 
-  // 2. CEFR progression chart data
-  const cefrChartData = sessionGrades
-    .filter(g => g?.cefrLevel)
-    .map(g => {
-      const cefrOrder: Record<string, number> = {
-        'A1 - Beginner': 1,
-        'A2 - Elementary': 2,
-        'B1 - Intermediate': 3,
-        'B2 - Upper Intermediate': 4,
-        'C1 - Advanced': 5,
-        'C2 - Proficient': 6
-      };
-      return {
-        name: new Date(g!.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
-        level: cefrOrder[g!.cefrLevel!] || 0,
-        label: g!.cefrLevel?.split(' - ')[0]
-      };
-    });
-
-  // 3. Homework for this student
-  const studentHomeworks = homeworks.filter(h => h.studentId === student.id);
-  const pendingHomeworks = studentHomeworks.filter(h => h.status === 'PENDING');
-  const completedHomeworks = studentHomeworks.filter(h => h.status !== 'PENDING');
-
-  // 4. Latest CEFR level
-  const latestCefr = sessionGrades.filter(g => g?.cefrLevel).pop()?.cefrLevel;
-
-  // 5. Average scores
-  const writtenScores = sessionGrades.filter(g => g?.writtenScore !== undefined).map(g => g!.writtenScore!);
-  const oralScores = sessionGrades.filter(g => g?.oralScore !== undefined).map(g => g!.oralScore!);
-  const avgWritten = writtenScores.length > 0 ? Math.round(writtenScores.reduce((a, b) => a + b, 0) / writtenScores.length) : null;
-  const avgOral = oralScores.length > 0 ? Math.round(oralScores.reduce((a, b) => a + b, 0) / oralScores.length) : null;
+  const getScoreBg = (score: number | null | undefined) => {
+    if (score == null) return 'bg-gray-50 border-gray-200';
+    if (score >= 80) return 'bg-green-50 border-green-200';
+    if (score >= 70) return 'bg-blue-50 border-blue-200';
+    if (score >= 60) return 'bg-yellow-50 border-yellow-200';
+    return 'bg-red-50 border-red-200';
+  };
 
   return (
     <div className="space-y-4 animate-in fade-in">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">My Progress</h2>
-          <p className="text-xs text-gray-500">Track your grades, CEFR level, and homework.</p>
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-blue-600" />
+            My Progress
+          </h2>
+          <p className="text-xs text-gray-500">Track your grades and learning progress.</p>
         </div>
-        <div className="flex gap-3">
-          <div className="text-right px-3 border-r border-gray-200">
-            <p className="text-[9px] text-gray-400 font-bold uppercase">Avg Written</p>
-            <p className="text-base font-bold text-blue-600">{avgWritten ?? '—'}</p>
-          </div>
-          <div className="text-right px-3 border-r border-gray-200">
-            <p className="text-[9px] text-gray-400 font-bold uppercase">Avg Oral</p>
-            <p className="text-base font-bold text-purple-600">{avgOral ?? '—'}</p>
-          </div>
-          <div className="text-right px-2">
-            <p className="text-[9px] text-gray-400 font-bold uppercase">CEFR Level</p>
-            <p className="text-base font-bold text-teal-600">{latestCefr?.split(' - ')[0] || '—'}</p>
-          </div>
+        
+        {/* Semester Selector */}
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedAcademicYear}
+            onChange={(e) => setSelectedAcademicYear(e.target.value)}
+            className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white"
+          >
+            {academicYears.map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          <select
+            value={selectedSemester}
+            onChange={(e) => setSelectedSemester(e.target.value as '1' | '2')}
+            className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white"
+          >
+            <option value="1">Semester 1</option>
+            <option value="2">Semester 2</option>
+          </select>
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex bg-white p-0.5 rounded-lg border border-gray-200 shadow-sm w-fit">
-        <button
-          onClick={() => setActiveTab('grades')}
-          className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-md transition-all flex items-center gap-1 ${activeTab === 'grades' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-        >
-          <ClipboardCheck className="w-3 h-3" /> Grades
-        </button>
-        <button
-          onClick={() => setActiveTab('homework')}
-          className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-md transition-all flex items-center gap-1 ${activeTab === 'homework' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-        >
-          <BookOpen className="w-3 h-3" /> Homework
-          {pendingHomeworks.length > 0 && (
-            <span className="bg-orange-500 text-white text-[8px] px-1.5 py-0.5 rounded-full ml-1">{pendingHomeworks.length}</span>
-          )}
-        </button>
-      </div>
-
-      {/* Tab Content */}
-      {activeTab === 'grades' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* CEFR Progression Chart */}
-          <Card className="!p-3 lg:col-span-1">
-            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-              <TrendingUp className="w-3 h-3 text-teal-600" /> CEFR Progression
-            </h3>
-            <div className="h-36">
-              {cefrChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={cefrChartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                    <XAxis dataKey="name" tick={{ fontSize: 9 }} />
-                    <YAxis domain={[0, 6]} ticks={[1, 2, 3, 4, 5, 6]} tickFormatter={(v) => ['', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'][v]} tick={{ fontSize: 9 }} width={25} />
-                    <Tooltip formatter={(value, name, props) => [props.payload.label, 'CEFR']} />
-                    <Line type="monotone" dataKey="level" stroke="#0d9488" strokeWidth={2} dot={{ r: 4, fill: '#0d9488' }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-gray-400 text-[10px] italic">
-                  No CEFR data yet.
-                </div>
-              )}
+      {/* Average Score Card */}
+      {average !== null && (
+        <Card className="!p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white rounded-lg shadow-sm">
+                <Award className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest">Semester Average</p>
+                <p className="text-2xl font-bold text-gray-900">{average}</p>
+              </div>
             </div>
-          </Card>
-
-          {/* Grades Table */}
-          <Card className="!p-0 overflow-hidden lg:col-span-2">
-            <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
-              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                <ClipboardCheck className="w-3 h-3 text-blue-600" /> Grades History
-              </h3>
+            <div className={`px-3 py-1 rounded-full text-sm font-bold border ${getScoreBg(average)} ${getScoreColor(average)}`}>
+              {average >= 80 ? 'Excellent' : average >= 70 ? 'Good' : average >= 60 ? 'Fair' : 'Needs Improvement'}
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                  <tr>
-                    <th className="px-3 py-2">Date</th>
-                    <th className="px-3 py-2">Topic</th>
-                    <th className="px-3 py-2">Category</th>
-                    <th className="px-3 py-2 text-center">Written</th>
-                    <th className="px-3 py-2 text-center">Oral</th>
-                    <th className="px-3 py-2 text-center">CEFR</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {sessionGrades.length === 0 && (
-                    <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400 text-[10px] italic">No grades recorded yet.</td></tr>
-                  )}
-                  {sessionGrades.map((grade, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 text-[10px] text-gray-700 font-medium">
-                        {new Date(grade!.date).toLocaleDateString()}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="text-[10px] font-bold text-gray-900">{grade!.topic}</div>
-                        {grade!.teacherNotes && (
-                          <div className="text-[9px] text-gray-500 italic line-clamp-1">"{grade!.teacherNotes}"</div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="text-[8px] font-bold text-gray-600 uppercase bg-gray-100 px-1.5 py-0.5 rounded">
-                          {grade!.skillCategory}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {grade!.writtenScore !== undefined ? (
-                          <span className={`text-[10px] font-bold ${grade!.writtenScore >= 70 ? 'text-green-600' : 'text-red-600'}`}>
-                            {grade!.writtenScore}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300 text-[10px]">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {grade!.oralScore !== undefined ? (
-                          <span className={`text-[10px] font-bold ${grade!.oralScore >= 70 ? 'text-green-600' : 'text-red-600'}`}>
-                            {grade!.oralScore}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300 text-[10px]">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {grade!.cefrLevel ? (
-                          <span className="bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded text-[8px] font-bold border border-teal-100">
-                            {grade!.cefrLevel.split(' - ')[0]}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300 text-[10px]">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </div>
+          </div>
+        </Card>
       )}
 
-      {activeTab === 'homework' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Pending Homework */}
-          <div className="lg:col-span-1 space-y-3">
-            <Card className="!p-3">
-              <h3 className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-2 flex items-center gap-1">
-                <Clock className="w-3 h-3" /> Pending ({pendingHomeworks.length})
-              </h3>
-              {pendingHomeworks.length > 0 ? (
-                <div className="space-y-2">
-                  {pendingHomeworks.map(hw => (
-                    <div key={hw.id} className="p-2 bg-orange-50 rounded-lg border border-orange-100">
-                      <p className="text-xs font-bold text-gray-900">{hw.title}</p>
-                      <p className="text-[9px] text-gray-600 mt-0.5 line-clamp-2">{hw.description}</p>
-                      <div className="text-[8px] text-orange-600 font-bold flex items-center gap-1 mt-1">
-                        <Calendar className="w-2.5 h-2.5" /> Due: {new Date(hw.dueDate).toLocaleDateString()}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-4">
-                  <CheckCircle className="w-6 h-6 text-green-300 mx-auto mb-1" />
-                  <p className="text-[9px] text-gray-400">All done!</p>
-                </div>
-              )}
-            </Card>
+      {/* Grades Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {/* Quiz 1 */}
+        <Card className={`!p-3 ${getScoreBg(studentGrade?.quiz1)}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <ClipboardCheck className="w-4 h-4 text-blue-500" />
+            <span className="text-[10px] font-bold text-gray-500 uppercase">Quiz 1</span>
           </div>
+          <p className={`text-2xl font-bold ${getScoreColor(studentGrade?.quiz1)}`}>
+            {studentGrade?.quiz1 ?? '-'}
+          </p>
+        </Card>
 
-          {/* Completed Homework */}
-          <Card className="!p-0 overflow-hidden lg:col-span-2">
-            <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
-              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                <CheckCircle className="w-3 h-3 text-green-600" /> Completed Homework
-              </h3>
+        {/* Quiz 2 */}
+        <Card className={`!p-3 ${getScoreBg(studentGrade?.quiz2)}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <ClipboardCheck className="w-4 h-4 text-blue-500" />
+            <span className="text-[10px] font-bold text-gray-500 uppercase">Quiz 2</span>
+          </div>
+          <p className={`text-2xl font-bold ${getScoreColor(studentGrade?.quiz2)}`}>
+            {studentGrade?.quiz2 ?? '-'}
+          </p>
+        </Card>
+
+        {/* Quiz 3 */}
+        <Card className={`!p-3 ${getScoreBg(studentGrade?.quiz3)}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <ClipboardCheck className="w-4 h-4 text-blue-500" />
+            <span className="text-[10px] font-bold text-gray-500 uppercase">Quiz 3</span>
+          </div>
+          <p className={`text-2xl font-bold ${getScoreColor(studentGrade?.quiz3)}`}>
+            {studentGrade?.quiz3 ?? '-'}
+          </p>
+        </Card>
+
+        {/* Mid Semester */}
+        <Card className={`!p-3 ${getScoreBg(studentGrade?.mid)}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <BookOpen className="w-4 h-4 text-orange-500" />
+            <span className="text-[10px] font-bold text-gray-500 uppercase">UTS</span>
+          </div>
+          <p className={`text-2xl font-bold ${getScoreColor(studentGrade?.mid)}`}>
+            {studentGrade?.mid ?? '-'}
+          </p>
+        </Card>
+
+        {/* Final Semester */}
+        <Card className={`!p-3 ${getScoreBg(studentGrade?.final)}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <GraduationCap className="w-4 h-4 text-purple-500" />
+            <span className="text-[10px] font-bold text-gray-500 uppercase">UAS</span>
+          </div>
+          <p className={`text-2xl font-bold ${getScoreColor(studentGrade?.final)}`}>
+            {studentGrade?.final ?? '-'}
+          </p>
+        </Card>
+      </div>
+
+      {/* Participation Score (if any) */}
+      {studentGrade?.participation != null && (
+        <Card className="!p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-teal-500" />
+              <span className="text-xs font-bold text-gray-700">Participation Score</span>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                  <tr>
-                    <th className="px-3 py-2">Title</th>
-                    <th className="px-3 py-2">Due Date</th>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2 text-center">Score</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {completedHomeworks.length === 0 && (
-                    <tr><td colSpan={4} className="px-3 py-6 text-center text-gray-400 text-[10px] italic">No completed homework yet.</td></tr>
-                  )}
-                  {completedHomeworks.map(hw => (
-                    <tr key={hw.id} className="hover:bg-gray-50">
-                      <td className="px-3 py-2">
-                        <div className="text-[10px] font-bold text-gray-900">{hw.title}</div>
-                        {hw.feedback && (
-                          <div className="text-[9px] text-blue-600 italic">Feedback: {hw.feedback}</div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-[10px] text-gray-500">
-                        {new Date(hw.dueDate).toLocaleDateString()}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase ${
-                          hw.status === 'GRADED' ? 'bg-green-100 text-green-700' :
-                          hw.status === 'SUBMITTED' ? 'bg-blue-100 text-blue-700' :
-                          'bg-orange-100 text-orange-700'
-                        }`}>
-                          {hw.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {hw.score !== undefined ? (
-                          <span className={`text-[10px] font-bold ${hw.score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
-                            {hw.score}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300 text-[10px]">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </div>
+            <span className={`text-lg font-bold ${getScoreColor(studentGrade.participation)}`}>
+              {studentGrade.participation}
+            </span>
+          </div>
+        </Card>
+      )}
+
+      {/* No Data Message */}
+      {!studentGrade && (
+        <Card className="!p-6 text-center">
+          <div className="text-gray-400 mb-2">
+            <ClipboardCheck className="w-10 h-10 mx-auto opacity-50" />
+          </div>
+          <p className="text-sm text-gray-500">No grades recorded for this semester yet.</p>
+          <p className="text-xs text-gray-400 mt-1">Grades will appear here once your teacher records them.</p>
+        </Card>
       )}
     </div>
   );

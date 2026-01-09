@@ -726,6 +726,82 @@ export const testsService = {
       lowestScore: Math.round(lowestScore * 100) / 100,
     };
   },
+
+  // ============================================
+  // ONLINE TEST SCORES FOR GRADES
+  // ============================================
+
+  /**
+   * Get online test scores for all students in a class
+   * Used to auto-populate student grades from online test results
+   * 
+   * Returns a map of student_id -> { quiz1, quiz2, quiz3, mid, final }
+   * Scores are calculated as percentage (0-100)
+   */
+  async getOnlineTestScoresForClass(
+    location: string,
+    className: string,
+    academicYear: string,
+    semester: string
+  ): Promise<Record<string, { quiz1?: number; quiz2?: number; quiz3?: number; mid?: number; final?: number }>> {
+    // Get all online tests for this class/school/academic period
+    const { data: tests, error: testsError } = await supabase
+      .from('test_schedules')
+      .select('id, test_type, quiz_number')
+      .eq('location', location)
+      .eq('class_name', className)
+      .eq('academic_year', academicYear)
+      .eq('semester', semester)
+      .eq('has_online_test', true);
+
+    if (testsError) throw testsError;
+    if (!tests || tests.length === 0) return {};
+
+    // Get all submissions for these tests (only SUBMITTED or GRADED)
+    const testIds = tests.map(t => t.id);
+    const { data: submissions, error: subError } = await supabase
+      .from('test_submissions')
+      .select('test_schedule_id, student_id, total_score, max_score, status')
+      .in('test_schedule_id', testIds)
+      .in('status', ['SUBMITTED', 'GRADED']);
+
+    if (subError) throw subError;
+    if (!submissions || submissions.length === 0) return {};
+
+    // Build result map
+    const result: Record<string, { quiz1?: number; quiz2?: number; quiz3?: number; mid?: number; final?: number }> = {};
+
+    for (const submission of submissions) {
+      // Calculate percentage score
+      if (submission.total_score === null || submission.max_score === null || submission.max_score === 0) {
+        continue;
+      }
+      const scorePercent = Math.round((submission.total_score / submission.max_score) * 100);
+
+      // Find the test info
+      const test = tests.find(t => t.id === submission.test_schedule_id);
+      if (!test) continue;
+
+      // Initialize student record if needed
+      if (!result[submission.student_id]) {
+        result[submission.student_id] = {};
+      }
+
+      // Map to appropriate field based on test_type and quiz_number
+      if (test.test_type === 'QUIZ') {
+        const quizNum = test.quiz_number || 1;
+        if (quizNum === 1) result[submission.student_id].quiz1 = scorePercent;
+        else if (quizNum === 2) result[submission.student_id].quiz2 = scorePercent;
+        else if (quizNum === 3) result[submission.student_id].quiz3 = scorePercent;
+      } else if (test.test_type === 'MID_SEMESTER') {
+        result[submission.student_id].mid = scorePercent;
+      } else if (test.test_type === 'FINAL_SEMESTER') {
+        result[submission.student_id].final = scorePercent;
+      }
+    }
+
+    return result;
+  },
 };
 
 export default testsService;

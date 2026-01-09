@@ -11,7 +11,7 @@ import { useStudentGrades } from '../../hooks/useStudentGrades';
 import { useTests } from '../../hooks/useTests';
 import { testsService, TestType, TestScheduleInsert } from '../../services/tests.service';
 import { User, SkillCategory, DifficultyLevel, CEFRLevel, ClassType } from '../../types';
-import { School, ChevronRight, GraduationCap, Calendar, MapPin, Clock, CheckCircle, XCircle, Loader2, BookOpen, Save, ClipboardList, Plus, X, Upload, File, Trash2, Globe, UserCheck } from 'lucide-react';
+import { School, ChevronRight, GraduationCap, Calendar, MapPin, Clock, CheckCircle, XCircle, Loader2, BookOpen, Save, ClipboardList, Plus, X, Upload, File, Trash2, Globe, UserCheck, Download, RefreshCw } from 'lucide-react';
 import { uploadFile, isAllowedFileType, UploadResult } from '../../lib/storage';
 
 const TEST_TYPE_LABELS: Record<TestType, string> = {
@@ -116,6 +116,11 @@ export const StudentGrades: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+  // Online test scores state (for auto-population)
+  const [onlineTestScores, setOnlineTestScores] = useState<Record<string, { quiz1?: number; quiz2?: number; quiz3?: number; mid?: number; final?: number }>>({});
+  const [loadingOnlineScores, setLoadingOnlineScores] = useState(false);
+  const [onlineScoresLoaded, setOnlineScoresLoaded] = useState(false);
+
   // Test creation modal state
   const [showTestModal, setShowTestModal] = useState(false);
   const [testType, setTestType] = useState<TestType>('QUIZ');
@@ -161,33 +166,126 @@ export const StudentGrades: React.FC = () => {
     selectedClass || ''
   );
 
-  // Initialize semesterGrades from database when data loads
+  // Fetch online test scores when class is selected
+  useEffect(() => {
+    const fetchOnlineScores = async () => {
+      if (!selectedSchool || !selectedClass || !selectedAcademicYear || !selectedSemester) {
+        setOnlineTestScores({});
+        setOnlineScoresLoaded(false);
+        return;
+      }
+
+      setLoadingOnlineScores(true);
+      try {
+        const scores = await testsService.getOnlineTestScoresForClass(
+          selectedSchool,
+          selectedClass,
+          selectedAcademicYear,
+          selectedSemester
+        );
+        setOnlineTestScores(scores);
+        setOnlineScoresLoaded(true);
+      } catch (err) {
+        console.error('Error fetching online test scores:', err);
+        setOnlineTestScores({});
+      } finally {
+        setLoadingOnlineScores(false);
+      }
+    };
+
+    fetchOnlineScores();
+  }, [selectedSchool, selectedClass, selectedAcademicYear, selectedSemester]);
+
+  // Type definitions for grade data from various sources
+  type OnlineScoreData = { quiz1?: number; quiz2?: number; quiz3?: number; mid?: number; final?: number };
+  type DbGradeData = { quiz1: number | null; quiz2: number | null; quiz3: number | null; participation: number | null; mid: number | null; final: number | null };
+
+  // Initialize semesterGrades from database when data loads, with online test scores fallback
   // Use JSON.stringify to create a stable dependency
   const dbGradesJson = JSON.stringify(dbGrades);
+  const onlineScoresJson = JSON.stringify(onlineTestScores);
   useEffect(() => {
-    if (!gradesLoading) {
-      const parsedGrades = JSON.parse(dbGradesJson);
-      if (Object.keys(parsedGrades).length > 0) {
-        const initialGrades: Record<string, StudentGradeData> = {};
-        Object.entries(parsedGrades).forEach(([studentId, grade]: [string, any]) => {
+    if (!gradesLoading && !loadingOnlineScores) {
+      const parsedDbGrades = JSON.parse(dbGradesJson) as Record<string, DbGradeData>;
+      const parsedOnlineScores = JSON.parse(onlineScoresJson) as Record<string, OnlineScoreData>;
+      const initialGrades: Record<string, StudentGradeData> = {};
+      
+      // First, populate from database grades (priority)
+      Object.entries(parsedDbGrades).forEach(([studentId, grade]) => {
+        initialGrades[studentId] = {
+          quiz1: grade.quiz1?.toString() || '',
+          quiz2: grade.quiz2?.toString() || '',
+          quiz3: grade.quiz3?.toString() || '',
+          participation: grade.participation?.toString() || '',
+          mid: grade.mid?.toString() || '',
+          final: grade.final?.toString() || '',
+        };
+      });
+      
+      // For students with online test scores but no saved grades, auto-populate
+      Object.entries(parsedOnlineScores).forEach(([studentId, scores]) => {
+        if (!initialGrades[studentId]) {
+          // No saved grade for this student, use online test scores
           initialGrades[studentId] = {
-            quiz1: grade.quiz1?.toString() || '',
-            quiz2: grade.quiz2?.toString() || '',
-            quiz3: grade.quiz3?.toString() || '',
-            participation: grade.participation?.toString() || '',
-            mid: grade.mid?.toString() || '',
-            final: grade.final?.toString() || '',
+            quiz1: scores.quiz1?.toString() || '',
+            quiz2: scores.quiz2?.toString() || '',
+            quiz3: scores.quiz3?.toString() || '',
+            participation: '', // Online tests don't have participation
+            mid: scores.mid?.toString() || '',
+            final: scores.final?.toString() || '',
           };
-        });
-        setSemesterGrades(initialGrades);
-      } else {
-        // Reset when no grades found (e.g., when switching year/semester)
-        setSemesterGrades({});
-      }
+        } else {
+          // Student has saved grades, but fill in empty fields from online tests
+          const existing = initialGrades[studentId];
+          if (!existing.quiz1 && scores.quiz1) existing.quiz1 = scores.quiz1.toString();
+          if (!existing.quiz2 && scores.quiz2) existing.quiz2 = scores.quiz2.toString();
+          if (!existing.quiz3 && scores.quiz3) existing.quiz3 = scores.quiz3.toString();
+          if (!existing.mid && scores.mid) existing.mid = scores.mid.toString();
+          if (!existing.final && scores.final) existing.final = scores.final.toString();
+        }
+      });
+      
+      setSemesterGrades(initialGrades);
       // Reset unsaved changes when data loads from DB
       setHasUnsavedChanges(false);
     }
-  }, [dbGradesJson, gradesLoading]);
+  }, [dbGradesJson, gradesLoading, onlineScoresJson, loadingOnlineScores]);
+
+  // Import all online test scores (overwrites current values for fields with online scores)
+  const importOnlineTestScores = () => {
+    if (Object.keys(onlineTestScores).length === 0) {
+      alert('No online test scores available to import.');
+      return;
+    }
+    
+    const confirmed = window.confirm(
+      'This will import online test scores and overwrite any existing values for Quiz 1-3, Mid Semester, and Final Semester (where online scores exist).\n\nParticipation values will not be affected.\n\nContinue?'
+    );
+    
+    if (!confirmed) return;
+    
+    setSemesterGrades(prev => {
+      const updated = { ...prev };
+      
+      (Object.entries(onlineTestScores) as [string, OnlineScoreData][]).forEach(([studentId, scores]) => {
+        if (!updated[studentId]) {
+          updated[studentId] = { quiz1: '', quiz2: '', quiz3: '', participation: '', mid: '', final: '' };
+        }
+        
+        // Overwrite with online scores where available
+        if (scores.quiz1 !== undefined) updated[studentId].quiz1 = scores.quiz1.toString();
+        if (scores.quiz2 !== undefined) updated[studentId].quiz2 = scores.quiz2.toString();
+        if (scores.quiz3 !== undefined) updated[studentId].quiz3 = scores.quiz3.toString();
+        if (scores.mid !== undefined) updated[studentId].mid = scores.mid.toString();
+        if (scores.final !== undefined) updated[studentId].final = scores.final.toString();
+      });
+      
+      return updated;
+    });
+    
+    setHasUnsavedChanges(true);
+    alert(`Imported online test scores for ${Object.keys(onlineTestScores).length} students. Don't forget to save!`);
+  };
 
   // Helper to check if there are any actual changes from DB
   const checkForChanges = (grades: Record<string, StudentGradeData>): boolean => {
@@ -980,14 +1078,36 @@ export const StudentGrades: React.FC = () => {
 
       <Card className="!p-0 overflow-hidden">
         <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="text-xs font-bold text-gray-700">
-            Semester {selectedSemester} Grades - AY {selectedAcademicYear}
-          </h3>
-          {gradesLoading && (
-            <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
-              <Loader2 className="w-3 h-3 animate-spin" /> Loading grades...
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            <h3 className="text-xs font-bold text-gray-700">
+              Semester {selectedSemester} Grades - AY {selectedAcademicYear}
+            </h3>
+            {(gradesLoading || loadingOnlineScores) && (
+              <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                <Loader2 className="w-3 h-3 animate-spin" /> 
+                {loadingOnlineScores ? 'Loading online scores...' : 'Loading grades...'}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Import from Online Tests button */}
+            {Object.keys(onlineTestScores).length > 0 && (
+              <button
+                onClick={importOnlineTestScores}
+                disabled={loadingOnlineScores}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors disabled:opacity-50"
+                title={`Import scores from Online Tests (${Object.keys(onlineTestScores).length} students with scores)`}
+              >
+                <Download className="w-3 h-3" />
+                Import Online Scores ({Object.keys(onlineTestScores).length})
+              </button>
+            )}
+            {onlineScoresLoaded && Object.keys(onlineTestScores).length === 0 && !loadingOnlineScores && (
+              <span className="text-[10px] text-gray-400 italic">
+                No online test scores available
+              </span>
+            )}
+          </div>
         </div>
         <div className="overflow-x-auto">
         <table className="w-full text-left text-xs min-w-[900px]">

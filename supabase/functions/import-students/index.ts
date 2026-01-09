@@ -9,13 +9,13 @@ interface StudentData {
   name: string;
   email: string;
   password: string;
-  jenjang: "SD" | "SMP";
   kelas: string;
   tipe_kelas: string;
 }
 
 interface ImportRequest {
   students: StudentData[];
+  location_name: string; // e.g., "TK ABDI SISWA BINTARO", "SD ABDI SISWA BINTARO"
 }
 
 Deno.serve(async (req) => {
@@ -84,7 +84,14 @@ Deno.serve(async (req) => {
 
     // Parse request body
     const body: ImportRequest = await req.json();
-    const { students } = body;
+    const { students, location_name } = body;
+
+    if (!location_name) {
+      return new Response(
+        JSON.stringify({ error: "Missing location_name parameter" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     if (!students || !Array.isArray(students) || students.length === 0) {
       return new Response(
@@ -93,24 +100,28 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get location IDs for SD and SMP ABDI SISWA ARIES
-    const { data: locations } = await supabaseAdmin
+    // Get location ID for the specified location
+    const { data: locationData, error: locationError } = await supabaseAdmin
       .from("locations")
       .select("id, name")
-      .in("name", ["SD ABDI SISWA ARIES", "SMP ABDI SISWA ARIES"]);
+      .ilike("name", `%${location_name}%`)
+      .limit(1)
+      .single();
 
-    const locationMap: Record<string, string> = {};
-    locations?.forEach((loc) => {
-      if (loc.name === "SD ABDI SISWA ARIES") locationMap["SD"] = loc.id;
-      if (loc.name === "SMP ABDI SISWA ARIES") locationMap["SMP"] = loc.id;
-    });
+    if (locationError || !locationData) {
+      return new Response(
+        JSON.stringify({ error: `Location not found: ${location_name}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    console.log("Location map:", locationMap);
+    console.log("Using location:", locationData);
 
-    const results: { success: number; failed: number; errors: string[] } = {
+    const results: { success: number; failed: number; errors: string[]; created: string[] } = {
       success: 0,
       failed: 0,
       errors: [],
+      created: [],
     };
 
     // Process students in batches of 10 to avoid timeout
@@ -135,8 +146,7 @@ Deno.serve(async (req) => {
             }
 
             const userId = authData.user.id;
-            const locationId = locationMap[student.jenjang] || null;
-            const schoolInfo = `${student.jenjang === "SD" ? "SD" : "SMP"} ABDI SISWA ARIES - ${student.kelas} (${student.tipe_kelas})`;
+            const schoolInfo = `${locationData.name} - ${student.kelas} (${student.tipe_kelas})`;
 
             // Create profile
             const { error: profileError } = await supabaseAdmin
@@ -147,7 +157,7 @@ Deno.serve(async (req) => {
                 name: student.name,
                 role: "STUDENT",
                 status: "ACTIVE",
-                assigned_location_id: locationId,
+                assigned_location_id: locationData.id,
                 school_origin: schoolInfo,
               });
 
@@ -160,6 +170,7 @@ Deno.serve(async (req) => {
             }
 
             results.success++;
+            results.created.push(student.email);
           } catch (err) {
             results.failed++;
             results.errors.push(`${student.email}: ${err.message}`);
