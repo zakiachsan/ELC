@@ -290,8 +290,8 @@ export const TestManager: React.FC = () => {
         }
 
         // Check file size (max 10MB)
-        if (file.size > 10 * 1024 * 1024) {
-          setUploadError(`File "${file.name}" is too large. Maximum 10MB.`);
+        if (file.size > 100 * 1024 * 1024) {
+          setUploadError(`File "${file.name}" is too large. Maximum 100MB.`);
           continue;
         }
 
@@ -654,7 +654,7 @@ export const TestManager: React.FC = () => {
                           Click to select file or drag & drop
                         </p>
                         <p className="text-[9px] text-gray-300 mt-1">
-                          Max. 10MB per file
+                          Max. 100MB per file
                         </p>
                       </>
                     )}

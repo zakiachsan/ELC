@@ -338,8 +338,8 @@ export const TestCreator: React.FC = () => {
           setUploadError(`File "${file.name}" is not supported.`);
           continue;
         }
-        if (file.size > 10 * 1024 * 1024) {
-          setUploadError(`File "${file.name}" is too large. Maximum 10MB.`);
+        if (file.size > 100 * 1024 * 1024) {
+          setUploadError(`File "${file.name}" is too large. Maximum 100MB.`);
           continue;
         }
         const result = await uploadFile(file, 'tests');
