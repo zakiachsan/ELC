@@ -56,7 +56,9 @@ export enum SkillCategory {
   WRITING = 'Writing',
   SPEAKING = 'Speaking',
   GRAMMAR = 'Grammar',
-  VOCABULARY = 'Vocabulary'
+  VOCABULARY = 'Vocabulary',
+  MATH = 'Math',
+  SCIENCE = 'Science'
 }
 
 export enum DifficultyLevel {
@@ -295,6 +297,20 @@ export interface EssayGradeResult {
   feedback: string;
 }
 
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  targetAudience: 'all' | 'teachers' | 'students' | 'parents';
+  isActive: boolean;
+  startsAt: string | null;
+  expiresAt: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ClassSession {
   id: string;
   teacherId: string;
@@ -309,6 +325,13 @@ export interface ClassSession {
   hasExam?: boolean;
   examMaterials?: string[];
   classType?: ClassType; // BILINGUAL or REGULAR
+  // Lesson plan fields
+  cefrLevel?: string;
+  materialsNeeded?: string;
+  learningObjectives?: string;
+  vocabularyVerb?: string;
+  vocabularyNoun?: string;
+  vocabularyAdjective?: string;
 }
 
 export interface ModuleExam {
