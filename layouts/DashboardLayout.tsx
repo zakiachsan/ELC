@@ -4,7 +4,7 @@ import { UserRole, User } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import {
   Users, GraduationCap, LayoutDashboard,
-  CalendarDays, BookOpen, List, Home, TrendingUp, MapPin, Globe, Activity, Palette, Trophy, Sparkles, CreditCard, Search, Menu, X, Briefcase, DollarSign, Gamepad2, BarChart3, MessageSquare, Newspaper, Award, Clock, Star
+  CalendarDays, BookOpen, List, Home, TrendingUp, MapPin, Globe, Activity, Palette, Trophy, Sparkles, CreditCard, Search, Menu, X, Briefcase, DollarSign, Gamepad2, BarChart3, MessageSquare, Newspaper, Award, Clock, Star, Megaphone
 } from 'lucide-react';
 
 interface DashboardLayoutProps {
@@ -140,6 +140,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Settings</div>
               <SidebarNavItem to="/admin/settings" label="Site Settings" icon={Palette} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/star-teachers" label="Star Teachers" icon={Star} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/admin/announcements" label="Announcements" icon={Megaphone} onClick={closeMobileMenu} />
             </>
           )}
 

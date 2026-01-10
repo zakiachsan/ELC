@@ -2,6 +2,8 @@ import React from 'react';
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { UserRole, User } from '../types';
 import { MOCK_USERS } from '../constants';
+import { useLinkedStudent } from '../hooks/useProfiles';
+import { Loader2 } from 'lucide-react';
 
 // Components
 import { NotFound } from '../components/NotFound';
@@ -43,6 +45,7 @@ import { TeacherManager } from '../components/admin/TeacherManager';
 import { ReviewManager } from '../components/admin/ReviewManager';
 import { TestScheduleManager } from '../components/admin/TestScheduleManager';
 import { StarTeacherManager } from '../components/admin/StarTeacherManager';
+import { AnnouncementManager } from '../components/admin/AnnouncementManager';
 
 // Teacher Components
 import { TeacherView } from '../components/teacher/TeacherView';
@@ -98,17 +101,55 @@ const TeacherDashboardWrapper: React.FC<{ onNavigate: (view: string) => void }> 
   return <TeacherView onNavigate={onNavigate} />;
 };
 
+// Parent Dashboard wrapper that fetches linked student from database
+const ParentDashboardLoader: React.FC<{
+  linkedStudentId: string | undefined;
+  children: (student: User) => React.ReactNode;
+}> = ({ linkedStudentId, children }) => {
+  const { student, loading, error } = useLinkedStudent(linkedStudentId);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <span className="ml-2 text-gray-600">Loading student data...</span>
+      </div>
+    );
+  }
+
+  if (error || !student) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <div className="text-red-500 mb-2">No student linked to this account</div>
+        <p className="text-sm text-gray-500">Please contact admin to link your account to a student.</p>
+      </div>
+    );
+  }
+
+  // Convert database profile to User type for components
+  const studentUser: User = {
+    id: student.id,
+    name: student.name,
+    email: student.email,
+    phone: student.phone || undefined,
+    address: student.address || undefined,
+    role: student.role as UserRole,
+    status: student.status as 'ACTIVE' | 'INACTIVE',
+    photoUrl: student.photo_url || undefined,
+    branch: student.branch || undefined,
+    schoolOrigin: student.school_origin || undefined,
+    assignedLocationId: student.assigned_location_id || undefined,
+  };
+
+  return <>{children(studentUser)}</>;
+};
+
 export const AppRoutes: React.FC<AppRoutesProps> = ({
   isAuthenticated,
   currentUser,
   onLogin,
   onLogout,
 }) => {
-  // Get linked student for parent view
-  const linkedStudent = currentUser.role === UserRole.PARENT
-    ? MOCK_USERS.find(u => u.id === currentUser.linkedStudentId)
-    : null;
-
   // Handler for teacher navigation (converts view to route)
   const handleTeacherNavigate = (view: string) => {
     // This is handled by the router now, so we just need to navigate
@@ -365,6 +406,16 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
           <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.ADMIN]}>
             <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
               <StarTeacherManager />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/announcements"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.ADMIN]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <AnnouncementManager />
             </DashboardWrapper>
           </ProtectedRoute>
         }
@@ -646,7 +697,9 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         element={
           <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.PARENT]}>
             <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
-              {linkedStudent ? <ParentOverview student={linkedStudent} /> : <div>No student linked</div>}
+              <ParentDashboardLoader linkedStudentId={currentUser.linkedStudentId}>
+                {(student) => <ParentOverview student={student} />}
+              </ParentDashboardLoader>
             </DashboardWrapper>
           </ProtectedRoute>
         }
@@ -656,7 +709,9 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         element={
           <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.PARENT]}>
             <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
-              {linkedStudent ? <ParentSchedule student={linkedStudent} /> : <div>No student linked</div>}
+              <ParentDashboardLoader linkedStudentId={currentUser.linkedStudentId}>
+                {(student) => <ParentSchedule student={student} />}
+              </ParentDashboardLoader>
             </DashboardWrapper>
           </ProtectedRoute>
         }
@@ -666,7 +721,9 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         element={
           <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.PARENT]}>
             <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
-              {linkedStudent ? <ParentActivityLog student={linkedStudent} /> : <div>No student linked</div>}
+              <ParentDashboardLoader linkedStudentId={currentUser.linkedStudentId}>
+                {(student) => <ParentActivityLog student={student} />}
+              </ParentDashboardLoader>
             </DashboardWrapper>
           </ProtectedRoute>
         }

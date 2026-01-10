@@ -10,9 +10,10 @@ import { useAttendance } from '../../hooks/useAttendance';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTests } from '../../hooks/useTests';
 import { SkillCategory, DifficultyLevel, ClassSession } from '../../types';
-import { Calendar, Clock, MapPin, ChevronRight, Loader2, LogIn, LogOut, Navigation, AlignLeft, FileText, AlertTriangle, BookOpen } from 'lucide-react';
+import { Calendar, Clock, MapPin, ChevronRight, Loader2, LogIn, LogOut, Navigation, AlignLeft, FileText, AlertTriangle, BookOpen, Megaphone, X, AlertCircle, Bell } from 'lucide-react';
 import { SKILL_ICONS } from '../student/StudentView';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useAnnouncements } from '../../hooks/useAnnouncements';
 
 interface TeacherViewProps {
   onNavigate: (view: string) => void;
@@ -27,6 +28,22 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
   const { tests: teacherTests, loading: testsLoading } = useTests({ teacherId: currentTeacher?.id });
   const { locations: locationsData } = useLocations();
   const { todayAttendance, checkIn, checkOut, loading: attendanceLoading } = useAttendance(currentTeacher?.id);
+  const { announcements, loading: announcementsLoading } = useAnnouncements('teachers');
+
+  // State for dismissed announcements (stored in session)
+  const [dismissedAnnouncements, setDismissedAnnouncements] = useState<string[]>(() => {
+    const stored = sessionStorage.getItem('dismissedAnnouncements');
+    return stored ? JSON.parse(stored) : [];
+  });
+
+  // Filter out dismissed announcements
+  const activeAnnouncements = announcements.filter(a => !dismissedAnnouncements.includes(a.id));
+
+  const dismissAnnouncement = (id: string) => {
+    const updated = [...dismissedAnnouncements, id];
+    setDismissedAnnouncements(updated);
+    sessionStorage.setItem('dismissedAnnouncements', JSON.stringify(updated));
+  };
 
   // Attendance states
   const [isCheckingIn, setIsCheckingIn] = useState(false);
@@ -262,6 +279,69 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
                </Button>
              </div>
            </Card>
+         </div>
+       )}
+
+       {/* ANNOUNCEMENTS SECTION */}
+       {activeAnnouncements.length > 0 && (
+         <div className="space-y-2">
+           {activeAnnouncements.map(announcement => {
+             const priorityColors = {
+               urgent: 'bg-red-50 border-red-200 text-red-800',
+               high: 'bg-orange-50 border-orange-200 text-orange-800',
+               normal: 'bg-blue-50 border-blue-200 text-blue-800',
+               low: 'bg-gray-50 border-gray-200 text-gray-700',
+             };
+             const priorityIcons = {
+               urgent: AlertCircle,
+               high: AlertTriangle,
+               normal: Bell,
+               low: Megaphone,
+             };
+             const PriorityIcon = priorityIcons[announcement.priority];
+             
+             return (
+               <div
+                 key={announcement.id}
+                 className={`relative flex items-start gap-3 p-3 rounded-lg border ${priorityColors[announcement.priority]}`}
+               >
+                 <div className="flex-shrink-0 mt-0.5">
+                   <PriorityIcon className="w-5 h-5" />
+                 </div>
+                 <div className="flex-1 min-w-0">
+                   <div className="flex items-center gap-2 mb-1">
+                     <h4 className="font-semibold text-sm">{announcement.title}</h4>
+                     {announcement.priority === 'urgent' && (
+                       <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-200 text-red-800 uppercase">
+                         Urgent
+                       </span>
+                     )}
+                     {announcement.priority === 'high' && (
+                       <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-200 text-orange-800 uppercase">
+                         Important
+                       </span>
+                     )}
+                   </div>
+                   <p className="text-xs opacity-90 whitespace-pre-wrap">{announcement.content}</p>
+                   <p className="text-[10px] opacity-60 mt-1">
+                     {new Date(announcement.createdAt).toLocaleDateString('id-ID', { 
+                       day: 'numeric', 
+                       month: 'short',
+                       hour: '2-digit',
+                       minute: '2-digit'
+                     })}
+                   </p>
+                 </div>
+                 <button
+                   onClick={() => dismissAnnouncement(announcement.id)}
+                   className="flex-shrink-0 p-1 hover:bg-black/10 rounded transition-colors"
+                   title="Dismiss"
+                 >
+                   <X className="w-4 h-4 opacity-60" />
+                 </button>
+               </div>
+             );
+           })}
          </div>
        )}
 

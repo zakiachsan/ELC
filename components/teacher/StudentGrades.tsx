@@ -34,7 +34,21 @@ interface StudentGradeData {
   participation: string;
   mid: string;
   final: string;
+  // Extended fields for Regular and Bilingual classes
+  speaking: string;
+  listening: string;
+  // Bilingual-only fields
+  reading: string;
+  writing: string;
+  maths: string;
+  science: string;
 }
+
+// Helper to create empty grade data
+const createEmptyGradeData = (): StudentGradeData => ({
+  quiz1: '', quiz2: '', quiz3: '', participation: '', mid: '', final: '',
+  speaking: '', listening: '', reading: '', writing: '', maths: '', science: ''
+});
 
 // Generate academic year options (current year - 2 to current year + 1)
 const generateAcademicYears = (): string[] => {
@@ -198,7 +212,12 @@ export const StudentGrades: React.FC = () => {
 
   // Type definitions for grade data from various sources
   type OnlineScoreData = { quiz1?: number; quiz2?: number; quiz3?: number; mid?: number; final?: number };
-  type DbGradeData = { quiz1: number | null; quiz2: number | null; quiz3: number | null; participation: number | null; mid: number | null; final: number | null };
+  type DbGradeData = {
+    quiz1: number | null; quiz2: number | null; quiz3: number | null;
+    participation: number | null; mid: number | null; final: number | null;
+    speaking: number | null; listening: number | null;
+    reading: number | null; writing: number | null; maths: number | null; science: number | null;
+  };
 
   // Initialize semesterGrades from database when data loads, with online test scores fallback
   // Use JSON.stringify to create a stable dependency
@@ -209,7 +228,7 @@ export const StudentGrades: React.FC = () => {
       const parsedDbGrades = JSON.parse(dbGradesJson) as Record<string, DbGradeData>;
       const parsedOnlineScores = JSON.parse(onlineScoresJson) as Record<string, OnlineScoreData>;
       const initialGrades: Record<string, StudentGradeData> = {};
-      
+
       // First, populate from database grades (priority)
       Object.entries(parsedDbGrades).forEach(([studentId, grade]) => {
         initialGrades[studentId] = {
@@ -219,18 +238,24 @@ export const StudentGrades: React.FC = () => {
           participation: grade.participation?.toString() || '',
           mid: grade.mid?.toString() || '',
           final: grade.final?.toString() || '',
+          speaking: grade.speaking?.toString() || '',
+          listening: grade.listening?.toString() || '',
+          reading: grade.reading?.toString() || '',
+          writing: grade.writing?.toString() || '',
+          maths: grade.maths?.toString() || '',
+          science: grade.science?.toString() || '',
         };
       });
-      
+
       // For students with online test scores but no saved grades, auto-populate
       Object.entries(parsedOnlineScores).forEach(([studentId, scores]) => {
         if (!initialGrades[studentId]) {
           // No saved grade for this student, use online test scores
           initialGrades[studentId] = {
+            ...createEmptyGradeData(),
             quiz1: scores.quiz1?.toString() || '',
             quiz2: scores.quiz2?.toString() || '',
             quiz3: scores.quiz3?.toString() || '',
-            participation: '', // Online tests don't have participation
             mid: scores.mid?.toString() || '',
             final: scores.final?.toString() || '',
           };
@@ -244,7 +269,7 @@ export const StudentGrades: React.FC = () => {
           if (!existing.final && scores.final) existing.final = scores.final.toString();
         }
       });
-      
+
       setSemesterGrades(initialGrades);
       // Reset unsaved changes when data loads from DB
       setHasUnsavedChanges(false);
@@ -292,14 +317,16 @@ export const StudentGrades: React.FC = () => {
     for (const [studentId, grade] of Object.entries(grades)) {
       const dbGrade = dbGrades[studentId];
 
-      const hasCurrentValues = grade.quiz1 || grade.quiz2 || grade.quiz3 || grade.participation || grade.mid || grade.final;
-      const hadDbValues = dbGrade && (dbGrade.quiz1 || dbGrade.quiz2 || dbGrade.quiz3 || dbGrade.participation || dbGrade.mid || dbGrade.final);
+      const hasCurrentValues = grade.quiz1 || grade.quiz2 || grade.quiz3 || grade.participation || grade.mid || grade.final ||
+        grade.speaking || grade.listening || grade.reading || grade.writing || grade.maths || grade.science;
+      const hadDbValues = dbGrade && (dbGrade.quiz1 || dbGrade.quiz2 || dbGrade.quiz3 || dbGrade.participation || dbGrade.mid || dbGrade.final ||
+        dbGrade.speaking || dbGrade.listening || dbGrade.reading || dbGrade.writing || dbGrade.maths || dbGrade.science);
 
       if (!hasCurrentValues && !hadDbValues) {
         continue; // No change for this student
       }
 
-      // Compare each field
+      // Compare each field (base fields)
       const currentQ1 = grade.quiz1 || '';
       const currentQ2 = grade.quiz2 || '';
       const currentQ3 = grade.quiz3 || '';
@@ -318,6 +345,27 @@ export const StudentGrades: React.FC = () => {
           currentPart !== dbPart || currentMid !== dbMid || currentFinal !== dbFinal) {
         return true; // Found a change
       }
+
+      // Compare extended fields
+      const currentSpeaking = grade.speaking || '';
+      const currentListening = grade.listening || '';
+      const currentReading = grade.reading || '';
+      const currentWriting = grade.writing || '';
+      const currentMaths = grade.maths || '';
+      const currentScience = grade.science || '';
+
+      const dbSpeaking = dbGrade?.speaking?.toString() || '';
+      const dbListening = dbGrade?.listening?.toString() || '';
+      const dbReading = dbGrade?.reading?.toString() || '';
+      const dbWriting = dbGrade?.writing?.toString() || '';
+      const dbMaths = dbGrade?.maths?.toString() || '';
+      const dbScience = dbGrade?.science?.toString() || '';
+
+      if (currentSpeaking !== dbSpeaking || currentListening !== dbListening ||
+          currentReading !== dbReading || currentWriting !== dbWriting ||
+          currentMaths !== dbMaths || currentScience !== dbScience) {
+        return true; // Found a change
+      }
     }
     return false;
   };
@@ -327,7 +375,7 @@ export const StudentGrades: React.FC = () => {
     setSemesterGrades(prev => {
       const newGrades = {
         ...prev,
-        [studentId]: { ...(prev[studentId] || { quiz1: '', quiz2: '', quiz3: '', participation: '', mid: '', final: '' }), [field]: value }
+        [studentId]: { ...(prev[studentId] || createEmptyGradeData()), [field]: value }
       };
 
       // Recalculate hasUnsavedChanges based on actual differences from DB
@@ -430,6 +478,12 @@ export const StudentGrades: React.FC = () => {
 
   const availableClasses = getAvailableClasses();
 
+  // Determine class type for the selected class (Regular or Bilingual)
+  // This affects which grade fields are shown
+  const selectedClassData = selectedClass ? locationClasses.find(c => c.name === selectedClass) : null;
+  const selectedClassType = selectedClassData?.class_type || 'Regular';
+  const isBilingual = selectedClassType?.toLowerCase() === 'bilingual';
+
   // Map students from database (already filtered by school and class at DB level)
   const students: User[] = studentsData.map(s => ({
     id: s.id,
@@ -515,6 +569,12 @@ export const StudentGrades: React.FC = () => {
         participation: grade.participation ? parseInt(grade.participation) : null,
         mid: grade.mid ? parseInt(grade.mid) : null,
         final: grade.final ? parseInt(grade.final) : null,
+        speaking: grade.speaking ? parseInt(grade.speaking) : null,
+        listening: grade.listening ? parseInt(grade.listening) : null,
+        reading: grade.reading ? parseInt(grade.reading) : null,
+        writing: grade.writing ? parseInt(grade.writing) : null,
+        maths: grade.maths ? parseInt(grade.maths) : null,
+        science: grade.science ? parseInt(grade.science) : null,
       });
       // Check if there are still other unsaved changes
       setHasUnsavedChanges(false);
@@ -535,14 +595,16 @@ export const StudentGrades: React.FC = () => {
       const dbGrade = dbGrades[studentId];
 
       // If student has any value in current grades OR had values in DB (to allow clearing)
-      const hasCurrentValues = grade.quiz1 || grade.quiz2 || grade.quiz3 || grade.participation || grade.mid || grade.final;
-      const hadDbValues = dbGrade && (dbGrade.quiz1 || dbGrade.quiz2 || dbGrade.quiz3 || dbGrade.participation || dbGrade.mid || dbGrade.final);
+      const hasCurrentValues = grade.quiz1 || grade.quiz2 || grade.quiz3 || grade.participation || grade.mid || grade.final ||
+        grade.speaking || grade.listening || grade.reading || grade.writing || grade.maths || grade.science;
+      const hadDbValues = dbGrade && (dbGrade.quiz1 || dbGrade.quiz2 || dbGrade.quiz3 || dbGrade.participation || dbGrade.mid || dbGrade.final ||
+        dbGrade.speaking || dbGrade.listening || dbGrade.reading || dbGrade.writing || dbGrade.maths || dbGrade.science);
 
       if (!hasCurrentValues && !hadDbValues) {
         return false; // Nothing to save - no current values and no previous values
       }
 
-      // Check if any value has changed
+      // Check if any base value has changed
       const currentQ1 = grade.quiz1 || '';
       const currentQ2 = grade.quiz2 || '';
       const currentQ3 = grade.quiz3 || '';
@@ -557,8 +619,29 @@ export const StudentGrades: React.FC = () => {
       const dbMid = dbGrade?.mid?.toString() || '';
       const dbFinal = dbGrade?.final?.toString() || '';
 
-      return currentQ1 !== dbQ1 || currentQ2 !== dbQ2 || currentQ3 !== dbQ3 ||
-             currentPart !== dbPart || currentMid !== dbMid || currentFinal !== dbFinal;
+      if (currentQ1 !== dbQ1 || currentQ2 !== dbQ2 || currentQ3 !== dbQ3 ||
+          currentPart !== dbPart || currentMid !== dbMid || currentFinal !== dbFinal) {
+        return true;
+      }
+
+      // Check extended fields
+      const currentSpeaking = grade.speaking || '';
+      const currentListening = grade.listening || '';
+      const currentReading = grade.reading || '';
+      const currentWriting = grade.writing || '';
+      const currentMaths = grade.maths || '';
+      const currentScience = grade.science || '';
+
+      const dbSpeaking = dbGrade?.speaking?.toString() || '';
+      const dbListening = dbGrade?.listening?.toString() || '';
+      const dbReading = dbGrade?.reading?.toString() || '';
+      const dbWriting = dbGrade?.writing?.toString() || '';
+      const dbMaths = dbGrade?.maths?.toString() || '';
+      const dbScience = dbGrade?.science?.toString() || '';
+
+      return currentSpeaking !== dbSpeaking || currentListening !== dbListening ||
+             currentReading !== dbReading || currentWriting !== dbWriting ||
+             currentMaths !== dbMaths || currentScience !== dbScience;
     });
 
     if (changedGrades.length === 0) {
@@ -581,6 +664,12 @@ export const StudentGrades: React.FC = () => {
         participation: grade.participation ? parseInt(grade.participation) : null,
         mid: grade.mid ? parseInt(grade.mid) : null,
         final: grade.final ? parseInt(grade.final) : null,
+        speaking: grade.speaking ? parseInt(grade.speaking) : null,
+        listening: grade.listening ? parseInt(grade.listening) : null,
+        reading: grade.reading ? parseInt(grade.reading) : null,
+        writing: grade.writing ? parseInt(grade.writing) : null,
+        maths: grade.maths ? parseInt(grade.maths) : null,
+        science: grade.science ? parseInt(grade.science) : null,
       }));
 
       const savedCount = await saveAllGradesToDb(inputs);
@@ -720,12 +809,14 @@ export const StudentGrades: React.FC = () => {
       };
     }).sort((a, b) => new Date(b.session.dateTime).getTime() - new Date(a.session.dateTime).getTime());
 
-    const grade = semesterGrades[selectedStudent.id] || { quiz1: '', quiz2: '', quiz3: '', participation: '', mid: '', final: '' };
-    // Calculate average from all filled values
-    const values = [grade.quiz1, grade.quiz2, grade.quiz3, grade.participation, grade.mid, grade.final]
+    const grade = semesterGrades[selectedStudent.id] || createEmptyGradeData();
+    // Calculate average from all filled values (including extended fields based on class type)
+    const baseValues = [grade.quiz1, grade.quiz2, grade.quiz3, grade.participation, grade.mid, grade.final, grade.speaking, grade.listening];
+    const bilingualValues = isBilingual ? [grade.reading, grade.writing, grade.maths, grade.science] : [];
+    const allGradeValues = [...baseValues, ...bilingualValues]
       .filter(v => v !== '' && v !== undefined)
       .map(v => parseInt(v));
-    const avg = values.length > 0 ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null;
+    const avg = allGradeValues.length > 0 ? Math.round(allGradeValues.reduce((a, b) => a + b, 0) / allGradeValues.length) : null;
 
     return (
       <div className="space-y-4 animate-in slide-in-from-right-4">
@@ -855,6 +946,95 @@ export const StudentGrades: React.FC = () => {
               />
             </div>
           </div>
+
+          {/* Extended fields for Regular and Bilingual - Speaking & Listening */}
+          <h4 className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-3 mt-4">Language Skills</h4>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div>
+              <label className="text-[9px] font-black text-gray-400 uppercase">Speaking</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={grade.speaking}
+                onChange={e => updateStudentGrade(selectedStudent.id, 'speaking', e.target.value)}
+                className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm mt-1 bg-blue-50/30"
+                placeholder="0-100"
+              />
+            </div>
+            <div>
+              <label className="text-[9px] font-black text-gray-400 uppercase">Listening</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={grade.listening}
+                onChange={e => updateStudentGrade(selectedStudent.id, 'listening', e.target.value)}
+                className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm mt-1 bg-blue-50/30"
+                placeholder="0-100"
+              />
+            </div>
+          </div>
+
+          {/* Bilingual-only fields */}
+          {isBilingual && (
+            <>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="text-[9px] font-black text-gray-400 uppercase">Reading</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={grade.reading}
+                    onChange={e => updateStudentGrade(selectedStudent.id, 'reading', e.target.value)}
+                    className="w-full px-3 py-2 border border-teal-200 rounded-lg text-sm mt-1 bg-teal-50/30"
+                    placeholder="0-100"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-black text-gray-400 uppercase">Writing</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={grade.writing}
+                    onChange={e => updateStudentGrade(selectedStudent.id, 'writing', e.target.value)}
+                    className="w-full px-3 py-2 border border-teal-200 rounded-lg text-sm mt-1 bg-teal-50/30"
+                    placeholder="0-100"
+                  />
+                </div>
+              </div>
+              <h4 className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-3">Academic Subjects</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[9px] font-black text-gray-400 uppercase">Maths</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={grade.maths}
+                    onChange={e => updateStudentGrade(selectedStudent.id, 'maths', e.target.value)}
+                    className="w-full px-3 py-2 border border-orange-200 rounded-lg text-sm mt-1 bg-orange-50/30"
+                    placeholder="0-100"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-black text-gray-400 uppercase">Science</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={grade.science}
+                    onChange={e => updateStudentGrade(selectedStudent.id, 'science', e.target.value)}
+                    className="w-full px-3 py-2 border border-orange-200 rounded-lg text-sm mt-1 bg-orange-50/30"
+                    placeholder="0-100"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
           <div className="mt-4">
             <Button onClick={() => saveSemesterGrade(selectedStudent.id)} disabled={isSaving} className="text-xs py-1.5 px-3">
               {isSaving ? 'Saving...' : 'Save Grades'}
@@ -1109,8 +1289,13 @@ export const StudentGrades: React.FC = () => {
             )}
           </div>
         </div>
+        {/* Scroll hint indicator at top */}
+        <div className="flex items-center justify-end gap-2 px-4 py-2 text-[10px] text-gray-400 border-t border-gray-100">
+          <span>Scroll untuk melihat semua kolom</span>
+          <span className="text-gray-300">→</span>
+        </div>
         <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs min-w-[900px]">
+        <table className={`w-full text-left text-xs ${isBilingual ? 'min-w-[1400px]' : 'min-w-[1100px]'}`}>
           <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
             <tr>
               <th className="px-4 py-2">Student</th>
@@ -1120,6 +1305,18 @@ export const StudentGrades: React.FC = () => {
               <th className="px-2 py-2 text-center">Participation</th>
               <th className="px-2 py-2 text-center">Mid Semester</th>
               <th className="px-2 py-2 text-center">Final Semester</th>
+              {/* Extended fields for Regular and Bilingual */}
+              <th className="px-2 py-2 text-center bg-blue-50">Speaking</th>
+              <th className="px-2 py-2 text-center bg-blue-50">Listening</th>
+              {/* Bilingual-only fields */}
+              {isBilingual && (
+                <>
+                  <th className="px-2 py-2 text-center bg-teal-50">Reading</th>
+                  <th className="px-2 py-2 text-center bg-teal-50">Writing</th>
+                  <th className="px-2 py-2 text-center bg-orange-50">Maths</th>
+                  <th className="px-2 py-2 text-center bg-orange-50">Science</th>
+                </>
+              )}
               <th className="px-2 py-2 text-center">Average</th>
               <th className="px-2 py-2 text-center">Grade</th>
               <th className="px-2 py-2 text-right">Actions</th>
@@ -1128,18 +1325,20 @@ export const StudentGrades: React.FC = () => {
           <tbody className="divide-y divide-gray-100">
             {students.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-gray-400 text-xs italic">
+                <td colSpan={isBilingual ? 16 : 12} className="px-4 py-8 text-center text-gray-400 text-xs italic">
                   No students in class {selectedClass} for this school yet.
                 </td>
               </tr>
             ) : students.map((student) => {
-              const grade = semesterGrades[student.id] || { quiz1: '', quiz2: '', quiz3: '', participation: '', mid: '', final: '' };
+              const grade = semesterGrades[student.id] || createEmptyGradeData();
 
-              // Calculate average from all filled values
-              const values = [grade.quiz1, grade.quiz2, grade.quiz3, grade.participation, grade.mid, grade.final]
+              // Calculate average from all filled values (including extended fields based on class type)
+              const baseValues = [grade.quiz1, grade.quiz2, grade.quiz3, grade.participation, grade.mid, grade.final, grade.speaking, grade.listening];
+              const bilingualValues = isBilingual ? [grade.reading, grade.writing, grade.maths, grade.science] : [];
+              const allValues = [...baseValues, ...bilingualValues]
                 .filter(v => v !== '' && v !== undefined)
                 .map(v => parseInt(v));
-              const avg = values.length > 0 ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null;
+              const avg = allValues.length > 0 ? Math.round(allValues.reduce((a, b) => a + b, 0) / allValues.length) : null;
 
               return (
                 <tr key={student.id} className="hover:bg-gray-50">
@@ -1224,6 +1423,79 @@ export const StudentGrades: React.FC = () => {
                       placeholder="0-100"
                     />
                   </td>
+                  {/* Extended fields for Regular and Bilingual - Speaking */}
+                  <td className="px-2 py-2 text-center bg-blue-50/30">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={grade.speaking}
+                      onChange={e => updateStudentGrade(student.id, 'speaking', e.target.value)}
+                      className="w-14 px-1 py-1 border border-blue-200 rounded text-center text-xs"
+                      placeholder="0-100"
+                    />
+                  </td>
+                  {/* Extended fields for Regular and Bilingual - Listening */}
+                  <td className="px-2 py-2 text-center bg-blue-50/30">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={grade.listening}
+                      onChange={e => updateStudentGrade(student.id, 'listening', e.target.value)}
+                      className="w-14 px-1 py-1 border border-blue-200 rounded text-center text-xs"
+                      placeholder="0-100"
+                    />
+                  </td>
+                  {/* Bilingual-only fields */}
+                  {isBilingual && (
+                    <>
+                      <td className="px-2 py-2 text-center bg-teal-50/30">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={grade.reading}
+                          onChange={e => updateStudentGrade(student.id, 'reading', e.target.value)}
+                          className="w-14 px-1 py-1 border border-teal-200 rounded text-center text-xs"
+                          placeholder="0-100"
+                        />
+                      </td>
+                      <td className="px-2 py-2 text-center bg-teal-50/30">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={grade.writing}
+                          onChange={e => updateStudentGrade(student.id, 'writing', e.target.value)}
+                          className="w-14 px-1 py-1 border border-teal-200 rounded text-center text-xs"
+                          placeholder="0-100"
+                        />
+                      </td>
+                      <td className="px-2 py-2 text-center bg-orange-50/30">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={grade.maths}
+                          onChange={e => updateStudentGrade(student.id, 'maths', e.target.value)}
+                          className="w-14 px-1 py-1 border border-orange-200 rounded text-center text-xs"
+                          placeholder="0-100"
+                        />
+                      </td>
+                      <td className="px-2 py-2 text-center bg-orange-50/30">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={grade.science}
+                          onChange={e => updateStudentGrade(student.id, 'science', e.target.value)}
+                          className="w-14 px-1 py-1 border border-orange-200 rounded text-center text-xs"
+                          placeholder="0-100"
+                        />
+                      </td>
+                    </>
+                  )}
                   <td className="px-2 py-2 text-center">
                     {avg !== null ? (
                       <span className={`font-bold ${avg >= 70 ? 'text-green-600' : 'text-red-600'}`}>

@@ -14,6 +14,14 @@ export interface StudentGrade {
   participation: number | null;
   mid: number | null;
   final: number | null;
+  // Extended fields for Regular and Bilingual classes
+  speaking: number | null;
+  listening: number | null;
+  // Bilingual-only fields
+  reading: number | null;
+  writing: number | null;
+  maths: number | null;
+  science: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -30,6 +38,14 @@ export interface StudentGradeInput {
   participation?: number | null;
   mid?: number | null;
   final?: number | null;
+  // Extended fields for Regular and Bilingual classes
+  speaking?: number | null;
+  listening?: number | null;
+  // Bilingual-only fields
+  reading?: number | null;
+  writing?: number | null;
+  maths?: number | null;
+  science?: number | null;
 }
 
 export function useStudentGrades(
@@ -99,6 +115,12 @@ export function useStudentGrades(
             participation: input.participation,
             mid: input.mid,
             final: input.final,
+            speaking: input.speaking,
+            listening: input.listening,
+            reading: input.reading,
+            writing: input.writing,
+            maths: input.maths,
+            science: input.science,
             updated_at: new Date().toISOString(),
           })
           .eq('id', existing.id)
@@ -126,6 +148,12 @@ export function useStudentGrades(
             participation: input.participation,
             mid: input.mid,
             final: input.final,
+            speaking: input.speaking,
+            listening: input.listening,
+            reading: input.reading,
+            writing: input.writing,
+            maths: input.maths,
+            science: input.science,
           })
           .select()
           .single();

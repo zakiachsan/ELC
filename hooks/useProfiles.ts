@@ -118,6 +118,43 @@ export const useParents = () => {
   return useProfiles('PARENT');
 };
 
+// Hook to fetch a single profile by ID
+export const useProfileById = (id: string | undefined) => {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(!!id);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchProfile = useCallback(async () => {
+    if (!id) {
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await profilesService.getById(id);
+      setProfile(data);
+    } catch (err) {
+      setError(err as Error);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
+
+  return { profile, loading, error, refetch: fetchProfile };
+};
+
+// Hook to fetch linked student for a parent
+export const useLinkedStudent = (linkedStudentId: string | undefined) => {
+  const { profile, loading, error, refetch } = useProfileById(linkedStudentId);
+  return { student: profile, loading, error, refetch };
+};
+
 
 // Hook for students needing attention (optimized - only fetches flagged students)
 export const useStudentsNeedingAttention = () => {

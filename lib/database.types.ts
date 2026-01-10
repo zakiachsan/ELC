@@ -12,6 +12,46 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      announcements: {
+        Row: {
+          id: string
+          title: string
+          content: string
+          priority: 'low' | 'normal' | 'high' | 'urgent'
+          target_audience: 'all' | 'teachers' | 'students' | 'parents'
+          is_active: boolean
+          starts_at: string | null
+          expires_at: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          content: string
+          priority?: 'low' | 'normal' | 'high' | 'urgent'
+          target_audience?: 'all' | 'teachers' | 'students' | 'parents'
+          is_active?: boolean
+          starts_at?: string | null
+          expires_at?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          content?: string
+          priority?: 'low' | 'normal' | 'high' | 'urgent'
+          target_audience?: 'all' | 'teachers' | 'students' | 'parents'
+          is_active?: boolean
+          starts_at?: string | null
+          expires_at?: string | null
+          created_by?: string | null
+          updated_at?: string
+        }
+      }
       profiles: {
         Row: {
           id: string
@@ -138,6 +178,13 @@ export interface Database {
           has_exam: boolean
           exam_materials: string[]
           class_type: string | null
+          // Lesson plan fields
+          cefr_level: string | null
+          materials_needed: string | null
+          learning_objectives: string | null
+          vocabulary_verb: string | null
+          vocabulary_noun: string | null
+          vocabulary_adjective: string | null
           created_at: string
           updated_at: string
         }
@@ -156,6 +203,13 @@ export interface Database {
           has_exam?: boolean
           exam_materials?: string[]
           class_type?: string | null
+          // Lesson plan fields
+          cefr_level?: string | null
+          materials_needed?: string | null
+          learning_objectives?: string | null
+          vocabulary_verb?: string | null
+          vocabulary_noun?: string | null
+          vocabulary_adjective?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -174,6 +228,13 @@ export interface Database {
           has_exam?: boolean
           exam_materials?: string[]
           class_type?: string | null
+          // Lesson plan fields
+          cefr_level?: string | null
+          materials_needed?: string | null
+          learning_objectives?: string | null
+          vocabulary_verb?: string | null
+          vocabulary_noun?: string | null
+          vocabulary_adjective?: string | null
           updated_at?: string
         }
       }
@@ -1349,6 +1410,12 @@ export interface Database {
           participation: number | null
           mid: number | null
           final: number | null
+          speaking: number | null
+          listening: number | null
+          reading: number | null
+          writing: number | null
+          maths: number | null
+          science: number | null
           class_type: string | null
           created_at: string
           updated_at: string
@@ -1366,6 +1433,12 @@ export interface Database {
           participation?: number | null
           mid?: number | null
           final?: number | null
+          speaking?: number | null
+          listening?: number | null
+          reading?: number | null
+          writing?: number | null
+          maths?: number | null
+          science?: number | null
           class_type?: string | null
           created_at?: string
           updated_at?: string
@@ -1383,6 +1456,12 @@ export interface Database {
           participation?: number | null
           mid?: number | null
           final?: number | null
+          speaking?: number | null
+          listening?: number | null
+          reading?: number | null
+          writing?: number | null
+          maths?: number | null
+          science?: number | null
           class_type?: string | null
           updated_at?: string
         }

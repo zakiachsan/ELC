@@ -84,7 +84,14 @@ export const SessionManager: React.FC = () => {
     topic: '',
     skillCategories: [] as SkillCategory[],
     description: '',
-    materials: [] as string[]
+    materials: [] as string[],
+    // Lesson plan fields
+    cefrLevel: '',
+    materialsNeeded: '',
+    learningObjectives: '',
+    vocabularyVerb: '',
+    vocabularyNoun: '',
+    vocabularyAdjective: ''
   });
   const [editSessionFiles, setEditSessionFiles] = useState<UploadResult[]>([]);
   const [editSessionUploading, setEditSessionUploading] = useState(false);
@@ -107,6 +114,13 @@ export const SessionManager: React.FC = () => {
   const [multiClassUploading, setMultiClassUploading] = useState(false);
   const [multiClassUploadError, setMultiClassUploadError] = useState<string | null>(null);
   const multiClassFileInputRef = useRef<HTMLInputElement>(null);
+  // Multi-class lesson plan fields
+  const [multiClassCefrLevel, setMultiClassCefrLevel] = useState('');
+  const [multiClassMaterialsNeeded, setMultiClassMaterialsNeeded] = useState('');
+  const [multiClassLearningObjectives, setMultiClassLearningObjectives] = useState('');
+  const [multiClassVocabularyVerb, setMultiClassVocabularyVerb] = useState('');
+  const [multiClassVocabularyNoun, setMultiClassVocabularyNoun] = useState('');
+  const [multiClassVocabularyAdjective, setMultiClassVocabularyAdjective] = useState('');
   
   // Custom calendar picker state
   const [showCalendarPicker, setShowCalendarPicker] = useState(false);
@@ -202,6 +216,13 @@ export const SessionManager: React.FC = () => {
     skillCategories: (Array.isArray(s.skill_category) ? s.skill_category : [s.skill_category]) as SkillCategory[],
     difficultyLevel: s.difficulty_level as DifficultyLevel,
     materials: s.materials || [],
+    // Lesson plan fields
+    cefrLevel: s.cefr_level || '',
+    materialsNeeded: s.materials_needed || '',
+    learningObjectives: s.learning_objectives || '',
+    vocabularyVerb: s.vocabulary_verb || '',
+    vocabularyNoun: s.vocabulary_noun || '',
+    vocabularyAdjective: s.vocabulary_adjective || '',
   }));
 
   // Auto-select session from URL param (for deep linking from dashboard)
@@ -487,7 +508,14 @@ export const SessionManager: React.FC = () => {
     topic: '',
     skillCategories: [] as SkillCategory[],
     description: '',
-    materials: [] as string[]
+    materials: [] as string[],
+    // Lesson plan fields
+    cefrLevel: '',
+    materialsNeeded: '',
+    learningObjectives: '',
+    vocabularyVerb: '',
+    vocabularyNoun: '',
+    vocabularyAdjective: ''
   });
   // newDate state removed - dates are now auto-added on selection
 
@@ -648,6 +676,13 @@ export const SessionManager: React.FC = () => {
         skill_category: editSessionForm.skillCategories.length > 0 ? editSessionForm.skillCategories : ['Grammar'],
         description: editSessionForm.description || null,
         materials: allMaterials,
+        // Lesson plan fields
+        cefr_level: editSessionForm.cefrLevel || null,
+        materials_needed: editSessionForm.materialsNeeded || null,
+        learning_objectives: editSessionForm.learningObjectives || null,
+        vocabulary_verb: editSessionForm.vocabularyVerb || null,
+        vocabulary_noun: editSessionForm.vocabularyNoun || null,
+        vocabulary_adjective: editSessionForm.vocabularyAdjective || null,
       });
 
       // Update selected session locally
@@ -658,6 +693,13 @@ export const SessionManager: React.FC = () => {
         skillCategories: editSessionForm.skillCategories.length > 0 ? editSessionForm.skillCategories : [SkillCategory.GRAMMAR],
         description: editSessionForm.description || undefined,
         materials: allMaterials,
+        // Lesson plan fields
+        cefrLevel: editSessionForm.cefrLevel || undefined,
+        materialsNeeded: editSessionForm.materialsNeeded || undefined,
+        learningObjectives: editSessionForm.learningObjectives || undefined,
+        vocabularyVerb: editSessionForm.vocabularyVerb || undefined,
+        vocabularyNoun: editSessionForm.vocabularyNoun || undefined,
+        vocabularyAdjective: editSessionForm.vocabularyAdjective || undefined,
       });
 
       setShowEditSessionModal(false);
@@ -864,6 +906,13 @@ export const SessionManager: React.FC = () => {
           difficulty_level: 'Elementary', // Default value - field removed from UI
           description: scheduleForm.description || null,
           materials: materialUrls,
+          // Lesson plan fields
+          cefr_level: scheduleForm.cefrLevel || null,
+          materials_needed: scheduleForm.materialsNeeded || null,
+          learning_objectives: scheduleForm.learningObjectives || null,
+          vocabulary_verb: scheduleForm.vocabularyVerb || null,
+          vocabulary_noun: scheduleForm.vocabularyNoun || null,
+          vocabulary_adjective: scheduleForm.vocabularyAdjective || null,
         });
       }
 
@@ -876,7 +925,13 @@ export const SessionManager: React.FC = () => {
         topic: '',
         skillCategories: [],
         description: '',
-        materials: []
+        materials: [],
+        cefrLevel: '',
+        materialsNeeded: '',
+        learningObjectives: '',
+        vocabularyVerb: '',
+        vocabularyNoun: '',
+        vocabularyAdjective: ''
       });
       setUploadedFiles([]);
       setUploadError(null);
@@ -895,10 +950,15 @@ export const SessionManager: React.FC = () => {
       startTime: '',
       endTime: '',
       topic: '',
-      skillCategory: '',
-      difficultyLevel: '',
+      skillCategories: [],
       description: '',
-      materials: []
+      materials: [],
+      cefrLevel: '',
+      materialsNeeded: '',
+      learningObjectives: '',
+      vocabularyVerb: '',
+      vocabularyNoun: '',
+      vocabularyAdjective: ''
     });
     setUploadedFiles([]);
     setUploadError(null);
@@ -1143,7 +1203,7 @@ export const SessionManager: React.FC = () => {
               {multiClassDates.length > 0 && (
                 <div className="space-y-3 p-3 bg-gray-50 rounded-lg">
                   <div>
-                    <label className="text-[9px] font-black text-gray-400 uppercase">Topic/Material</label>
+                    <label className="text-[9px] font-black text-gray-400 uppercase">Lesson Topic</label>
                     <input
                       type="text"
                       value={multiClassTopic}
@@ -1152,6 +1212,18 @@ export const SessionManager: React.FC = () => {
                       placeholder="e.g. Business English: Negotiation"
                     />
                   </div>
+
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase">Lesson Activity</label>
+                    <textarea
+                      value={multiClassDescription}
+                      onChange={e => setMultiClassDescription(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1"
+                      rows={2}
+                      placeholder="Description of lesson activities..."
+                    />
+                  </div>
+
                   <div>
                     <label className="text-[9px] font-black text-gray-400 uppercase">Skill Categories (select multiple)</label>
                     <div className="flex flex-wrap gap-2 mt-1.5">
@@ -1182,15 +1254,83 @@ export const SessionManager: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* CEFR Level */}
                   <div>
-                    <label className="text-[9px] font-black text-gray-400 uppercase">Description (optional)</label>
+                    <label className="text-[9px] font-black text-gray-400 uppercase">CEFR Level</label>
+                    <select
+                      value={multiClassCefrLevel}
+                      onChange={e => setMultiClassCefrLevel(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1"
+                    >
+                      <option value="">Select CEFR Level</option>
+                      <option value="A1">A1 - Beginner</option>
+                      <option value="A2">A2 - Elementary</option>
+                      <option value="B1">B1 - Intermediate</option>
+                      <option value="B2">B2 - Upper Intermediate</option>
+                      <option value="C1">C1 - Advanced</option>
+                      <option value="C2">C2 - Proficient</option>
+                    </select>
+                  </div>
+
+                  {/* Materials Needed */}
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase">Materials Needed</label>
                     <textarea
-                      value={multiClassDescription}
-                      onChange={e => setMultiClassDescription(e.target.value)}
+                      value={multiClassMaterialsNeeded}
+                      onChange={e => setMultiClassMaterialsNeeded(e.target.value)}
                       className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1"
                       rows={2}
-                      placeholder="Material description..."
+                      placeholder="e.g. Whiteboard, flashcards, audio equipment..."
                     />
+                  </div>
+
+                  {/* Learning Objectives */}
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase">Learning Objectives</label>
+                    <textarea
+                      value={multiClassLearningObjectives}
+                      onChange={e => setMultiClassLearningObjectives(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1"
+                      rows={2}
+                      placeholder="What students will learn..."
+                    />
+                  </div>
+
+                  {/* Vocabulary Section */}
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-gray-400 uppercase">Vocabulary</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[8px] text-gray-400 uppercase">Verb</label>
+                        <input
+                          type="text"
+                          value={multiClassVocabularyVerb}
+                          onChange={e => setMultiClassVocabularyVerb(e.target.value)}
+                          className="w-full border rounded-lg px-2 py-1 text-xs"
+                          placeholder="e.g. run, speak"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[8px] text-gray-400 uppercase">Noun</label>
+                        <input
+                          type="text"
+                          value={multiClassVocabularyNoun}
+                          onChange={e => setMultiClassVocabularyNoun(e.target.value)}
+                          className="w-full border rounded-lg px-2 py-1 text-xs"
+                          placeholder="e.g. book, table"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[8px] text-gray-400 uppercase">Adjective</label>
+                        <input
+                          type="text"
+                          value={multiClassVocabularyAdjective}
+                          onChange={e => setMultiClassVocabularyAdjective(e.target.value)}
+                          className="w-full border rounded-lg px-2 py-1 text-xs"
+                          placeholder="e.g. big, happy"
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   {/* File Upload Section */}
@@ -1454,6 +1594,13 @@ export const SessionManager: React.FC = () => {
                             description: multiClassDescription || null,
                             materials: materialUrls,
                             class_type: classType,
+                            // Lesson plan fields
+                            cefr_level: multiClassCefrLevel || null,
+                            materials_needed: multiClassMaterialsNeeded || null,
+                            learning_objectives: multiClassLearningObjectives || null,
+                            vocabulary_verb: multiClassVocabularyVerb || null,
+                            vocabulary_noun: multiClassVocabularyNoun || null,
+                            vocabulary_adjective: multiClassVocabularyAdjective || null,
                           });
                         }
                       }
@@ -1467,6 +1614,13 @@ export const SessionManager: React.FC = () => {
                       setMultiClassDescription('');
                       setMultiClassFiles([]);
                       setMultiClassUploadError(null);
+                      // Reset lesson plan fields
+                      setMultiClassCefrLevel('');
+                      setMultiClassMaterialsNeeded('');
+                      setMultiClassLearningObjectives('');
+                      setMultiClassVocabularyVerb('');
+                      setMultiClassVocabularyNoun('');
+                      setMultiClassVocabularyAdjective('');
                     } catch (error) {
                       console.error('Error creating sessions:', error);
                       alert('Failed to save schedule. Please try again.');
@@ -1539,7 +1693,14 @@ export const SessionManager: React.FC = () => {
                    topic: selectedSession.topic,
                    skillCategories: selectedSession.skillCategories,
                    description: selectedSession.description || '',
-                   materials: selectedSession.materials || []
+                   materials: selectedSession.materials || [],
+                   // Lesson plan fields
+                   cefrLevel: selectedSession.cefrLevel || '',
+                   materialsNeeded: selectedSession.materialsNeeded || '',
+                   learningObjectives: selectedSession.learningObjectives || '',
+                   vocabularyVerb: selectedSession.vocabularyVerb || '',
+                   vocabularyNoun: selectedSession.vocabularyNoun || '',
+                   vocabularyAdjective: selectedSession.vocabularyAdjective || ''
                  });
                  setEditSessionFiles([]);
                  setEditSessionUploadError(null);
@@ -1586,11 +1747,66 @@ export const SessionManager: React.FC = () => {
             </div>
           </div>
 
-          {/* Description */}
+          {/* Lesson Activity (formerly Description) */}
           {selectedSession.description && (
             <div className="pt-3 border-t border-gray-100">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Description</p>
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Lesson Activity</p>
               <p className="text-xs text-gray-600">{selectedSession.description}</p>
+            </div>
+          )}
+
+          {/* Lesson Plan Details */}
+          {(selectedSession.cefrLevel || selectedSession.learningObjectives || selectedSession.materialsNeeded) && (
+            <div className="pt-3 border-t border-gray-100 space-y-3">
+              <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest">Lesson Plan Details</p>
+
+              {selectedSession.cefrLevel && (
+                <div>
+                  <p className="text-[9px] font-black text-gray-400 uppercase">CEFR Level</p>
+                  <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded mt-1">{selectedSession.cefrLevel}</span>
+                </div>
+              )}
+
+              {selectedSession.learningObjectives && (
+                <div>
+                  <p className="text-[9px] font-black text-gray-400 uppercase">Learning Objectives</p>
+                  <p className="text-xs text-gray-600 mt-1">{selectedSession.learningObjectives}</p>
+                </div>
+              )}
+
+              {selectedSession.materialsNeeded && (
+                <div>
+                  <p className="text-[9px] font-black text-gray-400 uppercase">Materials Needed</p>
+                  <p className="text-xs text-gray-600 mt-1">{selectedSession.materialsNeeded}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Vocabulary Section */}
+          {(selectedSession.vocabularyVerb || selectedSession.vocabularyNoun || selectedSession.vocabularyAdjective) && (
+            <div className="pt-3 border-t border-gray-100">
+              <p className="text-[9px] font-black text-green-600 uppercase tracking-widest mb-2">Vocabulary</p>
+              <div className="grid grid-cols-3 gap-2">
+                {selectedSession.vocabularyVerb && (
+                  <div className="p-2 bg-green-50 rounded">
+                    <p className="text-[8px] font-bold text-green-600 uppercase">Verb</p>
+                    <p className="text-xs text-gray-700 mt-0.5">{selectedSession.vocabularyVerb}</p>
+                  </div>
+                )}
+                {selectedSession.vocabularyNoun && (
+                  <div className="p-2 bg-blue-50 rounded">
+                    <p className="text-[8px] font-bold text-blue-600 uppercase">Noun</p>
+                    <p className="text-xs text-gray-700 mt-0.5">{selectedSession.vocabularyNoun}</p>
+                  </div>
+                )}
+                {selectedSession.vocabularyAdjective && (
+                  <div className="p-2 bg-purple-50 rounded">
+                    <p className="text-[8px] font-bold text-purple-600 uppercase">Adjective</p>
+                    <p className="text-xs text-gray-700 mt-0.5">{selectedSession.vocabularyAdjective}</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1983,15 +2199,27 @@ export const SessionManager: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Topic */}
+                {/* Lesson Topic */}
                 <div>
-                  <label className="text-[9px] font-black text-gray-400 uppercase">Topic/Material</label>
+                  <label className="text-[9px] font-black text-gray-400 uppercase">Lesson Topic</label>
                   <input
                     type="text"
                     value={editSessionForm.topic}
                     onChange={e => setEditSessionForm({ ...editSessionForm, topic: e.target.value })}
                     className="w-full border rounded-lg px-3 py-2 text-xs mt-1"
                     placeholder="e.g. Business English: Negotiation"
+                  />
+                </div>
+
+                {/* Lesson Activity */}
+                <div>
+                  <label className="text-[9px] font-black text-gray-400 uppercase">Lesson Activity</label>
+                  <textarea
+                    value={editSessionForm.description}
+                    onChange={e => setEditSessionForm({ ...editSessionForm, description: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 text-xs mt-1"
+                    rows={3}
+                    placeholder="Description of lesson activities..."
                   />
                 </div>
 
@@ -2026,16 +2254,83 @@ export const SessionManager: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Description */}
+                {/* CEFR Level */}
                 <div>
-                  <label className="text-[9px] font-black text-gray-400 uppercase">Description (optional)</label>
-                  <textarea
-                    value={editSessionForm.description}
-                    onChange={e => setEditSessionForm({ ...editSessionForm, description: e.target.value })}
+                  <label className="text-[9px] font-black text-gray-400 uppercase">CEFR Level</label>
+                  <select
+                    value={editSessionForm.cefrLevel}
+                    onChange={e => setEditSessionForm({ ...editSessionForm, cefrLevel: e.target.value })}
                     className="w-full border rounded-lg px-3 py-2 text-xs mt-1"
-                    rows={3}
-                    placeholder="Material description..."
+                  >
+                    <option value="">Select CEFR Level</option>
+                    <option value="A1">A1 - Beginner</option>
+                    <option value="A2">A2 - Elementary</option>
+                    <option value="B1">B1 - Intermediate</option>
+                    <option value="B2">B2 - Upper Intermediate</option>
+                    <option value="C1">C1 - Advanced</option>
+                    <option value="C2">C2 - Proficient</option>
+                  </select>
+                </div>
+
+                {/* Materials Needed */}
+                <div>
+                  <label className="text-[9px] font-black text-gray-400 uppercase">Materials Needed</label>
+                  <textarea
+                    value={editSessionForm.materialsNeeded}
+                    onChange={e => setEditSessionForm({ ...editSessionForm, materialsNeeded: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 text-xs mt-1"
+                    rows={2}
+                    placeholder="e.g. Whiteboard, flashcards, audio equipment..."
                   />
+                </div>
+
+                {/* Learning Objectives */}
+                <div>
+                  <label className="text-[9px] font-black text-gray-400 uppercase">Learning Objectives</label>
+                  <textarea
+                    value={editSessionForm.learningObjectives}
+                    onChange={e => setEditSessionForm({ ...editSessionForm, learningObjectives: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 text-xs mt-1"
+                    rows={2}
+                    placeholder="What students will learn..."
+                  />
+                </div>
+
+                {/* Vocabulary Section */}
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black text-gray-400 uppercase">Vocabulary</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[8px] text-gray-400 uppercase">Verb</label>
+                      <input
+                        type="text"
+                        value={editSessionForm.vocabularyVerb}
+                        onChange={e => setEditSessionForm({ ...editSessionForm, vocabularyVerb: e.target.value })}
+                        className="w-full border rounded-lg px-2 py-1 text-xs"
+                        placeholder="e.g. run, speak"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[8px] text-gray-400 uppercase">Noun</label>
+                      <input
+                        type="text"
+                        value={editSessionForm.vocabularyNoun}
+                        onChange={e => setEditSessionForm({ ...editSessionForm, vocabularyNoun: e.target.value })}
+                        className="w-full border rounded-lg px-2 py-1 text-xs"
+                        placeholder="e.g. book, table"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[8px] text-gray-400 uppercase">Adjective</label>
+                      <input
+                        type="text"
+                        value={editSessionForm.vocabularyAdjective}
+                        onChange={e => setEditSessionForm({ ...editSessionForm, vocabularyAdjective: e.target.value })}
+                        className="w-full border rounded-lg px-2 py-1 text-xs"
+                        placeholder="e.g. big, happy"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Materials */}
@@ -2392,13 +2687,24 @@ export const SessionManager: React.FC = () => {
             )}
 
             <div>
-              <label className="text-[9px] font-black text-gray-400 uppercase">Topic/Material</label>
+              <label className="text-[9px] font-black text-gray-400 uppercase">Lesson Topic</label>
               <input
                 type="text"
                 value={scheduleForm.topic}
                 onChange={e => setScheduleForm({ ...scheduleForm, topic: e.target.value })}
                 className="w-full border rounded-lg px-3 py-1.5 text-xs"
                 placeholder="e.g. Business English: Negotiation"
+              />
+            </div>
+
+            <div>
+              <label className="text-[9px] font-black text-gray-400 uppercase">Lesson Activity</label>
+              <textarea
+                value={scheduleForm.description}
+                onChange={e => setScheduleForm({ ...scheduleForm, description: e.target.value })}
+                className="w-full border rounded-lg px-3 py-1.5 text-xs"
+                rows={3}
+                placeholder="Description of lesson activities..."
               />
             </div>
 
@@ -2432,15 +2738,83 @@ export const SessionManager: React.FC = () => {
               </div>
             </div>
 
+            {/* CEFR Level */}
             <div>
-              <label className="text-[9px] font-black text-gray-400 uppercase">Description</label>
+              <label className="text-[9px] font-black text-gray-400 uppercase">CEFR Level</label>
+              <select
+                value={scheduleForm.cefrLevel}
+                onChange={e => setScheduleForm({ ...scheduleForm, cefrLevel: e.target.value })}
+                className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1"
+              >
+                <option value="">Select CEFR Level</option>
+                <option value="A1">A1 - Beginner</option>
+                <option value="A2">A2 - Elementary</option>
+                <option value="B1">B1 - Intermediate</option>
+                <option value="B2">B2 - Upper Intermediate</option>
+                <option value="C1">C1 - Advanced</option>
+                <option value="C2">C2 - Proficient</option>
+              </select>
+            </div>
+
+            {/* Materials Needed */}
+            <div>
+              <label className="text-[9px] font-black text-gray-400 uppercase">Materials Needed</label>
               <textarea
-                value={scheduleForm.description}
-                onChange={e => setScheduleForm({ ...scheduleForm, description: e.target.value })}
+                value={scheduleForm.materialsNeeded}
+                onChange={e => setScheduleForm({ ...scheduleForm, materialsNeeded: e.target.value })}
                 className="w-full border rounded-lg px-3 py-1.5 text-xs"
-                rows={3}
-                placeholder="Description of materials to teach..."
+                rows={2}
+                placeholder="e.g. Whiteboard, flashcards, audio equipment..."
               />
+            </div>
+
+            {/* Learning Objectives */}
+            <div>
+              <label className="text-[9px] font-black text-gray-400 uppercase">Learning Objectives</label>
+              <textarea
+                value={scheduleForm.learningObjectives}
+                onChange={e => setScheduleForm({ ...scheduleForm, learningObjectives: e.target.value })}
+                className="w-full border rounded-lg px-3 py-1.5 text-xs"
+                rows={2}
+                placeholder="What students will learn..."
+              />
+            </div>
+
+            {/* Vocabulary Section */}
+            <div className="space-y-2">
+              <label className="text-[9px] font-black text-gray-400 uppercase">Vocabulary</label>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[8px] text-gray-400 uppercase">Verb</label>
+                  <input
+                    type="text"
+                    value={scheduleForm.vocabularyVerb}
+                    onChange={e => setScheduleForm({ ...scheduleForm, vocabularyVerb: e.target.value })}
+                    className="w-full border rounded-lg px-2 py-1 text-xs"
+                    placeholder="e.g. run, speak"
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] text-gray-400 uppercase">Noun</label>
+                  <input
+                    type="text"
+                    value={scheduleForm.vocabularyNoun}
+                    onChange={e => setScheduleForm({ ...scheduleForm, vocabularyNoun: e.target.value })}
+                    className="w-full border rounded-lg px-2 py-1 text-xs"
+                    placeholder="e.g. book, table"
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] text-gray-400 uppercase">Adjective</label>
+                  <input
+                    type="text"
+                    value={scheduleForm.vocabularyAdjective}
+                    onChange={e => setScheduleForm({ ...scheduleForm, vocabularyAdjective: e.target.value })}
+                    className="w-full border rounded-lg px-2 py-1 text-xs"
+                    placeholder="e.g. big, happy"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* File Upload Section */}
