@@ -1,15 +1,19 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card } from '../Card';
+import { Button } from '../Button';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { User } from '../../types';
+import { User, ClassSession, SkillCategory, DifficultyLevel, ClassType } from '../../types';
 import { LEVEL_COLORS } from '../../constants';
-import { TrendingUp, Calendar, CheckCircle, Clock, MapPin, AlertTriangle, BookOpen, Brain, List, Activity, History, Award, FileText, PenLine, Mic, ClipboardCheck, Play, X, Loader2, Phone, Edit2, Check } from 'lucide-react';
+import { TrendingUp, Calendar, CheckCircle, Clock, MapPin, AlertTriangle, BookOpen, Brain, List, Activity, History, Award, FileText, PenLine, Mic, ClipboardCheck, Play, X, Loader2, Phone, Edit2, Check, ChevronRight, Download, User as UserIcon, Lock, Globe, UserCheck } from 'lucide-react';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useSessions } from '../../hooks/useSessions';
 import { useReports, useStudentStats } from '../../hooks/useReports';
 import { useHomeworks } from '../../hooks/useHomeworks';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTests } from '../../hooks/useTests';
+import { supabase } from '../../lib/supabase';
+import { TestSchedule, TestType } from '../../services/tests.service';
 
 // --- SHARED DATA HOOK (using real Supabase data) ---
 const useParentData = (student: User) => {
@@ -568,9 +572,148 @@ export const ParentActivityLog: React.FC<{ student: User }> = ({ student }) => {
 }
 
 // --- COMPONENT 3: SCHEDULE ---
+const TEST_TYPE_LABELS: Record<TestType, string> = {
+  'QUIZ': 'Quiz',
+  'MID_SEMESTER': 'UTS',
+  'FINAL_SEMESTER': 'UAS',
+};
+
+const TEST_TYPE_COLORS: Record<TestType, string> = {
+  'QUIZ': 'bg-blue-100 text-blue-700 border-blue-200',
+  'MID_SEMESTER': 'bg-orange-100 text-orange-700 border-orange-200',
+  'FINAL_SEMESTER': 'bg-purple-100 text-purple-700 border-purple-200',
+};
+
+interface ScheduleItem {
+  id: string;
+  type: 'session' | 'test';
+  dateTime: string;
+  title: string;
+  location: string;
+  description?: string;
+  session?: ClassSession;
+  test?: TestSchedule;
+}
+
 export const ParentSchedule: React.FC<{ student: User }> = ({ student }) => {
-  const { loading, upcomingClasses, pastClasses } = useParentData(student);
+  const { loading: parentDataLoading, upcomingClasses, pastClasses } = useParentData(student);
   const [view, setView] = useState<'upcoming' | 'history'>('upcoming');
+  const [selectedSession, setSelectedSession] = useState<ClassSession | null>(null);
+  const [selectedTest, setSelectedTest] = useState<TestSchedule | null>(null);
+  const [studentProfile, setStudentProfile] = useState<{ school: string; class_name: string; class_type: ClassType | null } | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  // Fetch student profile to get school, class, and class type
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!student?.id) return;
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('school, class_name, class_type, school_origin')
+          .eq('id', student.id)
+          .single();
+
+        if (data && !error) {
+          const profileData = data as { school: string; class_name: string; class_type: string | null; school_origin: string | null };
+          
+          let school = profileData.school;
+          let className = profileData.class_name;
+          
+          if (!className && profileData.school_origin && profileData.school_origin.includes(' - ')) {
+            const parts = profileData.school_origin.split(' - ');
+            if (parts.length > 1) {
+              school = parts[0];
+              className = parts.slice(1).join(' - ');
+            }
+          }
+          
+          setStudentProfile({
+            school: school,
+            class_name: className,
+            class_type: profileData.class_type as ClassType | null
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching student profile:', err);
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+    fetchProfile();
+  }, [student?.id]);
+
+  // Fetch tests for student's school and class
+  const { tests: testsData, loading: testsLoading } = useTests(
+    studentProfile ? {
+      location: studentProfile.school,
+      className: studentProfile.class_name
+    } : {}
+  );
+
+  const loading = parentDataLoading || testsLoading || profileLoading;
+  const now = new Date();
+
+  // Map sessions to ClassSession format
+  const sessions: ClassSession[] = [...upcomingClasses, ...pastClasses].map(s => ({
+    id: s.id,
+    teacherId: s.teacher_id,
+    topic: s.topic,
+    description: s.description || '',
+    dateTime: s.date_time,
+    location: s.location,
+    skillCategory: s.skill_category as SkillCategory,
+    difficultyLevel: s.difficulty_level as DifficultyLevel,
+    materials: s.materials || [],
+    classType: (s as any).class_type as ClassType | undefined,
+  }));
+
+  // Filter tests by student's class type
+  const filteredTests = testsData.filter(t => {
+    if (!studentProfile?.class_type) return true;
+    if (!(t as any).class_type) return true;
+    return (t as any).class_type === studentProfile.class_type;
+  });
+
+  // Create combined schedule items
+  const scheduleItems: ScheduleItem[] = [
+    ...sessions.map(s => ({
+      id: s.id,
+      type: 'session' as const,
+      dateTime: s.dateTime,
+      title: s.topic,
+      location: s.location,
+      description: s.description,
+      session: s,
+    })),
+    ...filteredTests.map(t => ({
+      id: t.id,
+      type: 'test' as const,
+      dateTime: t.date_time,
+      title: `${TEST_TYPE_LABELS[t.test_type]} - ${t.title}`,
+      location: t.location,
+      description: t.description || undefined,
+      test: t,
+    })),
+  ];
+
+  // Filter Logic
+  const getItemEndTime = (item: ScheduleItem): Date => {
+    const startTime = new Date(item.dateTime);
+    if (item.type === 'test' && item.test) {
+      return new Date(startTime.getTime() + (item.test.duration_minutes * 60 * 1000));
+    } else {
+      return new Date(startTime.getTime() + (90 * 60 * 1000));
+    }
+  };
+
+  const upcomingItems = scheduleItems
+    .filter(item => getItemEndTime(item) > now)
+    .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+
+  const pastItems = scheduleItems
+    .filter(item => getItemEndTime(item) <= now)
+    .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
 
   if (loading) {
     return (
@@ -581,24 +724,240 @@ export const ParentSchedule: React.FC<{ student: User }> = ({ student }) => {
     );
   }
 
+  // --- SESSION DETAIL VIEW ---
+  if (selectedSession) {
+    return (
+      <div className="space-y-4 animate-in slide-in-from-right-4">
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={() => setSelectedSession(null)} className="text-xs py-1.5 px-3">
+            Back
+          </Button>
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Class Details</h2>
+            <p className="text-xs text-gray-500">{selectedSession.topic}</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <Card className="!p-4">
+            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Session Info</h3>
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-4 text-xs">
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Calendar className="w-3.5 h-3.5 text-teal-500" />
+                  <span className="font-medium">Date:</span> {new Date(selectedSession.dateTime).toLocaleDateString()}
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Clock className="w-3.5 h-3.5 text-teal-500" />
+                  <span className="font-medium">Time:</span> {new Date(selectedSession.dateTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <MapPin className="w-3.5 h-3.5 text-teal-500" />
+                  <span className="font-medium">Location:</span> {selectedSession.location}
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <UserIcon className="w-3.5 h-3.5 text-teal-500" />
+                  <span className="font-medium">Student:</span> {student.name}
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Description</h4>
+                <p className="text-gray-600 text-xs leading-relaxed">
+                  {selectedSession.description || "No description available."}
+                </p>
+              </div>
+
+              {selectedSession.materials && selectedSession.materials.length > 0 && (
+                <div>
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+                    <FileText className="w-3 h-3 text-blue-500" /> Materials
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedSession.materials.map((mat, i) => (
+                      <div key={i} className="flex items-center gap-1.5 bg-blue-50 text-blue-800 px-2 py-1.5 rounded text-[10px] border border-blue-100 cursor-pointer hover:bg-blue-100">
+                        <Download className="w-3 h-3" /> {mat}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // --- TEST DETAIL VIEW ---
+  if (selectedTest) {
+    const testDateTime = new Date(selectedTest.date_time);
+    const testEndTime = new Date(testDateTime.getTime() + (selectedTest.duration_minutes * 60 * 1000));
+    const isTestStarted = now >= testDateTime;
+    const isTestEnded = now > testEndTime;
+    
+    const getTimeUntilTest = () => {
+      const diff = testDateTime.getTime() - now.getTime();
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      
+      if (days > 0) return `${days} hari ${hours} jam lagi`;
+      if (hours > 0) return `${hours} jam ${minutes} menit lagi`;
+      return `${minutes} menit lagi`;
+    };
+
+    return (
+      <div className="space-y-4 animate-in slide-in-from-right-4">
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={() => setSelectedTest(null)} className="text-xs py-1.5 px-3">
+            Back
+          </Button>
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Test Details</h2>
+            <p className="text-xs text-gray-500">{selectedTest.title}</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <Card className="!p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${TEST_TYPE_COLORS[selectedTest.test_type]}`}>
+                {TEST_TYPE_LABELS[selectedTest.test_type]}
+              </span>
+              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Test Info</h3>
+            </div>
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-4 text-xs">
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Calendar className="w-3.5 h-3.5 text-teal-500" />
+                  <span className="font-medium">Date:</span> {new Date(selectedTest.date_time).toLocaleDateString()}
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Clock className="w-3.5 h-3.5 text-teal-500" />
+                  <span className="font-medium">Time:</span> {new Date(selectedTest.date_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Clock className="w-3.5 h-3.5 text-orange-500" />
+                  <span className="font-medium">Duration:</span> {selectedTest.duration_minutes} minutes
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <MapPin className="w-3.5 h-3.5 text-teal-500" />
+                  <span className="font-medium">Location:</span> {selectedTest.location}
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Description</h4>
+                <p className="text-gray-600 text-xs leading-relaxed">
+                  {selectedTest.description || "No description available."}
+                </p>
+              </div>
+
+              {selectedTest.materials && selectedTest.materials.length > 0 && (
+                <div>
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+                    <FileText className="w-3 h-3 text-blue-500" /> Study Materials
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTest.materials.map((mat: string, i: number) => (
+                      <div key={i} className="flex items-center gap-1.5 bg-blue-50 text-blue-800 px-2 py-1.5 rounded text-[10px] border border-blue-100 cursor-pointer hover:bg-blue-100">
+                        <Download className="w-3 h-3" /> {mat}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Test Status Card */}
+          <Card className="!p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <ClipboardCheck className="w-4 h-4 text-purple-500" />
+              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Test Status</h3>
+            </div>
+            
+            {isTestEnded ? (
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 text-center">
+                <CheckCircle className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm font-medium text-gray-600">Test telah berakhir</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Berakhir pada {testEndTime.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                </p>
+              </div>
+            ) : isTestStarted ? (
+              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-green-800">Test sedang berlangsung!</p>
+                    <p className="text-xs text-green-600 mt-0.5">
+                      Berakhir pada {testEndTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  <div className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-bold">
+                    {student.name} dapat mengerjakan test ini
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-orange-800 flex items-center gap-2">
+                      <Lock className="w-4 h-4" />
+                      Test belum dimulai
+                    </p>
+                    <p className="text-xs text-orange-600 mt-0.5">
+                      Dimulai dalam {getTimeUntilTest()}
+                    </p>
+                  </div>
+                  <div className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-xs font-bold">
+                    Pastikan {student.name} siap saat waktu test
+                  </div>
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // --- LIST VIEW ---
   return (
     <div className="space-y-4 animate-in fade-in">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">Class Schedule</h2>
-          <p className="text-xs text-gray-500">View {student.name}'s class timings.</p>
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            {student.name}'s Schedule
+            {studentProfile?.class_type && (
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                studentProfile.class_type === ClassType.BILINGUAL
+                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                  : 'bg-teal-100 text-teal-700 border border-teal-200'
+              }`}>
+                {studentProfile.class_type === ClassType.BILINGUAL ? (
+                  <><Globe className="w-2.5 h-2.5" /> Bilingual</>
+                ) : (
+                  <><UserCheck className="w-2.5 h-2.5" /> Regular</>
+                )}
+              </span>
+            )}
+          </h2>
+          <p className="text-xs text-gray-500">View classes and tests schedule.</p>
         </div>
 
         <div className="flex bg-white p-0.5 rounded-lg border border-gray-200 shadow-sm">
           <button
             onClick={() => setView('upcoming')}
-            className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-md transition-all ${view === 'upcoming' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-md transition-all ${view === 'upcoming' ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
           >
             Upcoming
           </button>
           <button
             onClick={() => setView('history')}
-            className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-md transition-all ${view === 'history' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-md transition-all ${view === 'history' ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
           >
             History
           </button>
@@ -606,46 +965,107 @@ export const ParentSchedule: React.FC<{ student: User }> = ({ student }) => {
       </div>
 
       <Card className="!p-0 overflow-hidden">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
-            <tr>
-              <th className="px-4 py-2">Date</th>
-              <th className="px-4 py-2">Topic</th>
-              <th className="px-4 py-2">Category</th>
-              <th className="px-4 py-2">Location</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {(view === 'upcoming' ? upcomingClasses : pastClasses).length === 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs min-w-[600px]">
+            <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-gray-400 text-xs italic">
-                  No {view === 'upcoming' ? 'upcoming' : 'past'} classes.
-                </td>
+                <th className="px-3 py-2">Date</th>
+                <th className="px-3 py-2">Type</th>
+                <th className="px-3 py-2">Topic</th>
+                <th className="px-3 py-2">Location</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2 text-right">Action</th>
               </tr>
-            )}
-            {(view === 'upcoming' ? upcomingClasses : pastClasses).map(session => (
-              <tr key={session.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2">
-                  <div className="text-xs font-medium text-gray-900">{new Date(session.date_time).toLocaleDateString()}</div>
-                  <div className="text-[10px] text-gray-500">{new Date(session.date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                </td>
-                <td className="px-4 py-2">
-                  <div className="text-xs font-bold text-gray-900">{session.topic}</div>
-                </td>
-                <td className="px-4 py-2">
-                  <span className="text-[9px] font-bold text-gray-600 uppercase bg-gray-100 px-1.5 py-0.5 rounded">
-                    {session.skill_category}
-                  </span>
-                </td>
-                <td className="px-4 py-2">
-                  <span className="flex items-center gap-1 text-[10px] text-gray-600">
-                    <MapPin className="w-3 h-3 text-orange-500" /> {session.location}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {(view === 'upcoming' ? upcomingItems : pastItems).map(item => {
+                const itemStart = new Date(item.dateTime);
+                const isInProgress = now >= itemStart && getItemEndTime(item) > now;
+
+                return (
+                  <tr key={`${item.type}-${item.id}`} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-3 py-2">
+                      <div className="text-xs font-bold text-gray-900">
+                        {new Date(item.dateTime).toLocaleDateString()}
+                      </div>
+                      <div className="text-[10px] text-gray-500">
+                        {new Date(item.dateTime).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      {item.type === 'session' ? (
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200 flex items-center gap-1 w-fit">
+                          <Calendar className="w-2.5 h-2.5" /> Class
+                        </span>
+                      ) : (
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 w-fit ${TEST_TYPE_COLORS[item.test!.test_type]}`}>
+                          <ClipboardCheck className="w-2.5 h-2.5" /> {TEST_TYPE_LABELS[item.test!.test_type]}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="text-xs font-bold text-gray-900">
+                        {item.type === 'session' ? item.session?.topic : item.test?.title}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="flex items-center gap-1 text-[10px] text-gray-600">
+                        <MapPin className="w-3 h-3 text-orange-500" /> {item.location}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      {view === 'upcoming' ? (
+                        isInProgress ? (
+                          <span className="text-[9px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full border border-green-200 animate-pulse">
+                            In Progress
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                            Upcoming
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">
+                          Completed
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        onClick={() => {
+                          if (item.type === 'session' && item.session) {
+                            setSelectedSession(item.session);
+                          } else if (item.type === 'test' && item.test) {
+                            setSelectedTest(item.test);
+                          }
+                        }}
+                        className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-[9px] font-bold uppercase hover:bg-blue-600 hover:text-white transition-all border border-blue-100 flex items-center gap-1 ml-auto"
+                      >
+                        Detail <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {view === 'upcoming' && upcomingItems.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center text-gray-400 text-[10px] italic">
+                    No upcoming classes or tests scheduled.
+                  </td>
+                </tr>
+              )}
+
+              {view === 'history' && pastItems.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center text-gray-400 text-[10px] italic">
+                    No class or test history found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   );
