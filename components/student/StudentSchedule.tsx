@@ -3,12 +3,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { useSessions } from '../../hooks/useSessions';
+import { useSessions, useTodaySessions } from '../../hooks/useSessions';
 import { useReports } from '../../hooks/useReports';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTests } from '../../hooks/useTests';
 import { supabase } from '../../lib/supabase';
 import { ClassSession, SkillCategory, DifficultyLevel, CEFRLevel, ClassType } from '../../types';
+import { LEVEL_COLORS } from '../../constants';
 import { TestSchedule, TestType } from '../../services/tests.service';
 import { Calendar, MapPin, Clock, User, FileText, Download, ChevronRight, Loader2, ClipboardList, Globe, UserCheck, Play, Lock, AlertCircle } from 'lucide-react';
 
@@ -31,6 +32,9 @@ interface ScheduleItem {
   title: string;
   location: string;
   description?: string;
+  categories?: string[];
+  teacherName?: string;
+  difficultyLevel?: DifficultyLevel;
   // Session-specific
   session?: ClassSession;
   // Test-specific
@@ -41,6 +45,7 @@ export const StudentSchedule: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError } = useSessions();
+  const { sessions: todaySessionsData, loading: todayLoading } = useTodaySessions();
   const { reports: reportsData } = useReports();
 
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming');
@@ -100,52 +105,43 @@ export const StudentSchedule: React.FC = () => {
 
   const now = new Date();
 
-  // Map sessions from database
-  const allSessions: ClassSession[] = sessionsData.map(s => ({
+  // Map sessions from database with teacher info
+  const allSessions = sessionsData.map(s => ({
     id: s.id,
     teacherId: s.teacher_id,
     topic: s.topic,
     description: s.description || '',
     dateTime: s.date_time,
     location: s.location,
-    skillCategory: s.skill_category as SkillCategory,
+    skillCategories: (Array.isArray(s.skill_category) ? s.skill_category : [s.skill_category].filter(Boolean)) as SkillCategory[],
     difficultyLevel: s.difficulty_level as DifficultyLevel,
     materials: s.materials || [],
     classType: (s as any).class_type as ClassType | undefined,
+    teacherName: (s as any).teacher?.name || null,
   }));
 
-  // Filter sessions by student's school and class
+  // Filter sessions by student's school (simpler filter like dashboard)
+  const baseSchoolName = studentProfile?.school?.split(' - ')[0] || '';
   const sessions = allSessions.filter(s => {
-    if (!studentProfile) return false;
-    
-    // Get base school name (without class) for comparison
-    const studentSchool = studentProfile.school?.split(' - ')[0]?.toLowerCase() || '';
-    const studentClass = studentProfile.class_name?.toLowerCase() || '';
-    const sessionLocation = s.location?.toLowerCase() || '';
-    
-    // Check if session location matches student's school
-    if (!sessionLocation.includes(studentSchool)) return false;
-    
-    // Check if session location matches student's class
-    // Session location format: "SCHOOL - CLASS" e.g., "SD ABDI SISWA ARIES - 1B"
-    if (studentClass) {
-      // Extract class from session location
-      const sessionParts = s.location?.split(' - ') || [];
-      if (sessionParts.length > 1) {
-        const sessionClass = sessionParts.slice(1).join(' - ').toLowerCase();
-        // Match class (handle variations like "2A" vs "2A (Regular)")
-        const studentClassBase = studentClass.split(' ')[0]; // "2A" from "2A (Regular)"
-        const sessionClassBase = sessionClass.split(' ')[0];
-        if (studentClassBase !== sessionClassBase) return false;
-      }
-    }
-    
-    // Also filter by class type if available
-    if (studentProfile.class_type && s.classType) {
-      if (s.classType !== studentProfile.class_type) return false;
-    }
-    
-    return true;
+    if (!baseSchoolName) return false;
+    return s.location?.toLowerCase().includes(baseSchoolName.toLowerCase());
+  });
+
+  // Map and filter today's sessions
+  const todaySessions = todaySessionsData.map(s => ({
+    id: s.id,
+    teacherId: s.teacher_id,
+    topic: s.topic,
+    description: s.description || '',
+    dateTime: s.date_time,
+    location: s.location,
+    skillCategories: (Array.isArray(s.skill_category) ? s.skill_category : [s.skill_category].filter(Boolean)) as string[],
+    difficultyLevel: s.difficulty_level as DifficultyLevel,
+    materials: s.materials || [],
+    teacherName: (s as any).teacher?.name || null,
+  })).filter(s => {
+    if (!baseSchoolName) return false;
+    return s.location?.toLowerCase().includes(baseSchoolName.toLowerCase());
   });
 
   // Build reports by session
@@ -184,16 +180,20 @@ export const StudentSchedule: React.FC = () => {
       title: s.topic,
       location: s.location,
       description: s.description,
-      session: s,
+      categories: s.skillCategories,
+      teacherName: s.teacherName,
+      session: s as any,
     })),
     // Map tests to schedule items
     ...filteredTests.map(t => ({
       id: t.id,
       type: 'test' as const,
       dateTime: t.date_time,
-      title: `${TEST_TYPE_LABELS[t.test_type]} - ${t.title}`,
+      title: t.title,
       location: t.location,
       description: t.description || undefined,
+      categories: (t as any).skill_category ? (Array.isArray((t as any).skill_category) ? (t as any).skill_category : [(t as any).skill_category]) : [],
+      teacherName: (t as any).teacher?.name || null,
       test: t,
     })),
   ];
@@ -232,7 +232,7 @@ export const StudentSchedule: React.FC = () => {
     return reports.find(r => r.studentId === user?.id);
   };
 
-  if (sessionsLoading || testsLoading || profileLoading) {
+  if (sessionsLoading || testsLoading || profileLoading || todayLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -501,15 +501,66 @@ export const StudentSchedule: React.FC = () => {
         </div>
       </div>
 
+      {/* Happening Today Section */}
+      {todaySessions.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-yellow-600" /> Happening Today
+          </h3>
+          <div className="space-y-2">
+            {todaySessions.map((session) => (
+              <Card 
+                key={session.id}
+                className="!p-3 border-l-4 border-l-yellow-400 bg-yellow-50/50 cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => setSelectedSession(session as any)}
+              >
+                <div className="flex flex-col md:flex-row gap-4 items-center">
+                  <div className="bg-white rounded-lg p-3 text-center border border-yellow-100 shadow-sm min-w-[90px]">
+                    <span className="text-yellow-600 font-bold text-[9px] uppercase block">TODAY</span>
+                    <span className="text-xl font-extrabold text-gray-900">
+                      {new Date(session.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </span>
+                  </div>
+                  <div className="flex-1 space-y-1 text-center md:text-left">
+                    <div className="flex items-center justify-center md:justify-start gap-2 flex-wrap">
+                      {session.skillCategories.map((cat, idx) => (
+                        <span key={idx} className="text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded uppercase">
+                          {cat}
+                        </span>
+                      ))}
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${LEVEL_COLORS[session.difficultyLevel]}`}>
+                        {session.difficultyLevel}
+                      </span>
+                    </div>
+                    <h3 className="text-base font-bold text-gray-900">{session.topic}</h3>
+                    <div className="flex items-center justify-center md:justify-start gap-3 text-xs text-gray-600">
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-3 h-3" /> {session.location}
+                      </span>
+                      {session.teacherName && (
+                        <span className="flex items-center gap-1">
+                          <User className="w-3 h-3" /> {session.teacherName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       <Card className="!p-0 overflow-hidden">
         <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs min-w-[600px]">
+        <table className="w-full text-left text-xs min-w-[700px]">
           <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
             <tr>
               <th className="px-3 py-2">Date</th>
               <th className="px-3 py-2">Type</th>
+              <th className="px-3 py-2">Category</th>
               <th className="px-3 py-2">Topic</th>
-              <th className="px-3 py-2">Location</th>
+              <th className="px-3 py-2">Teacher</th>
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2 text-right">Action</th>
             </tr>
@@ -541,13 +592,25 @@ export const StudentSchedule: React.FC = () => {
                     )}
                   </td>
                   <td className="px-3 py-2">
+                    <div className="flex flex-wrap gap-1">
+                      {(item.categories || []).map((cat, idx) => (
+                        <span key={idx} className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-800 text-white uppercase">
+                          {cat}
+                        </span>
+                      ))}
+                      {(!item.categories || item.categories.length === 0) && (
+                        <span className="text-[9px] text-gray-400 italic">-</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
                     <div className="text-xs font-bold text-gray-900">
-                      {item.type === 'session' ? item.session?.topic : item.test?.title}
+                      {item.title}
                     </div>
                   </td>
                   <td className="px-3 py-2">
                     <span className="flex items-center gap-1 text-[10px] text-gray-600">
-                      <MapPin className="w-3 h-3 text-orange-500" /> {item.location}
+                      <User className="w-3 h-3 text-teal-500" /> {item.teacherName || '-'}
                     </span>
                   </td>
                   <td className="px-3 py-2">
@@ -599,7 +662,7 @@ export const StudentSchedule: React.FC = () => {
 
             {activeTab === 'upcoming' && upcomingItems.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-gray-400 text-[10px] italic">
+                <td colSpan={7} className="px-3 py-6 text-center text-gray-400 text-[10px] italic">
                   No upcoming classes or tests scheduled.
                 </td>
               </tr>
@@ -607,7 +670,7 @@ export const StudentSchedule: React.FC = () => {
 
             {activeTab === 'history' && pastItems.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-gray-400 text-[10px] italic">
+                <td colSpan={7} className="px-3 py-6 text-center text-gray-400 text-[10px] italic">
                   No class or test history found.
                 </td>
               </tr>
