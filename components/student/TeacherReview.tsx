@@ -367,10 +367,18 @@ export const TeacherReview: React.FC = () => {
                 </div>
               )}
 
+              {/* Info message about review period */}
+              {!inReviewPeriod && (
+                <div className="p-3 bg-amber-50 text-amber-700 rounded-lg border border-amber-200 text-xs flex items-center gap-2">
+                  <Calendar className="w-4 h-4 shrink-0" />
+                  <span>Review hanya dapat diberikan pada tanggal <strong>25-31</strong> setiap bulan</span>
+                </div>
+              )}
+
               {!isViewOnly && (
                 <Button
                   onClick={handleSubmit}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !inReviewPeriod}
                   className="w-full"
                 >
                   {isSubmitting ? 'Mengirim...' : existingReview ? 'Update Review' : 'Kirim Review'}

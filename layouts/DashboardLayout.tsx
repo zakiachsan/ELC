@@ -196,8 +196,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       <main className="flex-1 p-4 md:p-6 overflow-y-auto">
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 md:mb-5 gap-3 border-b border-gray-100 sm:border-none pb-3 sm:pb-0">
           <div>
-            <h1 className="text-base md:text-lg font-bold text-gray-900 leading-none flex items-center gap-2">
-              {t.welcome},
+            <h1 className="text-base md:text-lg font-bold text-gray-900 leading-tight">
+              <span className="whitespace-nowrap">{t.welcome},</span>{' '}
               <span className="theme-text-primary">{currentUser.name}</span>
             </h1>
           </div>

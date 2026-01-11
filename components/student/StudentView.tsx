@@ -237,29 +237,31 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
                 <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
                    <Calendar className="w-4 h-4 text-yellow-600" /> {t.st_today_class}
                 </h3>
-                <Card 
+                <Card
                   className="!p-3 border-l-4 border-l-yellow-400 bg-yellow-50/50 cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => navigate('/student/schedule')}
+                  onClick={() => navigate(`/student/schedule?session=${todaySession.id}`)}
                 >
-                  <div className="flex flex-col md:flex-row gap-4 items-center">
-                     <div className="bg-white rounded-lg p-3 text-center border border-yellow-100 shadow-sm min-w-[90px]">
-                        <span className="text-yellow-600 font-bold text-[9px] uppercase block">TODAY</span>
-                        <span className="text-xl font-extrabold text-gray-900">
+                  <div className="flex gap-3 items-start">
+                     {/* Time box - compact on mobile */}
+                     <div className="bg-white rounded-lg p-2 md:p-3 text-center border border-yellow-100 shadow-sm shrink-0">
+                        <span className="text-yellow-600 font-bold text-[8px] md:text-[9px] uppercase block">TODAY</span>
+                        <span className="text-base md:text-xl font-extrabold text-gray-900">
                           {new Date(todaySession.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                         </span>
                      </div>
-                     <div className="flex-1 space-y-1 text-center md:text-left">
-                        <div className="flex items-center justify-center md:justify-start gap-2">
-                           <span className="text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded uppercase">
+                     {/* Content */}
+                     <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                           <span className="text-[8px] md:text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded uppercase">
                              {todaySession.skillCategories.join(', ')}
                            </span>
-                           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${LEVEL_COLORS[todaySession.difficultyLevel]}`}>
+                           <span className={`text-[8px] md:text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${LEVEL_COLORS[todaySession.difficultyLevel]}`}>
                              {todaySession.difficultyLevel}
                            </span>
                         </div>
-                        <h3 className="text-base font-bold text-gray-900">{todaySession.topic}</h3>
-                        <p className="text-xs text-gray-600 flex items-center justify-center md:justify-start gap-1">
-                          <MapPin className="w-3 h-3" /> {todaySession.location}
+                        <h3 className="text-sm md:text-base font-bold text-gray-900 leading-tight">{todaySession.topic}</h3>
+                        <p className="text-[10px] md:text-xs text-gray-600 flex items-center gap-1">
+                          <MapPin className="w-3 h-3 shrink-0" /> <span className="truncate">{todaySession.location}</span>
                         </p>
                      </div>
                   </div>
@@ -273,41 +275,40 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
                 <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-blue-600" /> {t.st_upcoming_class}
                 </h3>
-                <Card 
+                <Card
                   className="!p-3 cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => navigate('/student/schedule')}
+                  onClick={() => navigate(`/student/schedule?session=${upcomingSession.id}`)}
                 >
-                    <div className="flex flex-col sm:flex-row gap-4">
-                      <div className="bg-blue-50 rounded-lg p-3 flex flex-col items-center justify-center min-w-[80px] text-center border border-blue-100">
-                          <span className="text-blue-500 font-bold text-xs uppercase">
+                    <div className="flex gap-3 items-start">
+                      {/* Date box - compact on mobile */}
+                      <div className="bg-blue-50 rounded-lg p-2 md:p-3 flex flex-col items-center justify-center shrink-0 text-center border border-blue-100">
+                          <span className="text-blue-500 font-bold text-[10px] md:text-xs uppercase">
                             {new Date(upcomingSession.dateTime).toLocaleDateString('default', {weekday: 'short'})}
                           </span>
-                          <span className="text-2xl font-extrabold text-gray-900">
+                          <span className="text-xl md:text-2xl font-extrabold text-gray-900">
                             {new Date(upcomingSession.dateTime).getDate()}
                           </span>
-                          <span className="text-[10px] text-gray-500 font-medium">
+                          <span className="text-[9px] md:text-[10px] text-gray-500 font-medium">
                             {new Date(upcomingSession.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                           </span>
                       </div>
-
-                      <div className="flex-1 space-y-2">
-                          <div className="flex flex-wrap gap-2">
-                             <span className="text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded uppercase">
+                      {/* Content */}
+                      <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                             <span className="text-[8px] md:text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded uppercase">
                                {upcomingSession.skillCategories.join(', ')}
                              </span>
-                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${LEVEL_COLORS[upcomingSession.difficultyLevel]}`}>
+                             <span className={`text-[8px] md:text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${LEVEL_COLORS[upcomingSession.difficultyLevel]}`}>
                                {upcomingSession.difficultyLevel}
                              </span>
                           </div>
-
-                          <h3 className="text-base font-bold text-gray-900">{upcomingSession.topic}</h3>
-
-                          <div className="flex flex-wrap gap-3 text-xs text-gray-600">
+                          <h3 className="text-sm md:text-base font-bold text-gray-900 leading-tight">{upcomingSession.topic}</h3>
+                          <div className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-3 text-[10px] md:text-xs text-gray-600">
                             <span className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3" /> {upcomingSession.location}
+                              <MapPin className="w-3 h-3 shrink-0" /> <span className="truncate">{upcomingSession.location}</span>
                             </span>
                             <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" /> 90 {t.st_minutes}
+                              <Clock className="w-3 h-3 shrink-0" /> 90 {t.st_minutes}
                             </span>
                           </div>
                       </div>

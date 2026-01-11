@@ -1,17 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { useSessions, useTodaySessions } from '../../hooks/useSessions';
 import { useReports } from '../../hooks/useReports';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTests } from '../../hooks/useTests';
-import { supabase } from '../../lib/supabase';
 import { ClassSession, SkillCategory, DifficultyLevel, CEFRLevel, ClassType } from '../../types';
 import { LEVEL_COLORS } from '../../constants';
 import { TestSchedule, TestType } from '../../services/tests.service';
-import { Calendar, MapPin, Clock, User, FileText, Download, ChevronRight, Loader2, ClipboardList, Globe, UserCheck, Play, Lock, AlertCircle } from 'lucide-react';
+import { Calendar, MapPin, Clock, User, FileText, Download, ChevronRight, ChevronLeft, Loader2, ClipboardList, Globe, UserCheck, Play, Lock, AlertCircle } from 'lucide-react';
 
 const TEST_TYPE_LABELS: Record<TestType, string> = {
   'QUIZ': 'Quiz',
@@ -44,6 +43,7 @@ interface ScheduleItem {
 export const StudentSchedule: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError } = useSessions();
   const { sessions: todaySessionsData, loading: todayLoading } = useTodaySessions();
   const { reports: reportsData } = useReports();
@@ -51,55 +51,25 @@ export const StudentSchedule: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming');
   const [selectedSession, setSelectedSession] = useState<ClassSession | null>(null);
   const [selectedTest, setSelectedTest] = useState<TestSchedule | null>(null);
-  const [studentProfile, setStudentProfile] = useState<{ school: string; class_name: string; class_type: ClassType | null } | null>(null);
-  const [profileLoading, setProfileLoading] = useState(true);
+  const [historyPage, setHistoryPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
 
-  // Fetch student profile to get school, class, and class type
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (!user?.id) return;
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('school, class_name, class_type, school_origin')
-          .eq('id', user.id)
-          .single();
+  // Get school info from AuthContext user (same approach as Dashboard)
+  // Parse class name from schoolOrigin (format: "SCHOOL - CLASS")
+  const schoolOrigin = (user as any)?.schoolOrigin || '';
+  const className = schoolOrigin.includes(' - ')
+    ? schoolOrigin.split(' - ').slice(1).join(' - ')
+    : '';
+  const classType = (user as any)?.classType as ClassType | null;
 
-        if (data && !error) {
-          const profileData = data as { school: string; class_name: string; class_type: string | null; school_origin: string | null };
-          
-          // Parse school and class from school_origin if class_name is not set
-          let school = profileData.school;
-          let className = profileData.class_name;
-          
-          if (!className && profileData.school_origin && profileData.school_origin.includes(' - ')) {
-            const parts = profileData.school_origin.split(' - ');
-            if (parts.length > 1) {
-              school = parts[0]; // Base school name
-              className = parts.slice(1).join(' - '); // Class part (e.g., "2A (Regular)")
-            }
-          }
-          
-          setStudentProfile({
-            school: school,
-            class_name: className,
-            class_type: profileData.class_type as ClassType | null
-          });
-        }
-      } catch (err) {
-        console.error('Error fetching student profile:', err);
-      } finally {
-        setProfileLoading(false);
-      }
-    };
-    fetchProfile();
-  }, [user?.id]);
+  // Extract base school name for filtering (same as Dashboard)
+  const baseSchoolName = schoolOrigin?.split(' - ')[0] || '';
 
   // Fetch tests for student's school and class
   const { tests: testsData, loading: testsLoading } = useTests(
-    studentProfile ? {
-      location: studentProfile.school,
-      className: studentProfile.class_name
+    schoolOrigin ? {
+      location: baseSchoolName,
+      className: className
     } : {}
   );
 
@@ -120,8 +90,7 @@ export const StudentSchedule: React.FC = () => {
     teacherName: (s as any).teacher?.name || null,
   }));
 
-  // Filter sessions by student's school (simpler filter like dashboard)
-  const baseSchoolName = studentProfile?.school?.split(' - ')[0] || '';
+  // Filter sessions by student's school (same approach as Dashboard)
   const sessions = allSessions.filter(s => {
     if (!baseSchoolName) return false;
     return s.location?.toLowerCase().includes(baseSchoolName.toLowerCase());
@@ -163,11 +132,11 @@ export const StudentSchedule: React.FC = () => {
   // Filter tests by student's class type
   const filteredTests = testsData.filter(t => {
     // If student doesn't have a class_type, show all tests
-    if (!studentProfile?.class_type) return true;
+    if (!classType) return true;
     // If test doesn't have a class_type, show it (backwards compatibility)
     if (!(t as any).class_type) return true;
     // Filter by matching class type
-    return (t as any).class_type === studentProfile.class_type;
+    return (t as any).class_type === classType;
   });
 
   // Create combined schedule items from sessions and tests
@@ -226,13 +195,46 @@ export const StudentSchedule: React.FC = () => {
     })
     .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
 
+  // Pagination for history tab
+  const totalHistoryPages = Math.ceil(pastItems.length / ITEMS_PER_PAGE);
+  const paginatedPastItems = pastItems.slice(
+    (historyPage - 1) * ITEMS_PER_PAGE,
+    historyPage * ITEMS_PER_PAGE
+  );
+
+  // Handle URL parameters to auto-select session or test
+  useEffect(() => {
+    const sessionId = searchParams.get('session');
+    const testId = searchParams.get('test');
+
+    if (sessionId && !selectedSession) {
+      // Find the session in allSessions
+      const session = allSessions.find(s => s.id === sessionId);
+      if (session) {
+        setSelectedSession(session as any);
+        // Clear the URL parameter after selecting
+        setSearchParams({}, { replace: true });
+      }
+    }
+
+    if (testId && !selectedTest) {
+      // Find the test in testsData
+      const test = testsData.find(t => t.id === testId);
+      if (test) {
+        setSelectedTest(test);
+        // Clear the URL parameter after selecting
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [searchParams, allSessions, testsData, selectedSession, selectedTest, setSearchParams]);
+
   // Helper to get my specific report for a session
   const getMyReport = (sessionId: string) => {
     const reports = sessionReportsMap[sessionId] || [];
     return reports.find(r => r.studentId === user?.id);
   };
 
-  if (sessionsLoading || testsLoading || profileLoading || todayLoading) {
+  if (sessionsLoading || testsLoading || todayLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -298,12 +300,23 @@ export const StudentSchedule: React.FC = () => {
                           <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1">
                              <FileText className="w-3 h-3 text-blue-500" /> Materials
                           </h4>
-                          <div className="flex flex-wrap gap-2">
-                             {selectedSession.materials.map((mat, i) => (
-                                <div key={i} className="flex items-center gap-1.5 bg-blue-50 text-blue-800 px-2 py-1.5 rounded text-[10px] border border-blue-100 cursor-pointer hover:bg-blue-100">
-                                   <Download className="w-3 h-3" /> {mat}
-                                </div>
-                             ))}
+                          <div className="flex flex-col gap-2">
+                             {selectedSession.materials.map((mat, i) => {
+                                const fileName = mat.split('/').pop() || `Material ${i + 1}`;
+                                return (
+                                  <a
+                                    key={i}
+                                    href={mat}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    download
+                                    className="flex items-center gap-1.5 bg-blue-50 text-blue-800 px-2 py-1.5 rounded text-[10px] border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors"
+                                  >
+                                    <Download className="w-3 h-3 shrink-0" />
+                                    <span className="truncate">{decodeURIComponent(fileName)}</span>
+                                  </a>
+                                );
+                             })}
                           </div>
                        </div>
                     )}
@@ -386,12 +399,23 @@ export const StudentSchedule: React.FC = () => {
                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1">
                     <FileText className="w-3 h-3 text-blue-500" /> Study Materials
                   </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedTest.materials.map((mat: string, i: number) => (
-                      <div key={i} className="flex items-center gap-1.5 bg-blue-50 text-blue-800 px-2 py-1.5 rounded text-[10px] border border-blue-100 cursor-pointer hover:bg-blue-100">
-                        <Download className="w-3 h-3" /> {mat}
-                      </div>
-                    ))}
+                  <div className="flex flex-col gap-2">
+                    {selectedTest.materials.map((mat: string, i: number) => {
+                      const fileName = mat.split('/').pop() || `Material ${i + 1}`;
+                      return (
+                        <a
+                          key={i}
+                          href={mat}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download
+                          className="flex items-center gap-1.5 bg-blue-50 text-blue-800 px-2 py-1.5 rounded text-[10px] border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors"
+                        >
+                          <Download className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{decodeURIComponent(fileName)}</span>
+                        </a>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -468,13 +492,13 @@ export const StudentSchedule: React.FC = () => {
         <div>
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
             My Schedule
-            {studentProfile?.class_type && (
+            {classType && (
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                studentProfile.class_type === ClassType.BILINGUAL
+                classType === ClassType.BILINGUAL
                   ? 'bg-blue-100 text-blue-700 border border-blue-200'
                   : 'bg-teal-100 text-teal-700 border border-teal-200'
               }`}>
-                {studentProfile.class_type === ClassType.BILINGUAL ? (
+                {classType === ClassType.BILINGUAL ? (
                   <><Globe className="w-2.5 h-2.5" /> Bilingual</>
                 ) : (
                   <><UserCheck className="w-2.5 h-2.5" /> Regular</>
@@ -493,7 +517,7 @@ export const StudentSchedule: React.FC = () => {
              Upcoming
            </button>
            <button
-             onClick={() => setActiveTab('history')}
+             onClick={() => { setActiveTab('history'); setHistoryPage(1); }}
              className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-md transition-all ${activeTab === 'history' ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
            >
              History
@@ -509,37 +533,39 @@ export const StudentSchedule: React.FC = () => {
           </h3>
           <div className="space-y-2">
             {todaySessions.map((session) => (
-              <Card 
+              <Card
                 key={session.id}
                 className="!p-3 border-l-4 border-l-yellow-400 bg-yellow-50/50 cursor-pointer hover:shadow-md transition-shadow"
                 onClick={() => setSelectedSession(session as any)}
               >
-                <div className="flex flex-col md:flex-row gap-4 items-center">
-                  <div className="bg-white rounded-lg p-3 text-center border border-yellow-100 shadow-sm min-w-[90px]">
-                    <span className="text-yellow-600 font-bold text-[9px] uppercase block">TODAY</span>
-                    <span className="text-xl font-extrabold text-gray-900">
+                <div className="flex gap-3 items-start">
+                  {/* Time box - compact on mobile */}
+                  <div className="bg-white rounded-lg p-2 md:p-3 text-center border border-yellow-100 shadow-sm shrink-0">
+                    <span className="text-yellow-600 font-bold text-[8px] md:text-[9px] uppercase block">TODAY</span>
+                    <span className="text-base md:text-xl font-extrabold text-gray-900">
                       {new Date(session.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                     </span>
                   </div>
-                  <div className="flex-1 space-y-1 text-center md:text-left">
-                    <div className="flex items-center justify-center md:justify-start gap-2 flex-wrap">
+                  {/* Content */}
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {session.skillCategories.map((cat, idx) => (
-                        <span key={idx} className="text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded uppercase">
+                        <span key={idx} className="text-[8px] md:text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded uppercase">
                           {cat}
                         </span>
                       ))}
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${LEVEL_COLORS[session.difficultyLevel]}`}>
+                      <span className={`text-[8px] md:text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${LEVEL_COLORS[session.difficultyLevel]}`}>
                         {session.difficultyLevel}
                       </span>
                     </div>
-                    <h3 className="text-base font-bold text-gray-900">{session.topic}</h3>
-                    <div className="flex items-center justify-center md:justify-start gap-3 text-xs text-gray-600">
+                    <h3 className="text-sm md:text-base font-bold text-gray-900 leading-tight">{session.topic}</h3>
+                    <div className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-3 text-[10px] md:text-xs text-gray-600">
                       <span className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3" /> {session.location}
+                        <MapPin className="w-3 h-3 shrink-0" /> <span className="truncate">{session.location}</span>
                       </span>
                       {session.teacherName && (
                         <span className="flex items-center gap-1">
-                          <User className="w-3 h-3" /> {session.teacherName}
+                          <User className="w-3 h-3 shrink-0" /> {session.teacherName}
                         </span>
                       )}
                     </div>
@@ -566,7 +592,7 @@ export const StudentSchedule: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {(activeTab === 'upcoming' ? upcomingItems : pastItems).map(item => {
+            {(activeTab === 'upcoming' ? upcomingItems : paginatedPastItems).map(item => {
               const isHistory = activeTab === 'history';
               const report = isHistory && item.type === 'session' ? getMyReport(item.id) : null;
 
@@ -679,6 +705,57 @@ export const StudentSchedule: React.FC = () => {
         </table>
         </div>
       </Card>
+
+      {/* Pagination for History Tab */}
+      {activeTab === 'history' && totalHistoryPages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-lg">
+          <div className="text-xs text-gray-500">
+            Showing {((historyPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(historyPage * ITEMS_PER_PAGE, pastItems.length)} of {pastItems.length} items
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+              disabled={historyPage === 1}
+              className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4 text-gray-600" />
+            </button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalHistoryPages }, (_, i) => i + 1)
+                .filter(page => {
+                  // Show first page, last page, current page, and pages around current
+                  if (page === 1 || page === totalHistoryPages) return true;
+                  if (Math.abs(page - historyPage) <= 1) return true;
+                  return false;
+                })
+                .map((page, index, arr) => (
+                  <React.Fragment key={page}>
+                    {index > 0 && arr[index - 1] !== page - 1 && (
+                      <span className="text-gray-400 text-xs px-1">...</span>
+                    )}
+                    <button
+                      onClick={() => setHistoryPage(page)}
+                      className={`min-w-[28px] h-7 text-xs font-medium rounded-lg transition-colors ${
+                        historyPage === page
+                          ? 'bg-teal-600 text-white'
+                          : 'hover:bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  </React.Fragment>
+                ))}
+            </div>
+            <button
+              onClick={() => setHistoryPage(p => Math.min(totalHistoryPages, p + 1))}
+              disabled={historyPage === totalHistoryPages}
+              className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-4 h-4 text-gray-600" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
