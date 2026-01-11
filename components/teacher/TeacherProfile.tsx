@@ -256,11 +256,11 @@ export const TeacherProfile: React.FC = () => {
             <div className="space-y-4">
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="relative mx-auto w-40 h-40 rounded-xl overflow-hidden border-2 border-dashed border-gray-200 cursor-pointer hover:border-teal-400 transition-colors group"
+                className="relative mx-auto w-36 aspect-[4/5] rounded-xl overflow-hidden border-2 border-dashed border-gray-200 cursor-pointer hover:border-teal-400 transition-colors group"
               >
                 {formData.photo_url ? (
                   <>
-                    <img src={formData.photo_url} className="w-full h-full object-cover" alt="Profile" />
+                    <img src={formData.photo_url} className="w-full h-full object-cover object-top" alt="Profile" />
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <Camera className="w-8 h-8 text-white" />
                     </div>
@@ -280,7 +280,7 @@ export const TeacherProfile: React.FC = () => {
                 />
               </div>
               <p className="text-[10px] text-gray-400 text-center">
-                Recommended: Square image, min 400x400px
+                Recommended: Portrait photo (4:5 ratio), min 320x400px
               </p>
             </div>
           </Card>

@@ -1684,8 +1684,8 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
                      {featuredTeachers.map((teacher) => (
                         <div key={teacher.id} className="snap-start shrink-0 w-[85%]">
                            <div className="group bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-                              <div className="relative h-44 overflow-hidden">
-                                 <img src={teacher.photo_url || ''} alt={teacher.name} className="w-full h-full object-cover" />
+                              <div className="relative aspect-[4/5] overflow-hidden">
+                                 <img src={teacher.photo_url || ''} alt={teacher.name} className="w-full h-full object-cover object-top" />
                                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                                  <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
                                     <span className="text-base">{teacher.country_flag}</span>
@@ -1719,7 +1719,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
 
                {/* Desktop Carousel - 3 visible at a time */}
                <div className="hidden md:block relative">
-                  {featuredTeachers.length > 3 && (
+                  {featuredTeachers.length > 4 && (
                      <>
                         <button
                            onClick={() => {
@@ -1743,20 +1743,20 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
                   )}
                   <div 
                      id="teacher-carousel-desktop"
-                     className={`${featuredTeachers.length > 3 ? 'flex gap-5 overflow-x-auto snap-x snap-mandatory scrollbar-hide' : 'grid grid-cols-3 gap-5'}`}
+                     className={`${featuredTeachers.length > 4 ? 'flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide' : 'grid grid-cols-4 gap-4'}`}
                      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                   >
-                     {(featuredTeachers.length > 3 ? featuredTeachers : featuredTeachers.slice(0, 3)).map((teacher) => (
+                     {(featuredTeachers.length > 4 ? featuredTeachers : featuredTeachers.slice(0, 4)).map((teacher) => (
                         <div
                            key={teacher.id}
-                           className={`group bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 ${featuredTeachers.length > 3 ? 'snap-start shrink-0 w-[calc(33.333%-14px)]' : ''}`}
+                           className={`group bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 ${featuredTeachers.length > 4 ? 'snap-start shrink-0 w-[calc(25%-12px)]' : ''}`}
                         >
                            {/* Photo */}
-                           <div className="relative h-48 overflow-hidden">
+                           <div className="relative aspect-[4/5] overflow-hidden">
                               <img
                                  src={teacher.photo_url || ''}
                                  alt={teacher.name}
-                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                 className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
                               />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                               {/* Country Flag */}
