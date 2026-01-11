@@ -888,6 +888,12 @@ export const SessionManager: React.FC = () => {
       return;
     }
 
+    // Validate teacher is logged in
+    if (!currentTeacher?.id) {
+      alert('Error: Teacher session not found. Please refresh the page and try again.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -898,7 +904,7 @@ export const SessionManager: React.FC = () => {
       for (const date of scheduleForm.dates) {
         const dateTime = `${date}T${scheduleForm.startTime}:00${getTimezoneOffset()}`;
         await createSession({
-          teacher_id: currentTeacher?.id || '',
+          teacher_id: currentTeacher.id,
           topic: scheduleForm.topic,
           date_time: dateTime,
           location: `${selectedSchool} - ${selectedClass}`,
@@ -935,9 +941,10 @@ export const SessionManager: React.FC = () => {
       });
       setUploadedFiles([]);
       setUploadError(null);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error creating sessions:', error);
-      alert('Failed to save schedule. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to save schedule: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -1569,6 +1576,11 @@ export const SessionManager: React.FC = () => {
                       alert('Make sure all selected classes have start and end times!');
                       return;
                     }
+                    // Validate teacher is logged in
+                    if (!currentTeacher?.id) {
+                      alert('Error: Teacher session not found. Please refresh the page and try again.');
+                      return;
+                    }
                     setIsSubmitting(true);
                     try {
                       // Collect material URLs from uploaded files
@@ -1585,7 +1597,7 @@ export const SessionManager: React.FC = () => {
 
                           const dateTime = `${date}T${entry.startTime}:00${getTimezoneOffset()}`;
                           await createSession({
-                            teacher_id: currentTeacher?.id || '',
+                            teacher_id: currentTeacher.id,
                             topic: multiClassTopic,
                             date_time: dateTime,
                             location: `${selectedSchool} - ${entry.classId}`,
@@ -1621,9 +1633,10 @@ export const SessionManager: React.FC = () => {
                       setMultiClassVocabularyVerb('');
                       setMultiClassVocabularyNoun('');
                       setMultiClassVocabularyAdjective('');
-                    } catch (error) {
+                    } catch (error: unknown) {
                       console.error('Error creating sessions:', error);
-                      alert('Failed to save schedule. Please try again.');
+                      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                      alert(`Failed to save schedule: ${errorMessage}`);
                     } finally {
                       setIsSubmitting(false);
                     }
