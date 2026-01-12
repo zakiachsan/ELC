@@ -131,7 +131,7 @@ interface HomepageProps {
 
 export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSection, articleSlug, placementStep }) => {
   const { t, language, setLanguage } = useLanguage();
-  const { settings } = useSettings();
+  const { settings, loading: settingsLoading } = useSettings();
   const navigate = useNavigate();
   const location = useLocation();
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -1448,7 +1448,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
       <LoginModal isOpen={isLoginOpen} onClose={closeLogin} onLogin={onLoginSuccess} />
 
       {/* Welcome Video Popup */}
-      {showVideoPopup && (
+      {showVideoPopup && !settingsLoading && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in zoom-in-95">
           <div className={`bg-gray-900 rounded-3xl overflow-hidden shadow-2xl relative ${isPortrait ? 'w-full max-w-sm' : 'w-full max-w-2xl'}`}>
             <button
