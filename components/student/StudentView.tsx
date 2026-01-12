@@ -94,6 +94,16 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
   // Extract base school name for filtering (e.g., "SD ABDI SISWA ARIES" from "SD ABDI SISWA ARIES - 1 BILINGUAL")
   const baseSchoolName = schoolName?.split(' - ')[0] || student.schoolOrigin?.split(' - ')[0] || null;
 
+  // Helper to normalize class name for comparison
+  // Handles variations like "5A", "KELAS 5 A", "5 A", "KELAS 5A", etc.
+  const normalizeClassName = (name: string): string => {
+    return name
+      .toUpperCase()
+      .replace(/KELAS\s*/gi, '')  // Remove "KELAS" prefix
+      .replace(/\s+/g, '')        // Remove all spaces
+      .trim();
+  };
+
   const now = new Date();
 
 
@@ -110,23 +120,38 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
     materials: s.materials || [],
   });
 
-  // Filter sessions to only show those matching student's school
-  const filterByStudentSchool = (sessions: ClassSession[]): ClassSession[] => {
+  // Filter sessions to only show those matching student's school AND class
+  const filterByStudentClass = (sessions: ClassSession[]): ClassSession[] => {
     if (!baseSchoolName) return sessions;
-    return sessions.filter(s =>
-      s.location?.toLowerCase().includes(baseSchoolName.toLowerCase())
-    );
+    return sessions.filter(s => {
+      // Check school matches
+      const schoolMatches = s.location?.toLowerCase().includes(baseSchoolName.toLowerCase());
+      if (!schoolMatches) return false;
+      
+      // If no className from student, just match school
+      if (!className) return true;
+      
+      // Extract class from session location (format: "SCHOOL - CLASS")
+      const locationParts = s.location?.split(' - ');
+      if (locationParts && locationParts.length > 1) {
+        const sessionClass = locationParts.slice(1).join(' - ');
+        // Compare normalized class names
+        return normalizeClassName(sessionClass) === normalizeClassName(className);
+      }
+      
+      return false;
+    });
   };
 
   // Class Logic - filter by student's school
-  const todaySession = filterByStudentSchool(todaySessionsData.map(mapSession))[0];
+  const todaySession = filterByStudentClass(todaySessionsData.map(mapSession))[0];
 
-  const upcomingSession = filterByStudentSchool(upcomingSessionsData
+  const upcomingSession = filterByStudentClass(upcomingSessionsData
     .map(mapSession))
     .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime())[0];
 
   // Recent Offline Activity (Last class attended) - filter by student's school
-  const lastOfflineSession = filterByStudentSchool(allSessionsData
+  const lastOfflineSession = filterByStudentClass(allSessionsData
     .map(mapSession))
     .filter(s => new Date(s.dateTime) < now)
     .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime())[0];

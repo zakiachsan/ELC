@@ -65,6 +65,38 @@ export const StudentSchedule: React.FC = () => {
   // Extract base school name for filtering (same as Dashboard)
   const baseSchoolName = schoolOrigin?.split(' - ')[0] || '';
 
+  // Helper to normalize class name for comparison
+  // Handles variations like "5A", "KELAS 5 A", "5 A", "KELAS 5A", etc.
+  const normalizeClassName = (name: string): string => {
+    return name
+      .toUpperCase()
+      .replace(/KELAS\s*/gi, '')  // Remove "KELAS" prefix
+      .replace(/\s+/g, '')        // Remove all spaces
+      .trim();
+  };
+
+  // Helper to check if session matches student's school AND class
+  const matchesStudentClass = (sessionLocation: string | undefined): boolean => {
+    if (!sessionLocation || !baseSchoolName) return false;
+    
+    // Check school matches
+    const schoolMatches = sessionLocation.toLowerCase().includes(baseSchoolName.toLowerCase());
+    if (!schoolMatches) return false;
+    
+    // If no className from student, just match school
+    if (!className) return true;
+    
+    // Extract class from session location (format: "SCHOOL - CLASS")
+    const locationParts = sessionLocation.split(' - ');
+    if (locationParts.length > 1) {
+      const sessionClass = locationParts.slice(1).join(' - ');
+      // Compare normalized class names
+      return normalizeClassName(sessionClass) === normalizeClassName(className);
+    }
+    
+    return false;
+  };
+
   // Fetch tests for student's school and class
   const { tests: testsData, loading: testsLoading } = useTests(
     schoolOrigin ? {
@@ -90,11 +122,8 @@ export const StudentSchedule: React.FC = () => {
     teacherName: (s as any).teacher?.name || null,
   }));
 
-  // Filter sessions by student's school (same approach as Dashboard)
-  const sessions = allSessions.filter(s => {
-    if (!baseSchoolName) return false;
-    return s.location?.toLowerCase().includes(baseSchoolName.toLowerCase());
-  });
+  // Filter sessions by student's school AND class
+  const sessions = allSessions.filter(s => matchesStudentClass(s.location));
 
   // Map and filter today's sessions
   const todaySessions = todaySessionsData.map(s => ({
@@ -108,10 +137,7 @@ export const StudentSchedule: React.FC = () => {
     difficultyLevel: s.difficulty_level as DifficultyLevel,
     materials: s.materials || [],
     teacherName: (s as any).teacher?.name || null,
-  })).filter(s => {
-    if (!baseSchoolName) return false;
-    return s.location?.toLowerCase().includes(baseSchoolName.toLowerCase());
-  });
+  })).filter(s => matchesStudentClass(s.location));
 
   // Build reports by session
   const sessionReportsMap: Record<string, any[]> = {};
