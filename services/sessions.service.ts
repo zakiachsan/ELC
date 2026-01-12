@@ -73,15 +73,23 @@ export const sessionsService = {
 
   // Get sessions by school and class (partial match - more efficient)
   async getBySchoolAndClass(schoolName: string, className: string, limit?: number) {
-    // Use ilike pattern to match school name (class filtering done client-side due to variations)
     let query = supabase
       .from('class_sessions')
       .select(`
         *,
         teacher:profiles!teacher_id(id, name, email)
-      `)
-      .ilike('location', `${schoolName}%`)
-      .order('date_time', { ascending: false });
+      `);
+
+    if (className) {
+      // If className provided, filter by exact location (school + class)
+      const locationPattern = `${schoolName} - ${className}`;
+      query = query.ilike('location', locationPattern);
+    } else {
+      // If no className, filter by school prefix only (for student optimization)
+      query = query.ilike('location', `${schoolName}%`);
+    }
+
+    query = query.order('date_time', { ascending: false });
 
     if (limit) {
       query = query.limit(limit);
