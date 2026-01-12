@@ -28,7 +28,8 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
   const navigate = useNavigate();
   const { sessions: todaySessionsData, loading: todayLoading } = useTodaySessions();
   const { sessions: upcomingSessionsData, loading: upcomingLoading } = useUpcomingSessions();
-  const { sessions: allSessionsData, loading: sessionsLoading } = useSessions({ past: true });
+  // Only fetch last 20 sessions for "Recent Activity" - we only need 1 after filtering
+  const { sessions: allSessionsData, loading: sessionsLoading } = useSessions({ past: true, limit: 20 });
   const { progress: progressData, loading: progressLoading } = useModuleProgress(student.id);
   const { modules: modulesData, loading: modulesLoading } = useModules();
   const { locations, loading: locationsLoading } = useLocations();

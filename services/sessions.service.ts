@@ -7,8 +7,8 @@ type ClassSessionUpdate = Database['public']['Tables']['class_sessions']['Update
 
 export const sessionsService = {
   // Get all sessions
-  async getAll() {
-    const { data, error } = await supabase
+  async getAll(limit?: number) {
+    let query = supabase
       .from('class_sessions')
       .select(`
         *,
@@ -17,6 +17,10 @@ export const sessionsService = {
       `)
       .order('date_time', { ascending: false });
 
+    // Default limit to 500 to prevent fetching too much data
+    query = query.limit(limit || 500);
+
+    const { data, error } = await query;
     if (error) throw error;
     return data;
   },
@@ -68,17 +72,22 @@ export const sessionsService = {
   },
 
   // Get sessions by school and class (partial match - more efficient)
-  async getBySchoolAndClass(schoolName: string, className: string) {
-    const locationPattern = `${schoolName} - ${className}`;
-    const { data, error } = await supabase
+  async getBySchoolAndClass(schoolName: string, className: string, limit?: number) {
+    // Use ilike pattern to match school name (class filtering done client-side due to variations)
+    let query = supabase
       .from('class_sessions')
       .select(`
         *,
         teacher:profiles!teacher_id(id, name, email)
       `)
-      .eq('location', locationPattern)
+      .ilike('location', `${schoolName}%`)
       .order('date_time', { ascending: false });
 
+    if (limit) {
+      query = query.limit(limit);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
     return data;
   },

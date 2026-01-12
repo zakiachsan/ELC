@@ -15,6 +15,7 @@ interface UseSessionsOptions {
   past?: boolean;
   today?: boolean;
   enabled?: boolean;
+  limit?: number;
 }
 
 export const useSessions = (options: UseSessionsOptions = {}) => {
@@ -45,7 +46,7 @@ export const useSessions = (options: UseSessionsOptions = {}) => {
       } else if (options.upcoming) {
         data = await sessionsService.getUpcoming();
       } else if (options.past) {
-        data = await sessionsService.getPast();
+        data = await sessionsService.getPast(options.limit);
       } else {
         data = await sessionsService.getAll();
       }
@@ -56,7 +57,7 @@ export const useSessions = (options: UseSessionsOptions = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [options.teacherId, options.location, options.schoolName, options.className, options.upcoming, options.past, options.today, enabled]);
+  }, [options.teacherId, options.location, options.schoolName, options.className, options.upcoming, options.past, options.today, options.limit, enabled]);
 
   useEffect(() => {
     fetchSessions();

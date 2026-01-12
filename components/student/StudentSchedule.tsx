@@ -44,7 +44,14 @@ export const StudentSchedule: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError } = useSessions();
+  // Get school info early for optimized query
+  const schoolOriginEarly = (user as any)?.schoolOrigin || '';
+  const baseSchoolNameEarly = schoolOriginEarly?.split(' - ')[0] || '';
+  
+  // Use server-side filtering by school name for better performance
+  const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError } = useSessions(
+    baseSchoolNameEarly ? { schoolName: baseSchoolNameEarly, className: '' } : {}
+  );
   const { sessions: todaySessionsData, loading: todayLoading } = useTodaySessions();
   const { reports: reportsData } = useReports();
 
