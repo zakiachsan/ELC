@@ -284,7 +284,7 @@ export const StudentSchedule: React.FC = () => {
                        </div>
                        <div className="flex items-center gap-2 text-gray-700">
                           <User className="w-3.5 h-3.5 text-teal-500" />
-                          <span className="font-medium">Teacher:</span> Mr. John Keating
+                          <span className="font-medium">Teacher:</span> {selectedSession.teacherName || 'TBA'}
                        </div>
                     </div>
 
