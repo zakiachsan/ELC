@@ -34,9 +34,9 @@ export const useSessions = (options: UseSessionsOptions = {}) => {
       setError(null);
 
       let data;
-      if (options.schoolName && options.className) {
-        // Most efficient: filter by school and class at database level
-        data = await sessionsService.getBySchoolAndClass(options.schoolName, options.className);
+      if (options.schoolName) {
+        // Filter by school (and optionally class) at database level
+        data = await sessionsService.getBySchoolAndClass(options.schoolName, options.className || '');
       } else if (options.teacherId) {
         data = await sessionsService.getByTeacher(options.teacherId);
       } else if (options.location) {

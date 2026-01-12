@@ -84,12 +84,14 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
   const baseSchoolName = schoolName?.split(' - ')[0] || student.schoolOrigin?.split(' - ')[0] || null;
 
   // Helper to normalize class name for comparison
-  // Handles variations like "5A", "KELAS 5 A", "5 A", "KELAS 5A", etc.
+  // Handles variations like "5A", "KELAS 5 A", "5 A", "KELAS 5A", "1 BILINGUAL (Bilingual)", etc.
   const normalizeClassName = (name: string): string => {
     return name
       .toUpperCase()
-      .replace(/KELAS\s*/gi, '')  // Remove "KELAS" prefix
-      .replace(/\s+/g, '')        // Remove all spaces
+      .replace(/\s*\(BILINGUAL\)\s*/gi, '')  // Remove "(Bilingual)" suffix
+      .replace(/\s*\(REGULAR\)\s*/gi, '')    // Remove "(Regular)" suffix
+      .replace(/KELAS\s*/gi, '')              // Remove "KELAS" prefix
+      .replace(/\s+/g, '')                    // Remove all spaces
       .trim();
   };
 
