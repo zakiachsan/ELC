@@ -1270,6 +1270,7 @@ export const SessionManager: React.FC = () => {
                       className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1"
                     >
                       <option value="">Select CEFR Level</option>
+                      <option value="Pre-A1">Pre-A1 - Starter</option>
                       <option value="A1">A1 - Beginner</option>
                       <option value="A2">A2 - Elementary</option>
                       <option value="B1">B1 - Intermediate</option>
@@ -2276,6 +2277,7 @@ export const SessionManager: React.FC = () => {
                     className="w-full border rounded-lg px-3 py-2 text-xs mt-1"
                   >
                     <option value="">Select CEFR Level</option>
+                    <option value="Pre-A1">Pre-A1 - Starter</option>
                     <option value="A1">A1 - Beginner</option>
                     <option value="A2">A2 - Elementary</option>
                     <option value="B1">B1 - Intermediate</option>
@@ -2760,6 +2762,7 @@ export const SessionManager: React.FC = () => {
                 className="w-full border rounded-lg px-3 py-1.5 text-xs mt-1"
               >
                 <option value="">Select CEFR Level</option>
+                <option value="Pre-A1">Pre-A1 - Starter</option>
                 <option value="A1">A1 - Beginner</option>
                 <option value="A2">A2 - Elementary</option>
                 <option value="B1">B1 - Intermediate</option>

@@ -70,6 +70,7 @@ export enum DifficultyLevel {
 }
 
 export enum CEFRLevel {
+  PRE_A1 = 'Pre-A1 - Starter',
   A1 = 'A1 - Beginner',
   A2 = 'A2 - Elementary',
   B1 = 'B1 - Intermediate',
