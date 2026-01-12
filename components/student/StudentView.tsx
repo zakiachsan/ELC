@@ -72,15 +72,6 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
     setIsEditingWhatsApp(false);
   };
 
-  // DEBUG: Log student data and locations
-  console.log('StudentView DEBUG:', {
-    studentId: student.id,
-    assignedLocationId: student.assignedLocationId,
-    schoolOrigin: student.schoolOrigin,
-    locationsCount: locations.length,
-    locationsLoading,
-  });
-
   // Get school name from assignedLocationId (with fallback to schoolOrigin)
   const locationName = student.assignedLocationId
     ? locations.find(loc => loc.id === student.assignedLocationId)?.name
@@ -88,9 +79,6 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
 
   // Use locationName if found, otherwise fallback to schoolOrigin
   const schoolName = locationName || student.schoolOrigin || null;
-
-  // DEBUG: Log school name result
-  console.log('StudentView schoolName:', { locationName, schoolOrigin: student.schoolOrigin, final: schoolName });
 
   // Extract base school name for filtering (e.g., "SD ABDI SISWA ARIES" from "SD ABDI SISWA ARIES - 1 BILINGUAL")
   const baseSchoolName = schoolName?.split(' - ')[0] || student.schoolOrigin?.split(' - ')[0] || null;
