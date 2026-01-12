@@ -23,7 +23,7 @@ export const TeacherView: React.FC<TeacherViewProps> = ({ onNavigate }) => {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { user: currentTeacher } = useAuth();
-  const { sessions: todaySessionsData, loading: todayLoading, error: todayError } = useTodaySessions();
+  const { sessions: todaySessionsData, loading: todayLoading, error: todayError } = useTodaySessions(currentTeacher?.id);
   const { sessions: upcomingSessions, loading: upcomingLoading } = useSessions({ teacherId: currentTeacher?.id, upcoming: true });
   const { tests: teacherTests, loading: testsLoading } = useTests({ teacherId: currentTeacher?.id });
   const { locations: locationsData } = useLocations();

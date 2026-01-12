@@ -163,6 +163,27 @@ export const sessionsService = {
     return data;
   },
 
+  // Get today's sessions for a specific teacher
+  async getTodayByTeacher(teacherId: string) {
+    const today = new Date();
+    const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
+    const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
+
+    const { data, error } = await supabase
+      .from('class_sessions')
+      .select(`
+        *,
+        location_data:locations!location_id(id, name, address)
+      `)
+      .eq('teacher_id', teacherId)
+      .gte('date_time', startOfDay)
+      .lte('date_time', endOfDay)
+      .order('date_time', { ascending: true });
+
+    if (error) throw error;
+    return data;
+  },
+
   // Get sessions by date range
   async getByDateRange(startDate: string, endDate: string) {
     const { data, error } = await supabase

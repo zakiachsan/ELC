@@ -42,7 +42,12 @@ export const useSessions = (options: UseSessionsOptions = {}) => {
       } else if (options.location) {
         data = await sessionsService.getByLocation(options.location);
       } else if (options.today) {
-        data = await sessionsService.getToday();
+        // If teacherId is provided, filter today's sessions by teacher
+        if (options.teacherId) {
+          data = await sessionsService.getTodayByTeacher(options.teacherId);
+        } else {
+          data = await sessionsService.getToday();
+        }
       } else if (options.upcoming) {
         data = await sessionsService.getUpcoming();
       } else if (options.past) {
@@ -115,8 +120,8 @@ export const useUpcomingSessions = (limit?: number) => {
   return { sessions, loading, error };
 };
 
-export const useTodaySessions = () => {
-  return useSessions({ today: true });
+export const useTodaySessions = (teacherId?: string) => {
+  return useSessions({ today: true, teacherId });
 };
 
 
