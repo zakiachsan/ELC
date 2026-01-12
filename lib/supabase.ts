@@ -33,6 +33,7 @@ export const supabaseAdmin = createClient<Database>(
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+      storageKey: 'supabase-admin-auth',
     },
   }
 );
