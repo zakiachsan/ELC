@@ -5,7 +5,7 @@ import { Button } from '../Button';
 import {
   Gamepad2, Plus, Pencil, Trash2, Play, ChevronLeft, Save,
   Brain, Clock, CheckCircle, XCircle, GripVertical, Copy, Eye,
-  Users, X, Trophy, Target, Calendar, Loader2
+  Users, X, Trophy, Target, Calendar, Loader2, Phone
 } from 'lucide-react';
 import { useKahootQuizzes } from '../../hooks/useOlympiads';
 import { olympiadService } from '../../services/olympiad.service';
@@ -79,11 +79,18 @@ export const KahootManager: React.FC = () => {
   const [viewingParticipants, setViewingParticipants] = useState<UIKahootQuiz | null>(null);
   const [participants, setParticipants] = useState<DBKahootParticipant[]>([]);
   const [loadingParticipants, setLoadingParticipants] = useState(false);
+  const [participantView, setParticipantView] = useState<'today' | 'overall'>('today');
+
+  // Filter participants for today
+  const today = new Date().toISOString().split('T')[0];
+  const todayParticipants = participants.filter(p => p.completed_at.split('T')[0] === today);
+  const displayedParticipants = participantView === 'today' ? todayParticipants : participants;
 
   // Fetch participants when modal opens
   const handleViewParticipants = async (quiz: UIKahootQuiz) => {
     setViewingParticipants(quiz);
     setLoadingParticipants(true);
+    setParticipantView('today'); // Reset to today view when opening
     try {
       const data = await olympiadService.getKahootParticipants(quiz.id);
       setParticipants(data || []);
@@ -601,41 +608,67 @@ export const KahootManager: React.FC = () => {
         <div className="fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
             {/* Modal Header */}
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-purple-50 to-indigo-50">
-              <div>
-                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                  <Users className="w-4 h-4 text-purple-600" />
-                  Participants: {viewingParticipants.title}
-                </h3>
-                <p className="text-[10px] text-gray-500">{participants.length} peserta telah mengikuti quiz ini</p>
+            <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-purple-50 to-indigo-50">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <Users className="w-4 h-4 text-purple-600" />
+                    Participants: {viewingParticipants.title}
+                  </h3>
+                  <p className="text-[10px] text-gray-500">{participants.length} peserta telah mengikuti quiz ini</p>
+                </div>
+                <button
+                  onClick={() => setViewingParticipants(null)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
               </div>
-              <button
-                onClick={() => setViewingParticipants(null)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
+              
+              {/* Tab Switcher */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setParticipantView('today')}
+                  className={`px-4 py-2 text-xs font-medium rounded-lg transition-all ${
+                    participantView === 'today'
+                      ? 'bg-purple-600 text-white shadow-md'
+                      : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+                  }`}
+                >
+                  Hari Ini ({todayParticipants.length})
+                </button>
+                <button
+                  onClick={() => setParticipantView('overall')}
+                  className={`px-4 py-2 text-xs font-medium rounded-lg transition-all ${
+                    participantView === 'overall'
+                      ? 'bg-purple-600 text-white shadow-md'
+                      : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+                  }`}
+                >
+                  Semua ({participants.length})
+                </button>
+              </div>
             </div>
 
             {/* Stats Summary */}
             <div className="grid grid-cols-3 gap-3 p-4 border-b border-gray-100">
               <div className="text-center p-3 bg-purple-50 rounded-xl">
                 <p className="text-[9px] font-bold text-purple-600 uppercase">Total Peserta</p>
-                <p className="text-lg font-bold text-purple-900">{participants.length}</p>
+                <p className="text-lg font-bold text-purple-900">{displayedParticipants.length}</p>
               </div>
               <div className="text-center p-3 bg-green-50 rounded-xl">
                 <p className="text-[9px] font-bold text-green-600 uppercase">Rata-rata Skor</p>
                 <p className="text-lg font-bold text-green-900">
-                  {participants.length > 0
-                    ? Math.round(participants.reduce((sum, p) => sum + p.score, 0) / participants.length)
+                  {displayedParticipants.length > 0
+                    ? Math.round(displayedParticipants.reduce((sum, p) => sum + p.score, 0) / displayedParticipants.length)
                     : 0}
                 </p>
               </div>
               <div className="text-center p-3 bg-yellow-50 rounded-xl">
                 <p className="text-[9px] font-bold text-yellow-600 uppercase">Skor Tertinggi</p>
                 <p className="text-lg font-bold text-yellow-900">
-                  {participants.length > 0
-                    ? Math.max(...participants.map(p => p.score))
+                  {displayedParticipants.length > 0
+                    ? Math.max(...displayedParticipants.map(p => p.score))
                     : 0}
                 </p>
               </div>
@@ -648,56 +681,80 @@ export const KahootManager: React.FC = () => {
                   <Loader2 className="w-6 h-6 text-purple-600 animate-spin" />
                   <span className="ml-2 text-sm text-gray-500">Memuat data peserta...</span>
                 </div>
-              ) : participants.length === 0 ? (
+              ) : displayedParticipants.length === 0 ? (
                 <div className="text-center py-8">
                   <Users className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                  <p className="text-xs text-gray-500">Belum ada peserta yang mengikuti quiz ini.</p>
+                  <p className="text-xs text-gray-500">
+                    {participantView === 'today' 
+                      ? 'Belum ada peserta yang mengikuti quiz hari ini.' 
+                      : 'Belum ada peserta yang mengikuti quiz ini.'}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {participants
+                  {displayedParticipants
                     .sort((a, b) => b.score - a.score)
                     .map((participant, index) => (
-                      <div key={participant.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                        {/* Rank */}
-                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                          index === 0 ? 'bg-yellow-400 text-yellow-900' :
-                          index === 1 ? 'bg-gray-300 text-gray-700' :
-                          index === 2 ? 'bg-amber-600 text-white' :
-                          'bg-gray-200 text-gray-600'
-                        }`}>
-                          {index === 0 ? <Trophy className="w-3.5 h-3.5" /> : index + 1}
-                        </div>
-
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-gray-900 truncate">{participant.name}</p>
-                          <p className="text-[10px] text-gray-500 truncate">
-                            {new Date(participant.completed_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                        </div>
-
-                        {/* Score */}
-                        <div className="text-right shrink-0">
-                          <div className="flex items-center gap-1 justify-end">
-                            <Target className="w-3 h-3 text-gray-400" />
-                            <span className="text-[10px] text-gray-500">{participant.correct_answers}/{participant.total_questions}</span>
-                          </div>
-                          <p className={`text-sm font-bold ${
-                            participant.score >= 80 ? 'text-green-600' :
-                            participant.score >= 60 ? 'text-yellow-600' :
-                            'text-red-600'
+                      <div key={participant.id} className="p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                        <div className="flex items-center gap-3">
+                          {/* Rank */}
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                            index === 0 ? 'bg-yellow-400 text-yellow-900' :
+                            index === 1 ? 'bg-gray-300 text-gray-700' :
+                            index === 2 ? 'bg-amber-600 text-white' :
+                            'bg-gray-200 text-gray-600'
                           }`}>
-                            {participant.score} pts
-                          </p>
-                        </div>
-
-                        {/* Time Spent */}
-                        <div className="text-right shrink-0">
-                          <div className="flex items-center gap-1 text-[10px] text-gray-400">
-                            <Clock className="w-3 h-3" />
-                            <span>{participant.time_spent}s</span>
+                            {index === 0 ? <Trophy className="w-3.5 h-3.5" /> : index + 1}
                           </div>
+
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-gray-900 truncate">{participant.name}</p>
+                            <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                              {participant.position && (
+                                <span className="text-[10px] text-purple-600 font-medium">{participant.position}</span>
+                              )}
+                              {participant.school && (
+                                <span className="text-[10px] text-gray-500">{participant.school}</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Score */}
+                          <div className="text-right shrink-0">
+                            <div className="flex items-center gap-1 justify-end">
+                              <Target className="w-3 h-3 text-gray-400" />
+                              <span className="text-[10px] text-gray-500">{participant.correct_answers}/{participant.total_questions}</span>
+                            </div>
+                            <p className={`text-sm font-bold ${
+                              participant.score >= 80 ? 'text-green-600' :
+                              participant.score >= 60 ? 'text-yellow-600' :
+                              'text-red-600'
+                            }`}>
+                              {participant.score} pts
+                            </p>
+                          </div>
+
+                          {/* Time Spent */}
+                          <div className="text-right shrink-0">
+                            <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                              <Clock className="w-3 h-3" />
+                              <span>{participant.time_spent}s</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Additional Info Row */}
+                        <div className="flex items-center gap-4 mt-2 pl-10 text-[10px] text-gray-400">
+                          {participant.phone && (
+                            <span className="flex items-center gap-1">
+                              <Phone className="w-3 h-3" />
+                              {participant.phone}
+                            </span>
+                          )}
+                          <span>
+                            {new Date(participant.completed_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
                         </div>
                       </div>
                     ))}

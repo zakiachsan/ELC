@@ -2,9 +2,9 @@
 import React, { useState } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { Trophy, Plus, Trash2, CheckCircle, DollarSign, Sparkles, Mail, Smartphone, X, ToggleLeft, ToggleRight, MapPin, Clock, Calendar, User, Home, Users, Eye, GraduationCap, Loader2 } from 'lucide-react';
+import { Trophy, Trash2, CheckCircle, Sparkles, Mail, Smartphone, X, ToggleLeft, ToggleRight, MapPin, Clock, Calendar, User, Home, Users, Eye, GraduationCap, Loader2, Mic, Zap, BookOpen } from 'lucide-react';
 import { useOlympiads, useOlympiadRegistrations } from '../../hooks/useOlympiads';
-import { Olympiad, OlympiadStatus, OlympiadQuestion, OlympiadBenefit, OlympiadRegistration } from '../../types';
+import { Olympiad, OlympiadStatus, OlympiadQuestion, OlympiadBenefit, OlympiadRegistration, CompetitionType, COMPETITION_TYPE_LABELS, COMPETITION_TYPE_COLORS } from '../../types';
 
 export const OlympiadManager: React.FC = () => {
   const { olympiads: olympiadsData, loading, error, createOlympiad, updateOlympiad } = useOlympiads();
@@ -22,6 +22,7 @@ export const OlympiadManager: React.FC = () => {
     title: o.title,
     description: o.description || '',
     status: o.status as OlympiadStatus,
+    competitionType: (o as any).competition_type as CompetitionType || CompetitionType.OLYMPIAD,
     startDate: o.start_date,
     endDate: o.end_date,
     eventDate: o.event_date || undefined,
@@ -57,6 +58,7 @@ export const OlympiadManager: React.FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<OlympiadStatus>(OlympiadStatus.UPCOMING);
+  const [competitionType, setCompetitionType] = useState<CompetitionType>(CompetitionType.OLYMPIAD);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [eventDate, setEventDate] = useState('');
@@ -90,6 +92,7 @@ export const OlympiadManager: React.FC = () => {
     setTitle(ol.title);
     setDescription(ol.description);
     setStatus(ol.status);
+    setCompetitionType(ol.competitionType || CompetitionType.OLYMPIAD);
     setStartDate(ol.startDate);
     setEndDate(ol.endDate);
     setEventDate(ol.eventDate || '');
@@ -120,6 +123,7 @@ export const OlympiadManager: React.FC = () => {
         title,
         description,
         status,
+        competition_type: competitionType,
         start_date: startDate,
         end_date: endDate,
         event_date: eventDate || null,
@@ -278,13 +282,13 @@ export const OlympiadManager: React.FC = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-orange-500" /> Manajemen Olimpiade
+            <Trophy className="w-5 h-5 text-orange-500" /> ELC's Competition
           </h2>
-          <p className="text-xs text-gray-500">Kelola kompetisi bahasa Inggris.</p>
+          <p className="text-xs text-gray-500">Kelola lomba-lomba: Olympiad, Spelling Bee, Speed Competition, Story Telling</p>
         </div>
         {view === 'list' && (
-          <Button onClick={() => handleEdit({ id: '', title: '', description: '', status: OlympiadStatus.UPCOMING, startDate: '', endDate: '', questions: [], participantCount: 0, price: 0, terms: '', benefits: [] })} className="text-xs py-1.5 px-3">
-            <Plus className="w-3 h-3 mr-1" /> Buat Olimpiade
+          <Button onClick={() => handleEdit({ id: '', title: '', description: '', status: OlympiadStatus.UPCOMING, competitionType: CompetitionType.OLYMPIAD, startDate: '', endDate: '', questions: [], participantCount: 0, price: 0, terms: '', benefits: [] })} className="text-xs py-1.5 px-3">
+            Buat Kompetisi
           </Button>
         )}
       </div>
@@ -295,17 +299,25 @@ export const OlympiadManager: React.FC = () => {
             <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
               <tr>
                 <th className="px-4 py-2.5">Nama Kompetisi</th>
+                <th className="px-4 py-2.5">Jenis</th>
                 <th className="px-4 py-2.5">Status</th>
                 <th className="px-4 py-2.5 text-center">Tampil Homepage</th>
                 <th className="px-4 py-2.5 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {olympiads.map(ol => (
+              {olympiads.map(ol => {
+                const typeColors = COMPETITION_TYPE_COLORS[ol.competitionType] || COMPETITION_TYPE_COLORS[CompetitionType.OLYMPIAD];
+                return (
                 <tr key={ol.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-2.5">
                     <div className="font-bold text-gray-900 text-xs">{ol.title}</div>
                     <div className="text-[10px] text-gray-400">{ol.questions.length} Soal • {allRegistrations.filter(r => r.olympiadId === ol.id).length} Peserta</div>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${typeColors.bg} ${typeColors.text}`}>
+                      {COMPETITION_TYPE_LABELS[ol.competitionType] || 'Olympiad'}
+                    </span>
                   </td>
                   <td className="px-4 py-2.5">
                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${ol.status === OlympiadStatus.OPEN ? 'bg-green-100 text-green-700' : ol.status === OlympiadStatus.CLOSED ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
@@ -326,7 +338,7 @@ export const OlympiadManager: React.FC = () => {
                     <button onClick={() => handleEdit(ol)} className="text-blue-600 font-bold text-[11px] hover:underline">Detail</button>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </Card>
@@ -344,11 +356,22 @@ export const OlympiadManager: React.FC = () => {
               <div className="space-y-4">
                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     <div className="lg:col-span-2 space-y-4">
-                       <Card title="Detail Olimpiade" className="!p-4">
+                       <Card title="Detail Kompetisi" className="!p-4">
                           <div className="space-y-3">
-                             <div className="space-y-1">
-                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Judul Kompetisi</label>
-                                <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full border rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500" placeholder="Judul Kompetisi..." />
+                             <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                   <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Judul Kompetisi</label>
+                                   <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full border rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500" placeholder="Judul Kompetisi..." />
+                                </div>
+                                <div className="space-y-1">
+                                   <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Jenis Lomba</label>
+                                   <select value={competitionType} onChange={e => setCompetitionType(e.target.value as CompetitionType)} className="w-full border rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500">
+                                     <option value={CompetitionType.OLYMPIAD}>Olympiad</option>
+                                     <option value={CompetitionType.SPELLING_BEE}>Spelling Bee</option>
+                                     <option value={CompetitionType.SPEED_COMPETITION}>Speed Competition</option>
+                                     <option value={CompetitionType.STORY_TELLING}>Story Telling</option>
+                                   </select>
+                                </div>
                              </div>
                              <div className="space-y-1">
                                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Deskripsi</label>
@@ -434,8 +457,17 @@ export const OlympiadManager: React.FC = () => {
                              <div className="space-y-1">
                                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Biaya Daftar (Rp)</label>
                                 <div className="relative">
-                                   <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
-                                   <input type="number" value={price} onChange={e => setPrice(Number(e.target.value))} className="w-full border rounded-lg pl-8 pr-3 py-1.5 text-xs font-bold outline-none focus:ring-1 focus:ring-blue-500" placeholder="0" />
+                                   <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                   <input
+                                     type="text"
+                                     value={price.toLocaleString('id-ID')}
+                                     onChange={e => {
+                                       const value = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
+                                       setPrice(value ? Number(value) : 0);
+                                     }}
+                                     className="w-full border rounded-lg pl-9 pr-3 py-1.5 text-xs font-bold outline-none focus:ring-1 focus:ring-blue-500"
+                                     placeholder="0"
+                                   />
                                 </div>
                              </div>
                              <div className="space-y-1">

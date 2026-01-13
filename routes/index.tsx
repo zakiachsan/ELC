@@ -28,7 +28,7 @@ const PlacementTestWrapper: React.FC<{
 
 // Admin Components
 import { AccountManager } from '../components/admin/FamilyCreator';
-import { ScheduleManager } from '../components/admin/ScheduleManager';
+import { ScheduleManagerV2 } from '../components/admin/ScheduleManagerV2';
 import { StudentList } from '../components/admin/StudentList';
 import { StudentDetail } from '../components/admin/StudentDetail';
 import { LocationManager } from '../components/admin/LocationManager';
@@ -46,6 +46,7 @@ import { ReviewManager } from '../components/admin/ReviewManager';
 import { TestScheduleManager } from '../components/admin/TestScheduleManager';
 import { StarTeacherManager } from '../components/admin/StarTeacherManager';
 import { AnnouncementManager } from '../components/admin/AnnouncementManager';
+import { ParentEngagementRanking } from '../components/admin/ParentEngagementRanking';
 
 // Teacher Components
 import { TeacherView } from '../components/teacher/TeacherView';
@@ -70,10 +71,18 @@ import { OnlineTest } from '../components/student/OnlineTest';
 
 // Parent Components
 import { ParentOverview, ParentSchedule, ParentActivityLog } from '../components/parent/ParentDashboard';
+import { ParentExamProgress } from '../components/parent/ParentExamProgress';
 import { ParentTeacherReview } from '../components/parent/TeacherReview';
 
 // Shared Components
 import { FeedbackForm } from '../components/shared/FeedbackForm';
+
+// School Components
+import { SchoolDashboard } from '../components/school/SchoolDashboard';
+import { SchoolStudentSchedule } from '../components/school/SchoolStudentSchedule';
+import { SchoolTeacherSchedule } from '../components/school/SchoolTeacherSchedule';
+import { SchoolTeacherOfTheMonth } from '../components/school/TeacherOfTheMonth';
+import { TeacherOfTheMonthAdmin } from '../components/admin/TeacherOfTheMonthAdmin';
 
 interface AppRoutesProps {
   isAuthenticated: boolean;
@@ -176,6 +185,11 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         element={<Homepage onLoginSuccess={onLogin} initialSection="quiz" />}
       />
       <Route
+        path="/competition"
+        element={<Homepage onLoginSuccess={onLogin} initialSection="olympiad" />}
+      />
+      {/* Backward compatibility - redirect /olympiad to /competition */}
+      <Route
         path="/olympiad"
         element={<Homepage onLoginSuccess={onLogin} initialSection="olympiad" />}
       />
@@ -275,7 +289,7 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         element={
           <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.ADMIN]}>
             <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
-              <ScheduleManager />
+              <ScheduleManagerV2 />
             </DashboardWrapper>
           </ProtectedRoute>
         }
@@ -320,6 +334,17 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/admin/competition"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.ADMIN]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <OlympiadManager />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      {/* Backward compatibility */}
       <Route
         path="/admin/olympiad"
         element={
@@ -391,11 +416,31 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         }
       />
       <Route
+        path="/admin/teacher-of-month"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.ADMIN]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <TeacherOfTheMonthAdmin />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/reviews"
         element={
           <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.ADMIN]}>
             <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
               <ReviewManager />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/parent-engagement"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.ADMIN]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <ParentEngagementRanking />
             </DashboardWrapper>
           </ProtectedRoute>
         }
@@ -717,6 +762,18 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         }
       />
       <Route
+        path="/parent/exam-progress"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.PARENT]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <ParentDashboardLoader linkedStudentId={currentUser.linkedStudentId}>
+                {(student) => <ParentExamProgress student={student} />}
+              </ParentDashboardLoader>
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/parent/history"
         element={
           <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.PARENT]}>
@@ -744,6 +801,56 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
           <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.PARENT]}>
             <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
               <ParentTeacherReview />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* School Routes */}
+      <Route
+        path="/school"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.SCHOOL]}>
+            <Navigate to="/school/dashboard" replace />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/school/dashboard"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.SCHOOL]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <SchoolDashboard />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/school/student-schedule"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.SCHOOL]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <SchoolStudentSchedule />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/school/teacher-schedule"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.SCHOOL]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <SchoolTeacherSchedule />
+            </DashboardWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/school/teacher-of-month"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser.role} allowedRoles={[UserRole.SCHOOL]}>
+            <DashboardWrapper currentUser={currentUser} onLogout={onLogout}>
+              <SchoolTeacherOfTheMonth />
             </DashboardWrapper>
           </ProtectedRoute>
         }

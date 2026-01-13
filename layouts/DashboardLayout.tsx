@@ -117,18 +117,23 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Academic</div>
               <SidebarNavItem to="/admin/students" label={t.nav_student_reports} icon={List} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/teachers" label="Teacher" icon={GraduationCap} onClick={closeMobileMenu} />
-              <SidebarNavItem to="/admin/reviews" label="Teacher Reviews" icon={Star} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/schedule" label={t.nav_schedule} icon={CalendarDays} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/test-schedule" label="Test Schedule" icon={List} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/locations" label={t.nav_locations} icon={MapPin} onClick={closeMobileMenu} />
+
+              {/* Reviews & Recognition */}
+              <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Reviews & Recognition</div>
+              <SidebarNavItem to="/admin/reviews" label="Teacher Reviews" icon={Star} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/admin/parent-engagement" label="Parent Engagement" icon={TrendingUp} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/admin/teacher-of-month" label="Teacher of Month" icon={Award} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/admin/student-of-month" label="Student of Month" icon={Trophy} onClick={closeMobileMenu} />
 
               {/* Public */}
               <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Public</div>
               <SidebarNavItem to="/admin/placement" label="CEFR Center" icon={Search} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/kahoot" label="Live Quiz" icon={Gamepad2} highlight onClick={closeMobileMenu} />
-              <SidebarNavItem to="/admin/olympiad" label="Olympiad" icon={Trophy} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/admin/competition" label="Kompetisi" icon={Trophy} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/news" label="News & Articles" icon={Newspaper} onClick={closeMobileMenu} />
-              <SidebarNavItem to="/admin/student-of-month" label="Student of Month" icon={Award} onClick={closeMobileMenu} />
               <SidebarNavItem to="/admin/careers" label="Careers" icon={Briefcase} onClick={closeMobileMenu} />
 
               {/* Finance */}
@@ -175,9 +180,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             <>
               <SidebarNavItem to="/parent/dashboard" label={t.nav_dashboard} icon={LayoutDashboard} onClick={closeMobileMenu} />
               <SidebarNavItem to="/parent/schedule" label={t.nav_schedule} icon={CalendarDays} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/parent/exam-progress" label="Exam Progress" icon={BarChart3} onClick={closeMobileMenu} />
               <SidebarNavItem to="/parent/history" label={t.nav_activity_log} icon={Activity} onClick={closeMobileMenu} />
               <SidebarNavItem to="/parent/review" label="Teacher Review" icon={Star} onClick={closeMobileMenu} />
               <SidebarNavItem to="/parent/feedback" label="Feedback" icon={MessageSquare} onClick={closeMobileMenu} />
+            </>
+          )}
+
+          {currentUser.role === UserRole.SCHOOL && (
+            <>
+              <SidebarNavItem to="/school/dashboard" label={t.nav_dashboard} icon={LayoutDashboard} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/school/student-schedule" label="Student Schedule" icon={CalendarDays} onClick={closeMobileMenu} />
+              <SidebarNavItem to="/school/teacher-schedule" label="Teacher Schedule" icon={GraduationCap} onClick={closeMobileMenu} />
+
+              <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 opacity-40 uppercase tracking-[0.15em] mt-3 mb-1">Reviews</div>
+              <SidebarNavItem to="/school/teacher-of-month" label="Teacher of the Month" icon={Award} onClick={closeMobileMenu} />
             </>
           )}
         </nav>

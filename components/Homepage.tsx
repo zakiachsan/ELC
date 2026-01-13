@@ -14,6 +14,7 @@ import { UserRole, Olympiad, OlympiadStatus, CEFRLevel, News } from '../types';
 import { useOlympiads, useKahootQuizzes } from '../hooks/useOlympiads';
 import { usePlacementQuestions, usePlacementSubmissions, useOralTestSlots } from '../hooks/usePlacement';
 import { useNews, useStudentsOfMonth, useFeaturedTeachers, useTeacherApplications } from '../hooks/useContent';
+import { useTeachersOfTheMonth } from '../hooks/useSchoolTeacherReviews';
 import { olympiadService } from '../services/olympiad.service';
 import { slugify } from '../lib/utils';
 
@@ -132,6 +133,7 @@ interface HomepageProps {
 export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSection, articleSlug, placementStep }) => {
   const { t, language, setLanguage } = useLanguage();
   const { settings, loading: settingsLoading } = useSettings();
+  const { teachers: teachersOfMonth, loading: teachersOfMonthLoading } = useTeachersOfTheMonth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -245,6 +247,9 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
   // Kahoot Quiz States
   const [kahootFlow, setKahootFlow] = useState<'none' | 'intro' | 'playing' | 'result'>('none');
   const [kahootPlayerName, setKahootPlayerName] = useState('');
+  const [kahootPlayerPhone, setKahootPlayerPhone] = useState('');
+  const [kahootPlayerPosition, setKahootPlayerPosition] = useState('');
+  const [kahootPlayerSchool, setKahootPlayerSchool] = useState('');
   const [currentQuiz, setCurrentQuiz] = useState<KahootQuiz | null>(null);
   const [kahootQuestionIndex, setKahootQuestionIndex] = useState(0);
   const [kahootTimeLeft, setKahootTimeLeft] = useState(0);
@@ -288,9 +293,9 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
   const startRegistration = (ol: Olympiad) => {
     setSelectedOlympiad(ol);
     setRegStep('info');
-    // Navigate to /olympiad URL when opening registration
-    if (location.pathname !== '/olympiad') {
-      navigate('/olympiad', { replace: true });
+    // Navigate to /competition URL when opening registration
+    if (location.pathname !== '/competition' && location.pathname !== '/olympiad') {
+      navigate('/competition', { replace: true });
     }
   };
 
@@ -298,7 +303,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
     setSelectedOlympiad(null);
     setIsOtherSchool(false);
     // Navigate back to homepage when closing registration
-    if (location.pathname === '/olympiad') {
+    if (location.pathname === '/competition' || location.pathname === '/olympiad') {
       navigate('/', { replace: true });
     }
   };
@@ -539,6 +544,9 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
         await olympiadService.saveKahootParticipant({
           quiz_id: currentQuiz.id,
           name: kahootPlayerName,
+          phone: kahootPlayerPhone || null,
+          position: kahootPlayerPosition || null,
+          school: kahootPlayerSchool || null,
           score: finalScore,
           correct_answers: correctCount,
           total_questions: currentQuiz.questions.length,
@@ -559,6 +567,9 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
     setKahootFlow('none');
     setCurrentQuiz(null);
     setKahootPlayerName('');
+    setKahootPlayerPhone('');
+    setKahootPlayerPosition('');
+    setKahootPlayerSchool('');
     setKahootQuestionIndex(0);
     setKahootAnswers([]);
     setKahootScore(0);
@@ -1490,7 +1501,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
         {/* Desktop Nav Links */}
         <div className="hidden md:flex items-center gap-8 text-gray-600 font-medium text-sm">
           <a href="#why-elc" className="hover:theme-text-primary transition-colors">Keunggulan</a>
-          <Link to="/olympiad" className="hover:theme-text-primary transition-colors">Olimpiade</Link>
+          <Link to="/competition" className="hover:theme-text-primary transition-colors">Kompetisi</Link>
           <Link to="/cefr" className="hover:theme-text-primary transition-colors">Free Test</Link>
           <Link to="/hall-of-fame" className="hover:theme-text-primary transition-colors">Hall of Fame</Link>
           <Link to="/live-quiz" className="hover:theme-text-primary transition-colors">Quiz</Link>
@@ -1541,11 +1552,11 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
               Keunggulan
             </a>
             <Link
-              to="/olympiad"
+              to="/competition"
               onClick={() => setIsMobileMenuOpen(false)}
               className="block px-4 py-2.5 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
             >
-              Olimpiade
+              Kompetisi
             </Link>
             <Link
               to="/cefr"
@@ -1811,7 +1822,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
          </div>
       </section>
 
-      {/* Olympiad Section - Only show when there's an active olympiad */}
+      {/* ELC's Competition Section - Only show when there's an active competition */}
       {featuredOlympiad && (
       <section id="featured-event" className="py-12 lg:py-16 bg-gray-50 border-y border-gray-100 scroll-mt-20 overflow-hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1821,7 +1832,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
                     <div className="flex items-center gap-4">
                        <div className="inline-flex items-center gap-2 bg-indigo-900 text-white px-4 py-2 rounded-full text-sm font-bold uppercase tracking-wide shadow-md">
                           <Trophy className="w-4 h-4 text-yellow-400" />
-                          <span>National Event</span>
+                          <span>ELC's Competition</span>
                        </div>
                        <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900">{featuredOlympiad.title}</h2>
                     </div>
@@ -2000,6 +2011,128 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
             </div>
          </div>
       </section>
+
+      {/* Teacher of the Month */}
+      {settings.showTeacherOfMonth && teachersOfMonth.length > 0 && (
+        <section id="teacher-of-month" className="py-10 lg:py-14 bg-gradient-to-b from-amber-50 to-white border-y border-amber-100/50 scroll-mt-20">
+          <div className="max-w-6xl mx-auto sm:px-6 lg:px-8 space-y-6">
+            {/* Header */}
+            <div className="text-center space-y-2 px-4 sm:px-0">
+              <div className="inline-flex items-center gap-2 bg-amber-100 text-amber-700 px-4 py-1.5 rounded-full text-sm font-semibold">
+                <Award className="w-4 h-4" />
+                <span>Teacher of the Month</span>
+              </div>
+              <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 tracking-tight">
+                ELC's Best Teachers
+              </h2>
+              <p className="text-sm md:text-base text-gray-500 max-w-xl mx-auto">
+                Merayakan dedikasi dan keunggulan guru-guru terbaik kami berdasarkan penilaian dari sekolah.
+              </p>
+            </div>
+
+            {/* Teacher Cards - Carousel on mobile, grid on desktop */}
+            <div className="md:hidden">
+              {/* Mobile Carousel */}
+              <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide pl-4 pr-8 pb-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                {teachersOfMonth.slice(0, 6).map((teacher, idx) => (
+                  <div key={teacher.teacher_id} className="snap-start shrink-0 w-[75%]">
+                    <Card className="h-full bg-white border border-gray-100 rounded-2xl p-6 flex flex-col text-center shadow-sm">
+                      {/* Rank Badge */}
+                      <div className="flex justify-center mb-3">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shadow-md ${
+                          idx === 0 ? 'bg-amber-400 text-white' :
+                          idx === 1 ? 'bg-gray-400 text-white' :
+                          idx === 2 ? 'bg-orange-400 text-white' :
+                          'bg-gray-200 text-gray-600'
+                        }`}>
+                          #{idx + 1}
+                        </div>
+                      </div>
+
+                      {/* Teacher Photo */}
+                      <div className="flex justify-center mb-3">
+                        {teacher.teacher.photo_url ? (
+                          <img
+                            src={teacher.teacher.photo_url}
+                            alt={teacher.teacher.name}
+                            className="w-20 h-20 rounded-full object-cover border-4 border-amber-100"
+                          />
+                        ) : (
+                          <div className="w-20 h-20 rounded-full bg-amber-100 flex items-center justify-center border-4 border-amber-200">
+                            <GraduationCap className="w-8 h-8 text-amber-600" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Info */}
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-bold text-gray-900">{teacher.teacher.name}</h3>
+                        <p className="text-xs text-gray-500 font-medium">{teacher.school?.name || 'ELC'}</p>
+                        <div className="flex items-center justify-center gap-1">
+                          <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+                          <span className="text-xl font-bold text-gray-900">{teacher.average_rating.toFixed(1)}</span>
+                          <span className="text-sm text-gray-400">/10</span>
+                        </div>
+                        <p className="text-xs text-gray-400">{teacher.review_count} reviews</p>
+                      </div>
+                    </Card>
+                  </div>
+                ))}
+              </div>
+              {/* Swipe hint */}
+              <p className="text-center text-[10px] text-gray-400 mt-2 px-4">Geser untuk melihat lebih banyak →</p>
+            </div>
+
+            {/* Desktop Grid */}
+            <div className="hidden md:grid md:grid-cols-3 gap-5 px-4 sm:px-0">
+              {teachersOfMonth.slice(0, 6).map((teacher, idx) => (
+                <div key={teacher.teacher_id} className="group">
+                  <Card className="h-full bg-white border border-gray-100 rounded-2xl p-6 flex flex-col text-center transition-all hover:shadow-lg hover:-translate-y-1 duration-300">
+                    {/* Rank Badge */}
+                    <div className="flex justify-center mb-3">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shadow-md group-hover:scale-110 transition-transform ${
+                        idx === 0 ? 'bg-amber-400 text-white' :
+                        idx === 1 ? 'bg-gray-400 text-white' :
+                        idx === 2 ? 'bg-orange-400 text-white' :
+                        'bg-gray-200 text-gray-600'
+                      }`}>
+                        #{idx + 1}
+                      </div>
+                    </div>
+
+                    {/* Teacher Photo */}
+                    <div className="flex justify-center mb-3">
+                      {teacher.teacher.photo_url ? (
+                        <img
+                          src={teacher.teacher.photo_url}
+                          alt={teacher.teacher.name}
+                          className="w-20 h-20 rounded-full object-cover border-4 border-amber-100"
+                        />
+                      ) : (
+                        <div className="w-20 h-20 rounded-full bg-amber-100 flex items-center justify-center border-4 border-amber-200">
+                          <GraduationCap className="w-8 h-8 text-amber-600" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Info */}
+                    <div className="space-y-2">
+                      <h3 className="text-lg font-bold text-gray-900">{teacher.teacher.name}</h3>
+                      <p className="text-xs text-gray-500 font-medium">{teacher.school?.name || 'ELC'}</p>
+                      <div className="flex items-center justify-center gap-1">
+                        <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+                        <span className="text-xl font-bold text-gray-900">{teacher.average_rating.toFixed(1)}</span>
+                        <span className="text-sm text-gray-400">/10</span>
+                      </div>
+                      <p className="text-xs text-gray-400">{teacher.review_count} reviews</p>
+                    </div>
+                  </Card>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Hall of Fame */}
       <section id="hall-of-fame" className="py-10 lg:py-14 bg-gradient-to-b from-blue-50 to-white border-y border-blue-100/50 scroll-mt-20">
@@ -2507,23 +2640,73 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
                         </div>
                      </div>
 
-                     {/* Player Name Input */}
+                     {/* Player Registration Form */}
                      <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6 space-y-4">
-                        <label className="block text-left text-white/80 text-sm font-medium">Enter your name to start</label>
-                        <input
-                           type="text"
-                           value={kahootPlayerName}
-                           onChange={(e) => setKahootPlayerName(e.target.value)}
-                           placeholder="Your name..."
-                           className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 text-lg"
-                        />
+                        <p className="text-left text-white/80 text-sm font-medium mb-2">Isi data diri untuk memulai</p>
+                        
+                        {/* Nama */}
+                        <div>
+                           <label className="block text-left text-white/60 text-xs font-medium mb-1">Nama *</label>
+                           <input
+                              type="text"
+                              value={kahootPlayerName}
+                              onChange={(e) => setKahootPlayerName(e.target.value)}
+                              placeholder="Masukkan nama lengkap..."
+                              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
+                           />
+                        </div>
+
+                        {/* Nomor WA */}
+                        <div>
+                           <label className="block text-left text-white/60 text-xs font-medium mb-1">Nomor WhatsApp *</label>
+                           <input
+                              type="tel"
+                              value={kahootPlayerPhone}
+                              onChange={(e) => setKahootPlayerPhone(e.target.value)}
+                              placeholder="Contoh: 08123456789"
+                              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
+                           />
+                        </div>
+
+                        {/* Jabatan */}
+                        <div>
+                           <label className="block text-left text-white/60 text-xs font-medium mb-1">Jabatan *</label>
+                           <select
+                              value={kahootPlayerPosition}
+                              onChange={(e) => setKahootPlayerPosition(e.target.value)}
+                              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-400/50 appearance-none"
+                              style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
+                           >
+                              <option value="" className="text-gray-900">Pilih jabatan...</option>
+                              <option value="Guru" className="text-gray-900">Guru</option>
+                              <option value="Kepala Sekolah" className="text-gray-900">Kepala Sekolah</option>
+                              <option value="Wakil Kepala Sekolah" className="text-gray-900">Wakil Kepala Sekolah</option>
+                              <option value="Koordinator" className="text-gray-900">Koordinator</option>
+                              <option value="Staff TU" className="text-gray-900">Staff TU</option>
+                              <option value="Siswa" className="text-gray-900">Siswa</option>
+                              <option value="Lainnya" className="text-gray-900">Lainnya</option>
+                           </select>
+                        </div>
+
+                        {/* Asal Sekolah */}
+                        <div>
+                           <label className="block text-left text-white/60 text-xs font-medium mb-1">Asal Sekolah *</label>
+                           <input
+                              type="text"
+                              value={kahootPlayerSchool}
+                              onChange={(e) => setKahootPlayerSchool(e.target.value)}
+                              placeholder="Masukkan nama sekolah..."
+                              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
+                           />
+                        </div>
+
                         <button
                            onClick={beginKahootGame}
-                           disabled={!kahootPlayerName.trim()}
-                           className="w-full py-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 font-bold rounded-xl hover:from-yellow-300 hover:to-orange-400 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-lg"
+                           disabled={!kahootPlayerName.trim() || !kahootPlayerPhone.trim() || !kahootPlayerPosition || !kahootPlayerSchool.trim()}
+                           className="w-full py-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 font-bold rounded-xl hover:from-yellow-300 hover:to-orange-400 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-lg mt-2"
                         >
                            <Play className="w-5 h-5" />
-                           Start Quiz
+                           Mulai Quiz
                         </button>
                      </div>
 

@@ -5,18 +5,19 @@ import { Button } from '../Button';
 import { Users, Link as LinkIcon, Lock, Mail, GraduationCap, Briefcase, Trash2, Pencil, MapPin, School, TrendingUp, UserCheck, Activity, ToggleLeft, ToggleRight, Camera, X as XIcon, Upload, ShieldAlert, Smartphone, Globe, Loader2, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { MOCK_USERS, MOCK_SCHOOLS, MOCK_SESSIONS, MOCK_SESSION_REPORTS } from '../../constants';
 import { UserRole, User, ClassType } from '../../types';
-import { useTeachers, useLocations, useParents, useStudentsPaginated, useClasses } from '../../hooks/useProfiles';
-import { supabase } from '../../lib/supabase';
+import { useTeachers, useLocations, useParents, useStudentsPaginated, useClasses, useSchools } from '../../hooks/useProfiles';
+import { supabase, supabaseAdmin } from '../../lib/supabase';
 import { profilesService } from '../../services/profiles.service';
 
 export const AccountManager: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'families' | 'teachers'>('families');
+  const [activeTab, setActiveTab] = useState<'families' | 'teachers' | 'schools'>('families');
   const [view, setView] = useState<'list' | 'form'>('list');
   const [mockUsers, setMockUsers] = useState(MOCK_USERS);
 
   // Supabase hooks for real data
   const { profiles: teachersData, loading: teachersLoading, updateProfile, refetch: refetchTeachers } = useTeachers();
   const { profiles: parentsData, loading: parentsLoading, refetch: refetchParents } = useParents();
+  const { profiles: schoolsData, loading: schoolsLoading, updateProfile: updateSchoolProfile, refetch: refetchSchools } = useSchools();
   const { locations, loading: locationsLoading } = useLocations();
 
   // Pagination and filter state for families (moved up for hook dependency)
@@ -46,6 +47,15 @@ export const AccountManager: React.FC = () => {
   const [editParentId, setEditParentId] = useState<string | null>(null);
   const [editStudentId, setEditStudentId] = useState<string | null>(null);
   const [editTeacherId, setEditTeacherId] = useState<string | null>(null);
+  const [editSchoolId, setEditSchoolId] = useState<string | null>(null);
+
+  // School edit form state
+  const [schoolName, setSchoolName] = useState('');
+  const [schoolEmail, setSchoolEmail] = useState('');
+  const [schoolPassword, setSchoolPassword] = useState(''); // Optional - leave empty to keep existing
+  const [schoolLocationId, setSchoolLocationId] = useState('');
+  const [schoolStatus, setSchoolStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
+  const [schoolSearch, setSchoolSearch] = useState('');
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, id: string, name: string, type: 'student' | 'teacher' }>({
     isOpen: false,
@@ -622,6 +632,63 @@ export const AccountManager: React.FC = () => {
     setView('form');
   };
 
+  const handleEditSchool = (school: any) => {
+    setSubmitError(null);
+    setIsEditing(true);
+    setEditSchoolId(school.id);
+    setSchoolName(school.name || '');
+    setSchoolEmail(school.email || '');
+    setSchoolPassword(''); // Don't show password - leave empty to keep existing
+    setSchoolLocationId(school.assigned_location_id || '');
+    setSchoolStatus(school.status || 'ACTIVE');
+    setView('form');
+  };
+
+  const handleSchoolSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitError(null);
+    setIsSubmitting(true);
+
+    try {
+      if (!editSchoolId) {
+        throw new Error('No school ID to update');
+      }
+
+      // Update profile data
+      await updateSchoolProfile(editSchoolId, {
+        name: schoolName,
+        assigned_location_id: schoolLocationId || null,
+        status: schoolStatus,
+      });
+
+      // Update password only if provided (optional)
+      if (schoolPassword && schoolPassword.trim().length > 0) {
+        const { error: passwordError } = await supabaseAdmin.auth.admin.updateUserById(
+          editSchoolId,
+          { password: schoolPassword }
+        );
+        if (passwordError) {
+          console.error('Password update error:', passwordError);
+          // Don't throw - profile was updated, just password failed
+          setSubmitError('Profil berhasil diupdate, tapi gagal mengubah password: ' + passwordError.message);
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // Success - refresh and go back to list
+      await refetchSchools();
+      setView('list');
+      setEditSchoolId(null);
+      setSchoolPassword('');
+    } catch (err: any) {
+      console.error('Error updating school:', err);
+      setSubmitError(err.message || 'Gagal menyimpan perubahan');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -1000,7 +1067,7 @@ export const AccountManager: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
           <h2 className="text-base font-bold text-gray-900">Account Management</h2>
-          <p className="text-xs text-gray-500">Manage Family Units and Teacher profiles.</p>
+          <p className="text-xs text-gray-500">Manage Family Units, Teacher, and School profiles.</p>
         </div>
 
         <div className="flex bg-white p-0.5 rounded-lg border border-gray-200 shadow-sm">
@@ -1016,10 +1083,16 @@ export const AccountManager: React.FC = () => {
             >
                 Teachers
             </button>
+            <button
+                onClick={() => { setActiveTab('schools'); setView('list'); }}
+                className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'schools' ? 'theme-bg-primary text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+            >
+                Schools
+            </button>
         </div>
       </div>
 
-      {view === 'list' && (
+      {view === 'list' && activeTab !== 'schools' && (
          <div className="flex justify-end">
             <Button onClick={handleOpenCreate} className="text-xs py-1.5 px-3">
                Create {activeTab === 'families' ? 'Family Unit' : 'Teacher'}
@@ -1794,6 +1867,193 @@ export const AccountManager: React.FC = () => {
                 </Card>
             )}
          </>
+      )}
+
+      {/* --- SCHOOLS TAB --- */}
+      {activeTab === 'schools' && (
+        <>
+          {view === 'list' ? (
+            <div className="space-y-3">
+              {/* Search */}
+              <Card className="!p-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Cari nama sekolah atau email..."
+                      className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50 focus:bg-white"
+                      value={schoolSearch}
+                      onChange={e => setSchoolSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {schoolsData.length} akun sekolah
+                  </div>
+                </div>
+              </Card>
+
+              {/* Schools List */}
+              {schoolsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {schoolsData
+                    .filter(school =>
+                      schoolSearch === '' ||
+                      school.name?.toLowerCase().includes(schoolSearch.toLowerCase()) ||
+                      school.email?.toLowerCase().includes(schoolSearch.toLowerCase())
+                    )
+                    .map(school => {
+                      const assignedLocation = locations.find(l => l.id === school.assigned_location_id);
+                      return (
+                        <Card key={school.id} className="!p-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                                <School className="w-5 h-5 text-purple-600" />
+                              </div>
+                              <div>
+                                <p className="font-bold text-gray-900 text-sm">{school.name}</p>
+                                <p className="text-xs text-gray-500">{school.email}</p>
+                                {assignedLocation && (
+                                  <p className="text-xs text-purple-600 flex items-center gap-1 mt-0.5">
+                                    <MapPin className="w-3 h-3" />
+                                    {assignedLocation.name}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                school.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                              }`}>
+                                {school.status}
+                              </span>
+                              <button
+                                onClick={() => handleEditSchool(school)}
+                                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil className="w-4 h-4 text-gray-500" />
+                              </button>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  {schoolsData.length === 0 && (
+                    <Card className="!p-8 text-center">
+                      <School className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500 text-sm">Belum ada akun sekolah</p>
+                      <p className="text-xs text-gray-400 mt-1">Jalankan SQL script untuk membuat akun sekolah</p>
+                    </Card>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Edit School Form */
+            <Card className="!p-4">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <School className="w-4 h-4 text-purple-600" />
+                Edit School Account
+              </h3>
+              <form onSubmit={handleSchoolSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Name */}
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1 block">Nama</label>
+                    <input
+                      type="text"
+                      value={schoolName}
+                      onChange={e => setSchoolName(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
+                      required
+                    />
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1 block">Email</label>
+                    <input
+                      type="email"
+                      value={schoolEmail}
+                      onChange={e => setSchoolEmail(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-gray-50"
+                      disabled
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Email tidak dapat diubah</p>
+                  </div>
+
+                  {/* Password */}
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1 block">
+                      Password Baru <span className="text-gray-300">(Opsional)</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={schoolPassword}
+                      onChange={e => setSchoolPassword(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
+                      placeholder="Kosongkan jika tidak ingin ganti"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Biarkan kosong untuk mempertahankan password lama</p>
+                  </div>
+
+                  {/* Location */}
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1 block">Lokasi/Sekolah</label>
+                    <select
+                      value={schoolLocationId}
+                      onChange={e => setSchoolLocationId(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
+                      required
+                    >
+                      <option value="">Pilih lokasi...</option>
+                      {locations
+                        .filter(l => l.name && !l.name.includes('Online'))
+                        .map(loc => (
+                          <option key={loc.id} value={loc.id}>{loc.name}</option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {/* Status */}
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1 block">Status</label>
+                    <select
+                      value={schoolStatus}
+                      onChange={e => setSchoolStatus(e.target.value as 'ACTIVE' | 'INACTIVE')}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
+                    >
+                      <option value="ACTIVE">Active</option>
+                      <option value="INACTIVE">Inactive</option>
+                    </select>
+                  </div>
+                </div>
+
+                {submitError && (
+                  <div className="p-3 bg-red-50 text-red-700 rounded-lg border border-red-100 text-xs">
+                    {submitError}
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center pt-2">
+                  <Button type="button" variant="outline" onClick={() => { setView('list'); setEditSchoolId(null); }} className="text-xs py-1.5 px-3" disabled={isSubmitting}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="px-6 shadow-md text-xs py-1.5 flex items-center gap-2" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="w-3 h-3 animate-spin" />}
+                    {isSubmitting ? "Menyimpan..." : "Update"}
+                  </Button>
+                </div>
+              </form>
+            </Card>
+          )}
+        </>
       )}
 
       {/* Delete Modal */}

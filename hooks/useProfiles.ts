@@ -118,6 +118,10 @@ export const useParents = () => {
   return useProfiles('PARENT');
 };
 
+export const useSchools = () => {
+  return useProfiles('SCHOOL');
+};
+
 // Hook to fetch a single profile by ID
 export const useProfileById = (id: string | undefined) => {
   const [profile, setProfile] = useState<Profile | null>(null);

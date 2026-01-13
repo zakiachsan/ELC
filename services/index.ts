@@ -9,6 +9,7 @@ export { billingService } from './billing.service';
 export { contentService } from './content.service';
 export { placementService } from './placement.service';
 export { settingsService } from './settings.service';
+export { parentEngagementService } from './parentEngagement.service';
 
 // Keep existing gemini service
 export { gradeEssay } from './geminiService';

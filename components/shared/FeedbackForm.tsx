@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { MessageSquare, Send, CheckCircle, Star } from 'lucide-react';
 import { User } from '../../types';
+import { parentEngagementService } from '../../services/parentEngagement.service';
 
 interface FeedbackFormProps {
   user: User;
@@ -57,6 +58,13 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ user }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState<'submit' | 'history'>('submit');
+
+  // Track page view for parents
+  useEffect(() => {
+    if (user?.id && user.role === 'PARENT') {
+      parentEngagementService.trackPageView(user.id, 'feedback', '/parent/feedback');
+    }
+  }, [user?.id, user?.role]);
 
   const handleSubmit = async () => {
     if (!message.trim() || rating === 0) return;

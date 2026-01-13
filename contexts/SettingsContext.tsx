@@ -9,6 +9,7 @@ export interface SiteSettings {
   videoTitle: string;
   videoDescription: string;
   videoOrientation: 'landscape' | 'portrait';
+  showTeacherOfMonth: boolean;
 }
 
 interface SettingsContextType {
@@ -24,7 +25,8 @@ export const defaultSettings: SiteSettings = {
   videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
   videoTitle: 'Learning Tip of the Week',
   videoDescription: 'Discover how our adaptive logic helps you master English faster than traditional methods.',
-  videoOrientation: 'landscape'
+  videoOrientation: 'landscape',
+  showTeacherOfMonth: true
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -38,6 +40,7 @@ function dbToFlat(db: DbSiteSettings): SiteSettings {
     videoTitle: db.video.title,
     videoDescription: db.video.description,
     videoOrientation: db.video.orientation,
+    showTeacherOfMonth: db.teacherOfMonth?.showOnHomepage ?? true,
   };
 }
 
@@ -76,10 +79,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const updateSettings = async (newSettings: Partial<SiteSettings>) => {
     console.log('[SettingsProvider] Updating settings:', newSettings);
-    
+
     // Update video settings if any video-related fields changed
-    if (newSettings.videoUrl !== undefined || 
-        newSettings.videoTitle !== undefined || 
+    if (newSettings.videoUrl !== undefined ||
+        newSettings.videoTitle !== undefined ||
         newSettings.videoDescription !== undefined ||
         newSettings.videoOrientation !== undefined) {
       await siteSettingsService.updateVideo({
@@ -89,12 +92,19 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         orientation: newSettings.videoOrientation,
       });
     }
-    
+
     // Update theme settings if any theme-related fields changed
     if (newSettings.primaryColor !== undefined || newSettings.accentColor !== undefined) {
       await siteSettingsService.updateTheme({
         primaryColor: newSettings.primaryColor,
         accentColor: newSettings.accentColor,
+      });
+    }
+
+    // Update teacher of month settings if changed
+    if (newSettings.showTeacherOfMonth !== undefined) {
+      await siteSettingsService.updateTeacherOfMonth({
+        showOnHomepage: newSettings.showTeacherOfMonth,
       });
     }
 

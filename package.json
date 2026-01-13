@@ -16,6 +16,7 @@
     "@google/genai": "^1.33.0",
     "@supabase/supabase-js": "^2.89.0",
     "dotenv": "^17.2.3",
+    "jspdf": "^4.0.0",
     "lucide-react": "^0.560.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",

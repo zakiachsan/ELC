@@ -32,6 +32,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       [UserRole.TEACHER]: '/teacher',
       [UserRole.STUDENT]: '/student',
       [UserRole.PARENT]: '/parent',
+      [UserRole.SCHOOL]: '/school',
     };
     return <Navigate to={roleRedirects[userRole] || '/'} replace />;
   }

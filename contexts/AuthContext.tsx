@@ -18,6 +18,7 @@ interface AuthContextType {
   isTeacher: boolean;
   isStudent: boolean;
   isParent: boolean;
+  isSchool: boolean;
   isConfigured: boolean;
 }
 
@@ -317,6 +318,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     isTeacher: user?.role === UserRole.TEACHER,
     isStudent: user?.role === UserRole.STUDENT,
     isParent: user?.role === UserRole.PARENT,
+    isSchool: user?.role === UserRole.SCHOOL,
     isConfigured,
   };
 

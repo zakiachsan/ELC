@@ -1,16 +1,17 @@
 
 import React, { useState } from 'react';
-import { User, SkillCategory, DifficultyLevel, ClassSession } from '../../types';
+import { User, SkillCategory, DifficultyLevel, ClassSession, CompetitionType, COMPETITION_TYPE_LABELS } from '../../types';
 import { Card } from '../Card';
 
 import { LEVEL_COLORS } from '../../constants';
 import { useTodaySessions, useUpcomingSessions, useSessions } from '../../hooks/useSessions';
 import { useModuleProgress, useModules } from '../../hooks/useModules';
 import { useLocations } from '../../hooks/useProfiles';
-import { Calendar, Clock, MapPin, Headphones, BookOpen, PenTool, Mic, AlignLeft, Book, Info, History, MonitorPlay, School, Loader2, Phone, Edit2, Check, X, GraduationCap } from 'lucide-react';
+import { useOlympiads } from '../../hooks/useOlympiads';
+import { Calendar, Clock, MapPin, Headphones, BookOpen, PenTool, Mic, AlignLeft, Book, Info, History, MonitorPlay, School, Loader2, Phone, Edit2, Check, X, GraduationCap, Trophy, ExternalLink } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 // Icon Mapper for Skills (exported for use in other components)
 export const SKILL_ICONS: Record<SkillCategory, React.ElementType> = {
@@ -33,6 +34,10 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
   const { progress: progressData, loading: progressLoading } = useModuleProgress(student.id);
   const { modules: modulesData, loading: modulesLoading } = useModules();
   const { locations, loading: locationsLoading } = useLocations();
+  const { olympiads: competitionsData } = useOlympiads();
+
+  // Get active/open competitions
+  const activeCompetitions = competitionsData.filter(c => c.is_active || c.status === 'OPEN');
 
   // WhatsApp editing state
   const [isEditingWhatsApp, setIsEditingWhatsApp] = useState(false);
@@ -242,6 +247,36 @@ export const StudentView: React.FC<{ student: User }> = ({ student }) => {
           </div>
         </div>
       </Card>
+
+      {/* ELC's Competition Banner */}
+      {activeCompetitions.length > 0 && (
+        <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 rounded-xl p-3 sm:p-4 text-white">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <Trophy className="w-4 h-4" />
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-white/80">ELC's Competition</span>
+              </div>
+              <h3 className="text-sm font-bold mb-1">{activeCompetitions[0].title}</h3>
+              <div className="flex flex-wrap items-center gap-2 text-[9px] sm:text-[10px] text-white/80">
+                <span className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-full">
+                  {COMPETITION_TYPE_LABELS[(activeCompetitions[0] as any).competition_type as CompetitionType] || 'Olympiad'}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3 h-3" />
+                  Deadline: {new Date(activeCompetitions[0].end_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                </span>
+              </div>
+            </div>
+            <Link
+              to="/competition"
+              className="flex items-center gap-2 bg-white text-orange-700 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-bold hover:bg-orange-50 transition-colors shadow-md"
+            >
+              <ExternalLink className="w-3.5 h-3.5" /> Daftar
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* SECTION 1: TODAY'S CLASSES */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

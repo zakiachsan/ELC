@@ -3,7 +3,8 @@ export enum UserRole {
   ADMIN = 'ADMIN',
   TEACHER = 'TEACHER',
   STUDENT = 'STUDENT',
-  PARENT = 'PARENT'
+  PARENT = 'PARENT',
+  SCHOOL = 'SCHOOL'
 }
 
 export enum ClassType {
@@ -85,6 +86,27 @@ export enum OlympiadStatus {
   CLOSED = 'CLOSED'
 }
 
+export enum CompetitionType {
+  OLYMPIAD = 'OLYMPIAD',
+  SPELLING_BEE = 'SPELLING_BEE',
+  SPEED_COMPETITION = 'SPEED_COMPETITION',
+  STORY_TELLING = 'STORY_TELLING'
+}
+
+export const COMPETITION_TYPE_LABELS: Record<CompetitionType, string> = {
+  [CompetitionType.OLYMPIAD]: 'Olympiad',
+  [CompetitionType.SPELLING_BEE]: 'Spelling Bee',
+  [CompetitionType.SPEED_COMPETITION]: 'Speed Competition',
+  [CompetitionType.STORY_TELLING]: 'Story Telling'
+};
+
+export const COMPETITION_TYPE_COLORS: Record<CompetitionType, { bg: string; text: string; border: string }> = {
+  [CompetitionType.OLYMPIAD]: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' },
+  [CompetitionType.SPELLING_BEE]: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
+  [CompetitionType.SPEED_COMPETITION]: { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
+  [CompetitionType.STORY_TELLING]: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' }
+};
+
 export interface OlympiadRegistration {
   id: string;
   olympiadId: string;
@@ -153,6 +175,7 @@ export interface Olympiad {
   title: string;
   description: string;
   status: OlympiadStatus;
+  competitionType: CompetitionType;
   startDate: string;
   endDate: string;
   eventDate?: string;
@@ -256,6 +279,44 @@ export interface Location {
   capacity: number;
   level?: 'KINDERGARTEN' | 'PRIMARY' | 'JUNIOR' | 'SENIOR' | 'GENERAL'; // School level type
 }
+
+
+export interface SchoolTeacherReview {
+  id: string;
+  teacher_id: string;
+  school_id: string;
+  reviewer_id: string;
+  review_month: string;
+  academic_expertise_rating: number;
+  communication_rating: number;
+  empathy_rating: number;
+  collaboration_rating: number;
+  dedication_rating: number;
+  flexibility_rating: number;
+  classroom_management_rating: number;
+  creativity_rating: number;
+  integrity_rating: number;
+  inclusive_education_rating: number;
+  comments: string | null;
+  created_at: string;
+  updated_at?: string;
+  teacher?: User;
+  school?: Location;
+  reviewer?: User;
+}
+
+export const SCHOOL_REVIEW_CRITERIA = {
+  academic_expertise_rating: 'Keahlian akademis yang unggul',
+  communication_rating: 'Komunikasi yang efektif',
+  empathy_rating: 'Empati',
+  collaboration_rating: 'Kolaborasi',
+  dedication_rating: 'Semangat dan dedikasi',
+  flexibility_rating: 'Fleksibilitas',
+  classroom_management_rating: 'Manajemen kelas yang baik',
+  creativity_rating: 'Kreativitas dan inovasi',
+  integrity_rating: 'Integritas dan etika profesional',
+  inclusive_education_rating: 'Pemahaman terhadap prinsip pendidikan inklusif',
+} as const;
 
 export interface CoursePreset {
   id: string;

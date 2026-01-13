@@ -59,7 +59,7 @@ export interface Database {
           email: string
           phone: string | null
           address: string | null
-          role: 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT'
+          role: 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT' | 'SCHOOL'
           status: 'ACTIVE' | 'INACTIVE'
           photo_url: string | null
           branch: string | null
@@ -86,7 +86,7 @@ export interface Database {
           email: string
           phone?: string | null
           address?: string | null
-          role: 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT'
+          role: 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT' | 'SCHOOL'
           status?: 'ACTIVE' | 'INACTIVE'
           photo_url?: string | null
           branch?: string | null
@@ -1015,6 +1015,7 @@ export interface Database {
           video_title: string
           video_description: string
           video_orientation: 'landscape' | 'portrait'
+          show_teacher_of_month: boolean
           updated_at: string
           updated_by: string | null
         }
@@ -1026,6 +1027,7 @@ export interface Database {
           video_title?: string
           video_description?: string
           video_orientation?: 'landscape' | 'portrait'
+          show_teacher_of_month?: boolean
           updated_at?: string
           updated_by?: string | null
         }
@@ -1037,6 +1039,7 @@ export interface Database {
           video_title?: string
           video_description?: string
           video_orientation?: 'landscape' | 'portrait'
+          show_teacher_of_month?: boolean
           updated_at?: string
           updated_by?: string | null
         }
@@ -1064,6 +1067,57 @@ export interface Database {
           user_role?: string
           message?: string
           rating?: number | null
+        }
+      }
+      parent_sessions: {
+        Row: {
+          id: string
+          parent_id: string
+          started_at: string
+          session_month: string
+          user_agent: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          parent_id: string
+          started_at?: string
+          session_month: string
+          user_agent?: string | null
+          created_at?: string
+        }
+        Update: {
+          started_at?: string
+          session_month?: string
+          user_agent?: string | null
+        }
+      }
+      parent_page_views: {
+        Row: {
+          id: string
+          parent_id: string
+          session_id: string
+          page_name: string
+          page_path: string | null
+          viewed_at: string
+          view_month: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          parent_id: string
+          session_id: string
+          page_name: string
+          page_path?: string | null
+          viewed_at?: string
+          view_month: string
+          created_at?: string
+        }
+        Update: {
+          page_name?: string
+          page_path?: string | null
+          viewed_at?: string
+          view_month?: string
         }
       }
       quiz_questions: {
@@ -1146,6 +1200,9 @@ export interface Database {
           quiz_id: string
           name: string
           email: string | null
+          phone: string | null
+          position: string | null
+          school: string | null
           score: number
           correct_answers: number
           total_questions: number
@@ -1157,6 +1214,9 @@ export interface Database {
           quiz_id: string
           name: string
           email?: string | null
+          phone?: string | null
+          position?: string | null
+          school?: string | null
           score: number
           correct_answers: number
           total_questions: number
@@ -1168,6 +1228,9 @@ export interface Database {
           quiz_id?: string
           name?: string
           email?: string | null
+          phone?: string | null
+          position?: string | null
+          school?: string | null
           score?: number
           correct_answers?: number
           total_questions?: number
@@ -1515,6 +1578,67 @@ export interface Database {
           updated_at?: string
         }
       }
+      school_teacher_reviews: {
+        Row: {
+          id: string
+          teacher_id: string
+          school_id: string
+          reviewer_id: string
+          review_month: string
+          academic_expertise_rating: number
+          communication_rating: number
+          empathy_rating: number
+          collaboration_rating: number
+          dedication_rating: number
+          flexibility_rating: number
+          classroom_management_rating: number
+          creativity_rating: number
+          integrity_rating: number
+          inclusive_education_rating: number
+          comments: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          teacher_id: string
+          school_id: string
+          reviewer_id: string
+          review_month: string
+          academic_expertise_rating: number
+          communication_rating: number
+          empathy_rating: number
+          collaboration_rating: number
+          dedication_rating: number
+          flexibility_rating: number
+          classroom_management_rating: number
+          creativity_rating: number
+          integrity_rating: number
+          inclusive_education_rating: number
+          comments?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          teacher_id?: string
+          school_id?: string
+          reviewer_id?: string
+          review_month?: string
+          academic_expertise_rating?: number
+          communication_rating?: number
+          empathy_rating?: number
+          collaboration_rating?: number
+          dedication_rating?: number
+          flexibility_rating?: number
+          classroom_management_rating?: number
+          creativity_rating?: number
+          integrity_rating?: number
+          inclusive_education_rating?: number
+          comments?: string | null
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -1559,3 +1683,4 @@ export type TestSchedule = Database['public']['Tables']['test_schedules']['Row']
 export type TestQuestion = Database['public']['Tables']['test_questions']['Row']
 export type TestSubmission = Database['public']['Tables']['test_submissions']['Row']
 export type TestAnswer = Database['public']['Tables']['test_answers']['Row']
+export type SchoolTeacherReview = Database['public']['Tables']['school_teacher_reviews']['Row']

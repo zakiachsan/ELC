@@ -256,15 +256,23 @@ export const olympiadService = {
 
   // ==================== KAHOOT QUIZZES ====================
 
-  // Get all kahoot quizzes
+  // Get all kahoot quizzes with actual participant count
   async getKahootQuizzes() {
     const { data, error } = await supabase
       .from('kahoot_quizzes')
-      .select('*')
+      .select(`
+        *,
+        kahoot_participants(count)
+      `)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data;
+    
+    // Map the count from the nested object to play_count for consistency
+    return (data as any[])?.map(quiz => ({
+      ...quiz,
+      play_count: (quiz.kahoot_participants as any)?.[0]?.count || 0
+    })) || [];
   },
 
   // Get active kahoot quiz

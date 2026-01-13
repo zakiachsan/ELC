@@ -190,6 +190,7 @@ CREATE TABLE IF NOT EXISTS olympiads (
   title TEXT NOT NULL,
   description TEXT,
   status TEXT DEFAULT 'UPCOMING' CHECK (status IN ('UPCOMING', 'OPEN', 'CLOSED')),
+  competition_type TEXT DEFAULT 'OLYMPIAD' CHECK (competition_type IN ('OLYMPIAD', 'SPELLING_BEE', 'SPEED_COMPETITION', 'STORY_TELLING')),
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,
   event_date DATE,
@@ -208,6 +209,7 @@ CREATE TABLE IF NOT EXISTS olympiads (
 
 CREATE INDEX IF NOT EXISTS idx_olympiads_status ON olympiads(status);
 CREATE INDEX IF NOT EXISTS idx_olympiads_active ON olympiads(is_active);
+CREATE INDEX IF NOT EXISTS idx_olympiads_competition_type ON olympiads(competition_type);
 
 -- =====================================================
 -- TABLE 10: olympiad_registrations

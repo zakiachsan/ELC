@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTeachers } from '../../hooks/useProfiles';
 import { useTeacherReviews } from '../../hooks/useTeacherReviews';
+import { parentEngagementService } from '../../services/parentEngagement.service';
 import {
   TeacherReviewInsert,
   RATING_LABELS,
@@ -77,6 +78,13 @@ export const ParentTeacherReview: React.FC = () => {
   const { reviews: myReviews, loading: reviewsLoading, createReview } = useTeacherReviews({
     reviewerId: user?.id,
   });
+
+  // Track page view
+  useEffect(() => {
+    if (user?.id && user.role === 'PARENT') {
+      parentEngagementService.trackPageView(user.id, 'teacher-review', '/parent/teacher-review');
+    }
+  }, [user?.id, user?.role]);
 
   const [selectedTeacher, setSelectedTeacher] = useState<string | null>(null);
   const [showReviewForm, setShowReviewForm] = useState(false);

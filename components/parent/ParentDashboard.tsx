@@ -3,17 +3,21 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { User, ClassSession, SkillCategory, DifficultyLevel, ClassType } from '../../types';
+import { User, ClassSession, SkillCategory, DifficultyLevel, ClassType, OlympiadStatus, CompetitionType, COMPETITION_TYPE_LABELS, COMPETITION_TYPE_COLORS } from '../../types';
 import { LEVEL_COLORS } from '../../constants';
-import { TrendingUp, Calendar, CheckCircle, Clock, MapPin, AlertTriangle, BookOpen, Brain, List, Activity, History, Award, FileText, PenLine, Mic, ClipboardCheck, Play, X, Loader2, Phone, Edit2, Check, ChevronRight, Download, User as UserIcon, Lock, Globe, UserCheck } from 'lucide-react';
+import { TrendingUp, Calendar, CheckCircle, Clock, MapPin, AlertTriangle, BookOpen, Brain, List, Activity, History, Award, FileText, PenLine, Mic, ClipboardCheck, Play, X, Loader2, Phone, Edit2, Check, ChevronRight, Download, User as UserIcon, Lock, Globe, UserCheck, Trophy, ExternalLink } from 'lucide-react';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useSessions } from '../../hooks/useSessions';
 import { useReports, useStudentStats } from '../../hooks/useReports';
 import { useHomeworks } from '../../hooks/useHomeworks';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTests } from '../../hooks/useTests';
+import { useOlympiads } from '../../hooks/useOlympiads';
 import { supabase } from '../../lib/supabase';
 import { TestSchedule, TestType } from '../../services/tests.service';
+import { Link, useNavigate } from 'react-router-dom';
+import { EngagementReminder } from './EngagementReminder';
+import parentEngagementService from '../../services/parentEngagement.service';
 
 // --- SHARED DATA HOOK (using real Supabase data) ---
 const useParentData = (student: User) => {
@@ -124,7 +128,19 @@ export const ParentOverview: React.FC<{ student: User }> = ({ student }) => {
   const { loading, attendanceRate, cefrChartData, pendingHomeworks, latestCefr, avgWritten, avgOral, upcomingClasses } = useParentData(student);
   const { settings } = useSettings();
   const { user, updateProfile } = useAuth();
+  const { olympiads: competitionsData } = useOlympiads();
+  const navigate = useNavigate();
+
+  // Get active/open competitions
+  const activeCompetitions = competitionsData.filter(c => c.is_active || c.status === 'OPEN');
   const [showVideoModal, setShowVideoModal] = useState(false);
+
+  // Track page view
+  useEffect(() => {
+    if (user?.id) {
+      parentEngagementService.trackPageView(user.id, 'dashboard', '/parent/dashboard');
+    }
+  }, [user?.id]);
 
   // WhatsApp editing state (for parent's own phone)
   const [isEditingWhatsApp, setIsEditingWhatsApp] = useState(false);
@@ -186,6 +202,36 @@ export const ParentOverview: React.FC<{ student: User }> = ({ student }) => {
         </div>
       </div>
 
+      {/* ELC's Competition Banner */}
+      {activeCompetitions.length > 0 && (
+        <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 rounded-xl p-4 text-white">
+          <div className="flex flex-col md:flex-row items-center gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <Trophy className="w-4 h-4" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/80">ELC's Competition</span>
+              </div>
+              <h3 className="text-sm font-bold mb-1">{activeCompetitions[0].title}</h3>
+              <div className="flex flex-wrap items-center gap-2 text-[10px] text-white/80">
+                <span className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-full">
+                  {COMPETITION_TYPE_LABELS[(activeCompetitions[0] as any).competition_type as CompetitionType] || 'Olympiad'}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3 h-3" />
+                  Deadline: {new Date(activeCompetitions[0].end_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+              </div>
+            </div>
+            <Link
+              to="/competition"
+              className="flex items-center gap-2 bg-white text-orange-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-orange-50 transition-colors shadow-md"
+            >
+              <ExternalLink className="w-4 h-4" /> Daftar Sekarang
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Video Modal */}
       {showVideoModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
@@ -235,6 +281,15 @@ export const ParentOverview: React.FC<{ student: User }> = ({ student }) => {
           </div>
         </div>
       </div>
+
+      {/* ENGAGEMENT REMINDER */}
+      {user?.id && (
+        <EngagementReminder
+          parentId={user.id}
+          onNavigateToReview={() => navigate('/parent/review')}
+          onNavigateToFeedback={() => navigate('/parent/feedback')}
+        />
+      )}
 
       {/* WHATSAPP NUMBER SECTION */}
       <Card className="!p-3">
@@ -418,6 +473,14 @@ export const ParentOverview: React.FC<{ student: User }> = ({ student }) => {
 export const ParentActivityLog: React.FC<{ student: User }> = ({ student }) => {
   const { loading, sessionGrades, completedHomeworks } = useParentData(student);
   const [activeTab, setActiveTab] = useState<'grades' | 'homework'>('grades');
+  const { user } = useAuth();
+
+  // Track page view
+  useEffect(() => {
+    if (user?.id) {
+      parentEngagementService.trackPageView(user.id, 'activity', '/parent/activity');
+    }
+  }, [user?.id]);
 
   if (loading) {
     return (
@@ -598,6 +661,14 @@ interface ScheduleItem {
 export const ParentSchedule: React.FC<{ student: User }> = ({ student }) => {
   const { loading: parentDataLoading, upcomingClasses, pastClasses } = useParentData(student);
   const [view, setView] = useState<'upcoming' | 'history'>('upcoming');
+  const { user } = useAuth();
+
+  // Track page view
+  useEffect(() => {
+    if (user?.id) {
+      parentEngagementService.trackPageView(user.id, 'schedule', '/parent/schedule');
+    }
+  }, [user?.id]);
   const [selectedSession, setSelectedSession] = useState<ClassSession | null>(null);
   const [selectedTest, setSelectedTest] = useState<TestSchedule | null>(null);
   const [studentProfile, setStudentProfile] = useState<{ school: string; class_name: string; class_type: ClassType | null } | null>(null);

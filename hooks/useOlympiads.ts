@@ -139,12 +139,8 @@ export const useKahootQuizzes = () => {
 
   const updateQuiz = async (id: string, updates: KahootQuizUpdate) => {
     const updated = await olympiadService.updateKahootQuiz(id, updates);
-    if (updated) {
-      setQuizzes(prev => prev.map(q => q.id === id ? updated : q));
-    } else {
-      // If update didn't return data, refetch all quizzes
-      await fetchQuizzes();
-    }
+    // Always refetch to get accurate participant counts
+    await fetchQuizzes();
     return updated;
   };
 

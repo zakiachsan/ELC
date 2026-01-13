@@ -12,9 +12,14 @@ export interface ThemeSettings {
   accentColor: string;
 }
 
+export interface TeacherOfMonthSettings {
+  showOnHomepage: boolean;
+}
+
 export interface SiteSettings {
   video: VideoSettings;
   theme: ThemeSettings;
+  teacherOfMonth: TeacherOfMonthSettings;
 }
 
 const defaultSettings: SiteSettings = {
@@ -27,6 +32,9 @@ const defaultSettings: SiteSettings = {
   theme: {
     primaryColor: '#2563eb',
     accentColor: '#facc15'
+  },
+  teacherOfMonth: {
+    showOnHomepage: true
   }
 };
 
@@ -49,6 +57,8 @@ export const siteSettingsService = {
           settings.video = { ...defaultSettings.video, ...row.setting_value };
         } else if (row.setting_key === 'theme') {
           settings.theme = { ...defaultSettings.theme, ...row.setting_value };
+        } else if (row.setting_key === 'teacher_of_month') {
+          settings.teacherOfMonth = { ...defaultSettings.teacherOfMonth, ...row.setting_value };
         }
       });
 
@@ -149,6 +159,53 @@ export const siteSettingsService = {
       return true;
     } catch (err) {
       console.error('Error in updateTheme:', err);
+      return false;
+    }
+  },
+
+  async getTeacherOfMonth(): Promise<TeacherOfMonthSettings> {
+    try {
+      const { data, error } = await supabase
+        .from('site_settings')
+        .select('setting_value')
+        .eq('setting_key', 'teacher_of_month')
+        .single();
+
+      if (error || !data) {
+        return defaultSettings.teacherOfMonth;
+      }
+
+      return { ...defaultSettings.teacherOfMonth, ...data.setting_value };
+    } catch (err) {
+      console.error('Error getting teacher of month settings:', err);
+      return defaultSettings.teacherOfMonth;
+    }
+  },
+
+  async updateTeacherOfMonth(settings: Partial<TeacherOfMonthSettings>, userId?: string): Promise<boolean> {
+    try {
+      const current = await this.getTeacherOfMonth();
+      const updated = { ...current, ...settings };
+
+      const { error } = await supabase
+        .from('site_settings')
+        .upsert({
+          setting_key: 'teacher_of_month',
+          setting_value: updated,
+          updated_at: new Date().toISOString(),
+          updated_by: userId || null
+        }, {
+          onConflict: 'setting_key'
+        });
+
+      if (error) {
+        console.error('Error updating teacher of month settings:', error);
+        return false;
+      }
+
+      return true;
+    } catch (err) {
+      console.error('Error in updateTeacherOfMonth:', err);
       return false;
     }
   }
