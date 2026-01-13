@@ -67,8 +67,29 @@ const getWeekDateRange = (year: string, semester: number, week: number): { start
 type ViewLevel = 'teachers' | 'semesters' | 'categories' | 'weeks' | 'details';
 type CategoryType = 'materi' | 'lesson-plan' | 'task';
 
+// Logo URLs from Supabase Storage
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://prmjdngeuczatlspinql.supabase.co';
+const ELC_LOGO_URL = `${SUPABASE_URL}/storage/v1/object/public/materials/Logo/elc_logo.jpeg`;
+const CAMBRIDGE_LOGO_URL = `${SUPABASE_URL}/storage/v1/object/public/materials/Logo/cambridge_logo.jpeg`;
+
+// Helper to load image as base64 with good quality
+const loadImageAsBase64 = async (url: string): Promise<string> => {
+  try {
+    const response = await fetch(url + '?t=' + Date.now()); // Cache bust
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return '';
+  }
+};
+
 // PDF Generation for Lesson Plan
-const generateLessonPlanPDF = (session: ClassSession, teacherName: string) => {
+const generateLessonPlanPDF = async (session: ClassSession, teacherName: string) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 15;
@@ -79,12 +100,46 @@ const generateLessonPlanPDF = (session: ClassSession, teacherName: string) => {
   doc.setLineWidth(0.3);
   doc.setDrawColor(180, 180, 180);
 
-  // Header - CEFR Title
-  doc.setFontSize(11);
+  // Header with logos and title
+  const headerHeight = 25;
+  const logoWidth = 30;
+
+  // Load logos
+  const [elcLogo, cambridgeLogo] = await Promise.all([
+    loadImageAsBase64(ELC_LOGO_URL),
+    loadImageAsBase64(CAMBRIDGE_LOGO_URL)
+  ]);
+
+  // ELC Logo (left)
+  if (elcLogo) {
+    doc.addImage(elcLogo, 'JPEG', margin, y, logoWidth, headerHeight);
+  }
+
+  // Cambridge Logo (right)
+  if (cambridgeLogo) {
+    doc.addImage(cambridgeLogo, 'JPEG', pageWidth - margin - logoWidth, y, logoWidth, headerHeight);
+  }
+
+  // Center title - LESSON PLAN
+  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(50, 50, 50);
+  doc.text('LESSON PLAN', pageWidth / 2, y + 12, { align: 'center' });
+
+  // CEFR subtitle
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(80, 80, 80);
+  doc.text('CEFR', pageWidth / 2, y + 20, { align: 'center' });
+
+  y += headerHeight + 5;
+
+  // CEFR full description
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(128, 128, 128);
   doc.text('(Common European Framework of Reference for languages)', pageWidth / 2, y, { align: 'center' });
-  y += 12;
+  y += 10;
 
   // Reset text color
   doc.setTextColor(0, 0, 0);

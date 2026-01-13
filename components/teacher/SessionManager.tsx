@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { jsPDF } from 'jspdf';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { LEVEL_COLORS } from '../../constants';
@@ -28,6 +29,234 @@ const getTimezoneOffset = (): string => {
   const hours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
   const minutes = String(Math.abs(offset) % 60).padStart(2, '0');
   return `${sign}${hours}:${minutes}`;
+};
+
+// Logo URLs from Supabase Storage
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://prmjdngeuczatlspinql.supabase.co';
+const ELC_LOGO_URL = `${SUPABASE_URL}/storage/v1/object/public/materials/Logo/elc_logo.jpeg`;
+const CAMBRIDGE_LOGO_URL = `${SUPABASE_URL}/storage/v1/object/public/materials/Logo/cambridge_logo.jpeg`;
+
+// Helper to load image as base64 with good quality
+const loadImageAsBase64 = async (url: string): Promise<string> => {
+  try {
+    const response = await fetch(url + '?t=' + Date.now()); // Cache bust
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return '';
+  }
+};
+
+// PDF Generation for Lesson Plan
+const generateLessonPlanPDF = async (session: ClassSession, teacherName: string) => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 15;
+  const contentWidth = pageWidth - margin * 2;
+  let y = 15;
+
+  // Set default line width for boxes
+  doc.setLineWidth(0.3);
+  doc.setDrawColor(180, 180, 180);
+
+  // Header with logos and title
+  const headerHeight = 25;
+  const logoWidth = 30;
+
+  // Load logos
+  const [elcLogo, cambridgeLogo] = await Promise.all([
+    loadImageAsBase64(ELC_LOGO_URL),
+    loadImageAsBase64(CAMBRIDGE_LOGO_URL)
+  ]);
+
+  // ELC Logo (left)
+  if (elcLogo) {
+    doc.addImage(elcLogo, 'JPEG', margin, y, logoWidth, headerHeight);
+  }
+
+  // Cambridge Logo (right)
+  if (cambridgeLogo) {
+    doc.addImage(cambridgeLogo, 'JPEG', pageWidth - margin - logoWidth, y, logoWidth, headerHeight);
+  }
+
+  // Center title - LESSON PLAN
+  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(50, 50, 50);
+  doc.text('LESSON PLAN', pageWidth / 2, y + 12, { align: 'center' });
+
+  // CEFR subtitle
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(80, 80, 80);
+  doc.text('CEFR', pageWidth / 2, y + 20, { align: 'center' });
+
+  y += headerHeight + 5;
+
+  // CEFR full description
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(128, 128, 128);
+  doc.text('(Common European Framework of Reference for languages)', pageWidth / 2, y, { align: 'center' });
+  y += 10;
+
+  // Reset text color
+  doc.setTextColor(0, 0, 0);
+
+  // Row 1: Grade, Date, CEFR Level (3 columns)
+  const col3Width = contentWidth / 3;
+  const row1Height = 22;
+
+  // Grade box
+  doc.rect(margin, y, col3Width - 2, row1Height);
+  doc.setFontSize(9);
+  doc.setTextColor(128, 128, 128);
+  doc.text('Grade :', margin + 3, y + 6);
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10);
+  const gradeText = session.location || '';
+  const gradeLines = doc.splitTextToSize(gradeText, col3Width - 8);
+  doc.text(gradeLines, margin + 3, y + 13);
+
+  // Date box
+  doc.rect(margin + col3Width, y, col3Width - 2, row1Height);
+  doc.setFontSize(9);
+  doc.setTextColor(128, 128, 128);
+  doc.text('Date:', margin + col3Width + 3, y + 6);
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10);
+  const dateStr = new Date(session.dateTime).toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+  doc.text(dateStr, margin + col3Width + 3, y + 13);
+
+  // CEFR Level box
+  doc.rect(margin + col3Width * 2 + 2, y, col3Width - 2, row1Height);
+  doc.setFontSize(9);
+  doc.setTextColor(128, 128, 128);
+  doc.text('CEFR Level :', margin + col3Width * 2 + 5, y + 6);
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10);
+  doc.text(session.cefrLevel || '', margin + col3Width * 2 + 5, y + 13);
+
+  y += row1Height + 5;
+
+  // Row 2: Lesson topic, Materials needed (2 columns)
+  const col2LeftWidth = contentWidth * 0.55;
+  const col2RightWidth = contentWidth * 0.45 - 2;
+  const row2Height = 35;
+
+  // Lesson topic box
+  doc.rect(margin, y, col2LeftWidth, row2Height);
+  doc.setFontSize(9);
+  doc.setTextColor(128, 128, 128);
+  doc.text('Lesson topic:', margin + 3, y + 6);
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10);
+  const topicLines = doc.splitTextToSize(session.topic || '', col2LeftWidth - 8);
+  doc.text(topicLines, margin + 3, y + 13);
+
+  // Materials needed box
+  doc.rect(margin + col2LeftWidth + 2, y, col2RightWidth, row2Height);
+  doc.setFontSize(9);
+  doc.setTextColor(128, 128, 128);
+  doc.text('Materials needed:', margin + col2LeftWidth + 5, y + 6);
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10);
+  const materialsLines = doc.splitTextToSize(session.materialsNeeded || '', col2RightWidth - 8);
+  doc.text(materialsLines, margin + col2LeftWidth + 5, y + 13);
+
+  y += row2Height + 5;
+
+  // Row 3: Learning objective/s (full width)
+  const row3Height = 35;
+  doc.rect(margin, y, contentWidth, row3Height);
+  doc.setFontSize(9);
+  doc.setTextColor(128, 128, 128);
+  doc.text('Learning objective/s:', margin + 3, y + 6);
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10);
+  const objectivesLines = doc.splitTextToSize(session.learningObjectives || '', contentWidth - 8);
+  doc.text(objectivesLines.slice(0, 4), margin + 3, y + 13);
+
+  y += row3Height + 5;
+
+  // Row 4: Vocabulary table
+  const vocabHeaderHeight = 10;
+  const vocabColHeaderHeight = 10;
+  const vocabContentHeight = 30;
+  const vocabTotalHeight = vocabHeaderHeight + vocabColHeaderHeight + vocabContentHeight;
+  const vocabColWidth = contentWidth / 3;
+
+  // Outer vocabulary box
+  doc.rect(margin, y, contentWidth, vocabTotalHeight);
+
+  // Vocabulary header
+  doc.setFontSize(10);
+  doc.setTextColor(128, 128, 128);
+  doc.text('Vocabulary:', margin + contentWidth / 2, y + 7, { align: 'center' });
+
+  // Column headers row
+  const colHeaderY = y + vocabHeaderHeight;
+  doc.line(margin, colHeaderY, margin + contentWidth, colHeaderY);
+
+  // Column header dividers
+  doc.line(margin + vocabColWidth, colHeaderY, margin + vocabColWidth, y + vocabTotalHeight);
+  doc.line(margin + vocabColWidth * 2, colHeaderY, margin + vocabColWidth * 2, y + vocabTotalHeight);
+
+  // Column header text
+  doc.setFontSize(9);
+  doc.setTextColor(128, 128, 128);
+  doc.text('Verb', margin + vocabColWidth / 2, colHeaderY + 7, { align: 'center' });
+  doc.text('Noun', margin + vocabColWidth + vocabColWidth / 2, colHeaderY + 7, { align: 'center' });
+  doc.text('Adjective', margin + vocabColWidth * 2 + vocabColWidth / 2, colHeaderY + 7, { align: 'center' });
+
+  // Content row line
+  const contentRowY = colHeaderY + vocabColHeaderHeight;
+  doc.line(margin, contentRowY, margin + contentWidth, contentRowY);
+
+  // Vocabulary content
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(9);
+  const verbLines = doc.splitTextToSize(session.vocabularyVerb || '', vocabColWidth - 6);
+  const nounLines = doc.splitTextToSize(session.vocabularyNoun || '', vocabColWidth - 6);
+  const adjLines = doc.splitTextToSize(session.vocabularyAdjective || '', vocabColWidth - 6);
+
+  doc.text(verbLines.slice(0, 4), margin + 3, contentRowY + 6);
+  doc.text(nounLines.slice(0, 4), margin + vocabColWidth + 3, contentRowY + 6);
+  doc.text(adjLines.slice(0, 4), margin + vocabColWidth * 2 + 3, contentRowY + 6);
+
+  y += vocabTotalHeight + 5;
+
+  // Row 5: Lesson activity (full width, larger box)
+  const row5Height = 50;
+  doc.rect(margin, y, contentWidth, row5Height);
+  doc.setFontSize(9);
+  doc.setTextColor(128, 128, 128);
+  doc.text('Lesson activity:', margin + 3, y + 6);
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10);
+  const activityLines = doc.splitTextToSize(session.description || '', contentWidth - 8);
+  doc.text(activityLines.slice(0, 7), margin + 3, y + 13);
+
+  // Footer with teacher name
+  y = doc.internal.pageSize.getHeight() - 20;
+  doc.setFontSize(9);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Teacher: ${teacherName}`, margin, y);
+  doc.setFontSize(8);
+  doc.text(`Generated on ${new Date().toLocaleDateString('en-US')}`, pageWidth - margin, y, { align: 'right' });
+
+  // Save PDF
+  const fileName = `Lesson_Plan_${session.topic.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date(session.dateTime).toISOString().split('T')[0]}.pdf`;
+  doc.save(fileName);
 };
 
 export const SessionManager: React.FC = () => {
@@ -1691,6 +1920,14 @@ export const SessionManager: React.FC = () => {
            <div className="flex items-center gap-2">
              <Button
                variant="outline"
+               onClick={() => generateLessonPlanPDF(selectedSession, currentTeacher?.name || 'Teacher')}
+               className="text-xs py-1.5 px-3 text-orange-600 border-orange-200 hover:bg-orange-50"
+             >
+               <Download className="w-3.5 h-3.5 mr-1" />
+               Lesson Plan
+             </Button>
+             <Button
+               variant="outline"
                onClick={() => {
                  // Pre-fill the edit form with selected session data
                  const sessionDate = new Date(selectedSession.dateTime);
@@ -1699,7 +1936,7 @@ export const SessionManager: React.FC = () => {
                  // Calculate end time (default 45 min after start)
                  const endDate = new Date(sessionDate.getTime() + 45 * 60 * 1000);
                  const endTime = endDate.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                 
+
                  setEditSessionForm({
                    date: dateStr,
                    startTime: startTime,
