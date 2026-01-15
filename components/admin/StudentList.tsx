@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../Card';
-import { useStudents, useStudentsPaginated, useLocations } from '../../hooks/useProfiles';
+import { useStudents, useStudentsPaginated, useLocations, useClasses } from '../../hooks/useProfiles';
 import { useSessions } from '../../hooks/useSessions';
 import { useReports } from '../../hooks/useReports';
 import type { Database } from '../../lib/database.types';
@@ -89,10 +89,7 @@ export const StudentList: React.FC = () => {
     setCurrentPage(1);
   }, [classFilter]);
 
-  // Data Hooks - Statistics tab uses all students
-  const { profiles: allStudents, loading: allStudentsLoading } = useStudents();
-  const { sessions, loading: sessionsLoading } = useSessions();
-  const { reports, loading: reportsLoading } = useReports();
+  // Core data - locations for filter dropdown (lightweight, always loaded)
   const { locations, loading: locationsLoading } = useLocations();
 
   // Find location ID from school filter
@@ -102,16 +99,23 @@ export const StudentList: React.FC = () => {
     return location?.id;
   }, [schoolFilter, locations]);
 
-  // Data Hook - Directory tab uses paginated students
-  // Note: className filter is done client-side because class data comes from multiple sources
+  // Classes for selected location (lightweight query)
+  const { classes: locationClasses, loading: classesLoading } = useClasses(selectedLocationId);
+
+  // Data Hooks - ONLY load all students when Statistics tab is active (lazy load)
+  const { profiles: allStudents, loading: allStudentsLoading } = useStudents(activeSubTab === 'statistics');
+  const { sessions, loading: sessionsLoading } = useSessions();
+  const { reports, loading: reportsLoading } = useReports();
+
+  // Data Hook - Directory tab uses paginated students (efficient!)
   const {
     students: paginatedStudents,
     totalCount: serverTotalCount,
     totalPages: serverTotalPages,
     loading: paginatedLoading
   } = useStudentsPaginated({
-    page: classFilter ? 1 : currentPage, // When class filter active, get page 1 first
-    pageSize: classFilter ? 1000 : PAGE_SIZE, // Get more data when filtering by class
+    page: classFilter ? 1 : currentPage,
+    pageSize: classFilter ? 1000 : PAGE_SIZE,
     search: debouncedSearch || undefined,
     locationId: selectedLocationId,
   });
@@ -122,7 +126,6 @@ export const StudentList: React.FC = () => {
       const location = locations.find(loc => loc.id === student.assigned_location_id);
       if (location) return location.name;
     }
-    // school_origin format: "SCHOOL_NAME - CLASS_NAME", extract school part
     if (student.school_origin) {
       const parts = student.school_origin.split(' - ');
       return parts[0] || student.school_origin;
@@ -132,46 +135,34 @@ export const StudentList: React.FC = () => {
 
   // Helper to get class name from school_origin or assigned_classes
   const getClassName = (student: Profile): string => {
-    // First check assigned_classes array
     if (student.assigned_classes && student.assigned_classes.length > 0) {
       return student.assigned_classes.join(', ');
     }
-    // Then check class_name field
     if (student.class_name) {
       return student.class_name;
     }
-    // Finally, try to parse from school_origin (format: "SCHOOL - CLASS")
     if (student.school_origin && student.school_origin.includes(' - ')) {
       const parts = student.school_origin.split(' - ');
       if (parts.length > 1) {
-        return parts.slice(1).join(' - '); // Get everything after first " - "
+        return parts.slice(1).join(' - ');
       }
     }
     return '';
   };
 
-  // Calculate unique schools from all students (for dropdown filter)
+  // School filter dropdown - use locations table (NOT all students!)
   const uniqueSchools = useMemo(() => {
-    const schools = allStudents
-      .map(s => getSchoolName(s))
-      .filter((school): school is string => !!school);
-    return sortSchoolsByLevel([...new Set(schools)]);
-  }, [allStudents, locations]);
+    const schools = locations.map(loc => loc.name).filter(Boolean);
+    return sortSchoolsByLevel(schools);
+  }, [locations]);
 
-  // Calculate unique classes based on selected school (for dropdown filter)
+  // Class filter dropdown - use classes table for selected location
   const uniqueClasses = useMemo(() => {
-    // Filter students by selected school first
-    const studentsInSchool = schoolFilter
-      ? allStudents.filter(s => getSchoolName(s) === schoolFilter)
-      : allStudents;
+    if (!selectedLocationId || !locationClasses) return [];
+    return locationClasses.map(c => c.name).sort();
+  }, [selectedLocationId, locationClasses]);
 
-    const classes = studentsInSchool
-      .map(s => getClassName(s))
-      .filter((cls): cls is string => !!cls);
-    return [...new Set(classes)].sort();
-  }, [allStudents, schoolFilter, locations]);
-
-  // Apply class filter client-side (data comes from multiple sources)
+  // Apply class filter client-side
   const classFilteredStudents = useMemo(() => {
     if (!classFilter) return paginatedStudents;
     return paginatedStudents.filter(s => getClassName(s) === classFilter);

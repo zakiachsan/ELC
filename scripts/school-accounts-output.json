@@ -1,0 +1,186 @@
+{
+  "created": [],
+  "skipped": [],
+  "errors": [
+    {
+      "name": "SD ABDI SISWA ARIES",
+      "email": "school_sd_abdi_siswa_aries@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SD ABDI SISWA BINTARO",
+      "email": "school_sd_abdi_siswa_bintaro@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SD ALBERTUS",
+      "email": "school_sd_albertus@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SD BHAKTI",
+      "email": "school_sd_bhakti@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SD CHARITAS BATAM",
+      "email": "school_sd_charitas_batam@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SD CHARITAS JKT",
+      "email": "school_sd_charitas_jkt@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SD KRISTOFORUS 1",
+      "email": "school_sd_kristoforus_1@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SD KRISTOFORUS 2",
+      "email": "school_sd_kristoforus_2@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SD SANG TIMUR CAKUNG",
+      "email": "school_sd_sang_timur_cakung@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SD SANG TIMUR KARANG TENGAH",
+      "email": "school_sd_sang_timur_karang_tengah@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SD SANTA MARIA",
+      "email": "school_sd_santa_maria@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SD ST VINCENTIUS",
+      "email": "school_sd_st_vincentius@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SD TARAKANITA",
+      "email": "school_sd_tarakanita@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SDK SANG TIMUR KARANG TENGAH",
+      "email": "school_sdk_sang_timur_karang_tengah@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMA ABDI SISWA BINTARO",
+      "email": "school_sma_abdi_siswa_bintaro@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMA ABDI SISWA PATRA",
+      "email": "school_sma_abdi_siswa_patra@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMA BHK",
+      "email": "school_sma_bhk@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMK SANTA MARIA",
+      "email": "school_smk_santa_maria@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMP ABDI SISWA ARIES",
+      "email": "school_smp_abdi_siswa_aries@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMP ABDI SISWA BINTARO",
+      "email": "school_smp_abdi_siswa_bintaro@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMP ABDI SISWA PATRA",
+      "email": "school_smp_abdi_siswa_patra@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMP BHK",
+      "email": "school_smp_bhk@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMP CHARITAS BATAM",
+      "email": "school_smp_charitas_batam@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMP CHARITAS JKT",
+      "email": "school_smp_charitas_jkt@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMP MARSUDIRINI",
+      "email": "school_smp_marsudirini@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMP SANG TIMUR CAKUNG",
+      "email": "school_smp_sang_timur_cakung@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMP SANG TIMUR KARANG TENGAH",
+      "email": "school_smp_sang_timur_karang_tengah@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMP SANTA MARIA",
+      "email": "school_smp_santa_maria@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMP ST VINCENTIUS",
+      "email": "school_smp_st_vincentius@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "SMP TARAKANITA",
+      "email": "school_smp_tarakanita@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "TK ABDI SISWA BINTARO",
+      "email": "school_tk_abdi_siswa_bintaro@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "TK CHARITAS BATAM",
+      "email": "school_tk_charitas_batam@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "TK KRISTOFORUS 1",
+      "email": "school_tk_kristoforus_1@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "TK KRISTOFORUS 2",
+      "email": "school_tk_kristoforus_2@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "TK SANTA MARIA",
+      "email": "school_tk_santa_maria@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    },
+    {
+      "name": "TK ST VINCENTIUS",
+      "email": "school_tk_st_vincentius@elc.com",
+      "error": "new row for relation \"profiles\" violates check constraint \"profiles_role_check\""
+    }
+  ]
+}
