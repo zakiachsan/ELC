@@ -1338,7 +1338,7 @@ export const AccountManager: React.FC = () => {
                                       </div>
                                       <div className="space-y-1">
                                           <label className="text-[9px] font-bold text-gray-500 uppercase">Phone</label>
-                                          <input type="tel" required value={parentPhone} onChange={(e) => setParentPhone(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" placeholder="08..." />
+                                          <input type="tel" value={parentPhone} onChange={(e) => setParentPhone(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" placeholder="08..." />
                                       </div>
                                     </div>
                                     <div className="space-y-1">
@@ -1403,7 +1403,7 @@ export const AccountManager: React.FC = () => {
                                   </div>
                                   <div className="space-y-1">
                                       <label className="text-[9px] font-bold text-gray-500 uppercase">Phone</label>
-                                      <input type="tel" required value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" placeholder="08..." />
+                                      <input type="tel" value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" placeholder="08..." />
                                   </div>
                                 </div>
                                 <div className="space-y-1">
