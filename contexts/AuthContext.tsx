@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Session, User as SupabaseUser, AuthError } from '@supabase/supabase-js';
 import { User, UserRole, SkillCategory, DifficultyLevel } from '../types';
@@ -62,6 +62,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isConfigured = isSupabaseConfigured();
+  const initialSessionChecked = useRef(false);
 
   const fetchUserProfile = useCallback(async (userId: string): Promise<User | null> => {
     console.log('Fetching profile for user:', userId);
@@ -124,8 +125,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
 
-    // Get initial session
+    // Get initial session - only run once (prevent double execution in React StrictMode)
     const getInitialSession = async () => {
+      // Skip if already running/completed
+      if (initialSessionChecked.current) {
+        return;
+      }
+      initialSessionChecked.current = true;
+
       try {
         console.log('Getting initial session...');
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -155,7 +162,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     getInitialSession();
 
-    // Listen for auth changes
+    // Listen for auth changes - always set up subscription
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event);
@@ -169,12 +176,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // Only refresh profile on token refresh
           await fetchUserProfile(session.user.id);
           setLoading(false);
-        } else if (!session) {
-          // No session means no need to fetch profile
-          setLoading(false);
         }
-        // For SIGNED_IN and INITIAL_SESSION with session, let getInitialSession handle it
-        // signIn function already fetches profile, so we don't need to fetch again here
+        // IMPORTANT: Don't set loading=false for INITIAL_SESSION or SIGNED_IN events
+        // Let getInitialSession handle the loading state - it always runs and sets loading=false in finally block
+        // Setting loading=false here before getInitialSession completes causes race condition
       }
     );
 

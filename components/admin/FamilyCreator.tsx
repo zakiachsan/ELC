@@ -70,6 +70,7 @@ export const AccountManager: React.FC = () => {
   const [parentPassword, setParentPassword] = useState('');
   const [parentPhone, setParentPhone] = useState('');
   const [parentAddress, setParentAddress] = useState('');
+  const [includeParent, setIncludeParent] = useState(false); // Parent account is optional, default OFF
 
   const [studentName, setStudentName] = useState('');
   const [studentEmail, setStudentEmail] = useState('');
@@ -83,58 +84,28 @@ export const AccountManager: React.FC = () => {
   const [studentClassType, setStudentClassType] = useState<ClassType | ''>('');
 
   // Dynamic classes hook for student - after studentLocationId is defined
-  const { classes: studentClasses, loading: classesLoading } = useClasses(studentLocationId || undefined);
+  const { classes: studentClasses, loading: classesLoading, error: classesError } = useClasses(studentLocationId || undefined);
 
-  // Get selected student school's level for grade options
-  const selectedStudentSchoolLevel = studentLocationId
-    ? locations.find(l => l.id === studentLocationId)?.level || null
-    : null;
+  // Debug: Log classes loading status
+  useEffect(() => {
+    if (studentLocationId) {
+      console.log('[FamilyCreator] Classes status:', {
+        locationId: studentLocationId,
+        loading: classesLoading,
+        error: classesError?.message,
+        classCount: studentClasses?.length || 0,
+        classes: studentClasses?.map(c => c.name)
+      });
+    }
+  }, [studentLocationId, classesLoading, classesError, studentClasses]);
 
-  // Get grade options for student - use dynamic classes from DB if available
+  // Get grade options for student - ONLY use database classes, no hardcoded fallback
   const getStudentGradeOptions = (): string[] => {
     let classes: string[] = [];
 
-    // If we have classes from the database, use those
+    // Use classes from the database
     if (studentClasses && studentClasses.length > 0) {
       classes = studentClasses.map(c => c.name);
-    } else {
-      // Fallback to generated classes based on school level
-      switch (selectedStudentSchoolLevel?.toUpperCase()) {
-        case 'KINDERGARTEN':
-          ['TK-A', 'TK-B'].forEach(c => {
-            for (let i = 1; i <= 3; i++) classes.push(`${c}.${i}`);
-          });
-          break;
-        case 'ELEMENTARY':
-        case 'PRIMARY':
-          for (let grade = 1; grade <= 6; grade++) {
-            for (let section = 1; section <= 3; section++) {
-              classes.push(`Kelas ${grade}.${section}`);
-            }
-          }
-          break;
-        case 'JUNIOR':
-          for (let grade = 7; grade <= 9; grade++) {
-            for (let section = 1; section <= 3; section++) {
-              classes.push(`Kelas ${grade}.${section}`);
-            }
-          }
-          break;
-        case 'SENIOR':
-          for (let grade = 10; grade <= 12; grade++) {
-            for (let section = 1; section <= 3; section++) {
-              classes.push(`Kelas ${grade}.${section}`);
-            }
-          }
-          break;
-        default:
-          // General - show all
-          for (let grade = 1; grade <= 12; grade++) {
-            for (let section = 1; section <= 3; section++) {
-              classes.push(`Kelas ${grade}.${section}`);
-            }
-          }
-      }
     }
 
     // If student already has a grade/class that's not in the list, add it at the top
@@ -500,7 +471,7 @@ export const AccountManager: React.FC = () => {
     : mockUsers.filter(u => u.role === UserRole.TEACHER);
 
   const resetForm = () => {
-    setParentName(''); setParentEmail(''); setParentPassword(''); setParentPhone(''); setParentAddress('');
+    setParentName(''); setParentEmail(''); setParentPassword(''); setParentPhone(''); setParentAddress(''); setIncludeParent(false);
     setStudentName(''); setStudentEmail(''); setStudentPassword(''); setStudentPhone(''); setStudentLocationId(''); setStudentSchool('');
     setStudentGrade('');
     setStudentStatus('ACTIVE');
@@ -586,14 +557,16 @@ export const AccountManager: React.FC = () => {
       setParentPassword('');
       setParentPhone(parent.phone || '');
       setParentAddress(parent.address || '');
+      setIncludeParent(true); // Show parent form when parent exists
     } else {
-      // No parent - admin will create one
+      // No parent - admin can optionally create one
       setEditParentId(null);
       setParentName('');
       setParentEmail('');
       setParentPassword('');
       setParentPhone('');
       setParentAddress('');
+      setIncludeParent(false); // Hide parent form by default when no parent
     }
 
     setView('form');
@@ -718,7 +691,6 @@ export const AccountManager: React.FC = () => {
           school_origin: studentSchool || null,
           branch: studentGrade || null,
           status: studentStatus,
-          class_type: studentClassType || null,
         });
 
         if (editParentId) {
@@ -730,8 +702,8 @@ export const AccountManager: React.FC = () => {
             phone: parentPhone || null,
             address: parentAddress || null,
           });
-        } else if (parentEmail && parentName) {
-          // CREATE NEW PARENT for existing student
+        } else if (includeParent && parentEmail && parentName && parentPassword) {
+          // CREATE NEW PARENT for existing student (only if includeParent is ON)
           console.log('Creating new parent for student:', editStudentId);
 
           const { data: { session } } = await supabase.auth.getSession();
@@ -814,7 +786,6 @@ export const AccountManager: React.FC = () => {
           school_origin: studentSchool || undefined,
           branch: studentGrade || undefined,
           status: studentStatus,
-          class_type: studentClassType || undefined,
         }),
       });
 
@@ -833,37 +804,41 @@ export const AccountManager: React.FC = () => {
       const newStudentId = studentResult.user.id;
       console.log('Student created with ID:', newStudentId);
 
-      // Step 2: Create Parent linked to student
-      console.log('Creating parent with:', { email: parentEmail, name: parentName, role: 'PARENT', linked_student_id: newStudentId });
+      // Step 2: Create Parent linked to student (only if includeParent is ON)
+      if (includeParent && parentEmail && parentName && parentPassword) {
+        console.log('Creating parent with:', { email: parentEmail, name: parentName, role: 'PARENT', linked_student_id: newStudentId });
 
-      const parentResponse = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': supabaseAnonKey,
-        },
-        body: JSON.stringify({
-          email: parentEmail,
-          password: parentPassword,
-          name: parentName,
-          role: 'PARENT',
-          phone: parentPhone || undefined,
-          address: parentAddress || undefined,
-          linked_student_id: newStudentId,
-        }),
-      });
+        const parentResponse = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': supabaseAnonKey,
+          },
+          body: JSON.stringify({
+            email: parentEmail,
+            password: parentPassword,
+            name: parentName,
+            role: 'PARENT',
+            phone: parentPhone || undefined,
+            address: parentAddress || undefined,
+            linked_student_id: newStudentId,
+          }),
+        });
 
-      const parentResult = await parentResponse.json();
-      console.log('Parent response status:', parentResponse.status);
-      console.log('Parent result:', parentResult);
+        const parentResult = await parentResponse.json();
+        console.log('Parent response status:', parentResponse.status);
+        console.log('Parent result:', parentResult);
 
-      if (!parentResponse.ok) {
-        throw new Error(`Gagal membuat akun parent: ${parentResult.error || parentResponse.statusText}`);
-      }
+        if (!parentResponse.ok) {
+          throw new Error(`Gagal membuat akun parent: ${parentResult.error || parentResponse.statusText}`);
+        }
 
-      if (!parentResult?.success) {
-        throw new Error(parentResult?.error || 'Gagal membuat akun parent - response tidak valid');
+        if (!parentResult?.success) {
+          throw new Error(parentResult?.error || 'Gagal membuat akun parent - response tidak valid');
+        }
+      } else {
+        console.log('Skipping parent creation - includeParent is OFF or parent data incomplete');
       }
 
       // Refetch data to update the list
@@ -1194,11 +1169,14 @@ export const AccountManager: React.FC = () => {
                                                   <div className="font-bold text-gray-900 text-xs">{fam.student.name}</div>
                                                   <div className="text-[10px] text-gray-400 flex items-center gap-1">
                                                     {fam.student.email}
-                                                    {fam.student.branch && (
-                                                      <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-[8px] font-bold">
-                                                        {fam.student.branch}
-                                                      </span>
-                                                    )}
+                                                    {(() => {
+                                                      const className = fam.student.branch || extractClassFromSchoolOrigin(fam.student.schoolOrigin);
+                                                      return className ? (
+                                                        <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-[8px] font-bold">
+                                                          {className}
+                                                        </span>
+                                                      ) : null;
+                                                    })()}
                                                   </div>
                                               </div>
                                           </div>
@@ -1327,38 +1305,60 @@ export const AccountManager: React.FC = () => {
                   </Card>
                 </div>
             ) : (
-                <Card title={isEditing ? "Edit Family Unit" : "Register New Family Unit"} className="!p-4">
+                <Card title={isEditing ? "Edit Student" : "Register New Student"} className="!p-4">
                     <form onSubmit={handleFamilySubmit} className="space-y-4">
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             {/* Parent Section */}
                             <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200 h-fit">
-                                <h3 className="font-bold text-gray-800 flex items-center gap-2 uppercase text-[10px] tracking-widest">
-                                    <Users className="w-3.5 h-3.5 text-blue-600" /> Parent Account
-                                </h3>
-                                <div className="space-y-1">
-                                    <label className="text-[9px] font-bold text-gray-500 uppercase">Full Name</label>
-                                    <input type="text" required value={parentName} onChange={(e) => setParentName(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" />
+                                <div className="flex justify-between items-center pb-2 border-b border-gray-200">
+                                    <h3 className="font-bold text-gray-800 flex items-center gap-2 uppercase text-[10px] tracking-widest">
+                                        <Users className="w-3.5 h-3.5 text-blue-600" /> Parent Account
+                                        <span className="text-gray-400 font-normal normal-case tracking-normal">(Opsional)</span>
+                                    </h3>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className={`text-[8px] font-bold uppercase ${includeParent ? 'text-blue-600' : 'text-gray-400'}`}>
+                                            {includeParent ? 'Aktif' : 'Tidak Aktif'}
+                                        </span>
+                                        <button type="button" onClick={() => setIncludeParent(!includeParent)} className="focus:outline-none">
+                                            {includeParent ? <ToggleRight className="w-6 h-6 text-blue-600" /> : <ToggleLeft className="w-6 h-6 text-gray-400" />}
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                  <div className="space-y-1">
-                                      <label className="text-[9px] font-bold text-gray-500 uppercase">Email</label>
-                                      <input type="email" required value={parentEmail} onChange={(e) => setParentEmail(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" />
+                                
+                                {includeParent ? (
+                                  <>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-bold text-gray-500 uppercase">Full Name</label>
+                                        <input type="text" required value={parentName} onChange={(e) => setParentName(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div className="space-y-1">
+                                          <label className="text-[9px] font-bold text-gray-500 uppercase">Email</label>
+                                          <input type="email" required value={parentEmail} onChange={(e) => setParentEmail(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" />
+                                      </div>
+                                      <div className="space-y-1">
+                                          <label className="text-[9px] font-bold text-gray-500 uppercase">Phone</label>
+                                          <input type="tel" required value={parentPhone} onChange={(e) => setParentPhone(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" placeholder="08..." />
+                                      </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-bold text-gray-500 uppercase">Address</label>
+                                        <textarea rows={2} required value={parentAddress} onChange={(e) => setParentAddress(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs resize-none" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-bold text-gray-500 uppercase">
+                                          Password {isEditing && editParentId && <span className="text-gray-400 font-normal">(kosongkan jika tidak ingin mengubah)</span>}
+                                        </label>
+                                        <input type="text" required={!isEditing || !editParentId} placeholder={isEditing && editParentId ? "Kosongkan jika tidak ingin mengubah password" : "Set password"} value={parentPassword} onChange={(e) => setParentPassword(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" />
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="py-6 text-center">
+                                    <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                                    <p className="text-xs text-gray-500">Parent account tidak akan dibuat.</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">Anda bisa menambahkan parent nanti melalui menu edit.</p>
                                   </div>
-                                  <div className="space-y-1">
-                                      <label className="text-[9px] font-bold text-gray-500 uppercase">Phone</label>
-                                      <input type="tel" required value={parentPhone} onChange={(e) => setParentPhone(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" placeholder="08..." />
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[9px] font-bold text-gray-500 uppercase">Address</label>
-                                    <textarea rows={2} required value={parentAddress} onChange={(e) => setParentAddress(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs resize-none" />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[9px] font-bold text-gray-500 uppercase">
-                                      Password {isEditing && <span className="text-gray-400 font-normal">(kosongkan jika tidak ingin mengubah)</span>}
-                                    </label>
-                                    <input type="text" required={!isEditing} placeholder={isEditing ? "Kosongkan jika tidak ingin mengubah password" : "Set password"} value={parentPassword} onChange={(e) => setParentPassword(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none text-xs" />
-                                </div>
+                                )}
                             </div>
                             {/* Student Section */}
                             <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200">
@@ -1427,21 +1427,37 @@ export const AccountManager: React.FC = () => {
                                       <label className="text-[9px] font-bold text-gray-500 uppercase flex items-center gap-1">
                                         Kelas <span className="text-red-500">*</span>
                                         {classesLoading && <Loader2 className="w-3 h-3 animate-spin text-blue-500" />}
-                                        {hasDynamicClasses && <span className="text-green-600 font-normal">({studentClasses.length} kelas)</span>}
+                                        {!classesLoading && hasDynamicClasses && <span className="text-green-600 font-normal">({studentClasses.length} kelas)</span>}
+                                        {!classesLoading && studentLocationId && !hasDynamicClasses && !classesError && <span className="text-orange-500 font-normal">(0 kelas)</span>}
+                                        {classesError && <span className="text-red-500 font-normal">(error)</span>}
                                       </label>
                                       <select
                                         value={studentGrade}
                                         onChange={(e) => setStudentGrade(e.target.value)}
-                                        className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none bg-white text-xs"
+                                        className={`w-full px-3 py-1.5 border rounded-lg focus:ring-1 theme-ring-primary focus:border-transparent outline-none bg-white text-xs ${
+                                          classesError ? 'border-red-300' : 'border-gray-200'
+                                        }`}
                                         disabled={!studentLocationId || classesLoading}
                                       >
                                         <option value="">
-                                          {!studentLocationId ? 'Pilih sekolah dulu' : classesLoading ? 'Loading...' : 'Pilih Kelas'}
+                                          {!studentLocationId
+                                            ? 'Pilih sekolah dulu'
+                                            : classesLoading
+                                              ? 'Memuat kelas...'
+                                              : studentGradeOptions.length === 0
+                                                ? 'Tidak ada kelas tersedia'
+                                                : 'Pilih Kelas'}
                                         </option>
                                         {studentGradeOptions.map(grade => (
                                           <option key={grade} value={grade}>{grade}</option>
                                         ))}
                                       </select>
+                                      {classesError && (
+                                        <p className="text-[9px] text-red-500">Gagal memuat daftar kelas. Silakan refresh halaman.</p>
+                                      )}
+                                      {!classesLoading && studentLocationId && !hasDynamicClasses && !classesError && (
+                                        <p className="text-[9px] text-orange-500">Sekolah ini belum memiliki data kelas. Hubungi admin untuk menambahkan kelas.</p>
+                                      )}
                                   </div>
                                 </div>
 
@@ -1496,7 +1512,7 @@ export const AccountManager: React.FC = () => {
                             </Button>
                         </div>
                     </form>
-                    {success && <div className="mt-3 p-3 bg-green-50 text-green-700 rounded-lg border border-green-100 font-bold text-center text-xs">Family unit berhasil dibuat!</div>}
+                    {success && <div className="mt-3 p-3 bg-green-50 text-green-700 rounded-lg border border-green-100 font-bold text-center text-xs">{isEditing ? 'Data berhasil diupdate!' : (includeParent ? 'Family unit berhasil dibuat!' : 'Student berhasil dibuat!')}</div>}
                 </Card>
             )}
         </>

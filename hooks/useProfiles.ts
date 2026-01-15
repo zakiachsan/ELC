@@ -335,9 +335,19 @@ export const useClasses = (locationId?: string) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await profilesService.getClassesByLocation(locationId);
+      
+      // Add timeout to prevent hanging - 5 second timeout
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout')), 5000);
+      });
+      
+      const data = await Promise.race([
+        profilesService.getClassesByLocation(locationId),
+        timeoutPromise
+      ]);
       setClasses(data as ClassItem[]);
     } catch (err) {
+      console.warn('Failed to fetch classes:', err);
       setError(err as Error);
       setClasses([]);
     } finally {
