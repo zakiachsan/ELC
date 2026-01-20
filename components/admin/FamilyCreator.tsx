@@ -2,12 +2,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { Users, Link as LinkIcon, Lock, Mail, GraduationCap, Briefcase, Trash2, Pencil, MapPin, School, TrendingUp, UserCheck, Activity, ToggleLeft, ToggleRight, Camera, X as XIcon, Upload, ShieldAlert, Smartphone, Globe, Loader2, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Users, Link as LinkIcon, Lock, Mail, GraduationCap, Briefcase, Trash2, Pencil, MapPin, School, TrendingUp, UserCheck, Activity, ToggleLeft, ToggleRight, Camera, X as XIcon, Upload, ShieldAlert, Smartphone, Globe, Loader2, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Award } from 'lucide-react';
 import { MOCK_USERS, MOCK_SCHOOLS, MOCK_SESSIONS, MOCK_SESSION_REPORTS } from '../../constants';
 import { UserRole, User, ClassType } from '../../types';
 import { useTeachers, useLocations, useParents, useStudentsPaginated, useClasses, useSchools } from '../../hooks/useProfiles';
 import { supabase, supabaseAdmin } from '../../lib/supabase';
 import { profilesService } from '../../services/profiles.service';
+import { contentService } from '../../services/content.service';
 
 export const AccountManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'families' | 'teachers' | 'schools'>('families');
@@ -131,6 +132,19 @@ export const AccountManager: React.FC = () => {
   const [allClassesData, setAllClassesData] = useState<{id: string; location_id: string; name: string}[]>([]);
   const [allClassesLoading, setAllClassesLoading] = useState(false);
 
+  // Featured teacher profile (for homepage "Our Teachers" section)
+  const [featuredTeacherEnabled, setFeaturedTeacherEnabled] = useState(false);
+  const [featuredTeacherPhotoUrl, setFeaturedTeacherPhotoUrl] = useState('');
+  const [featuredTeacherCountry, setFeaturedTeacherCountry] = useState('');
+  const [featuredTeacherCountryFlag, setFeaturedTeacherCountryFlag] = useState('🇮🇩');
+  const [featuredTeacherType, setFeaturedTeacherType] = useState<'native' | 'local'>('local');
+  const [featuredTeacherSpecialty, setFeaturedTeacherSpecialty] = useState('');
+  const [featuredTeacherQuote, setFeaturedTeacherQuote] = useState('');
+  const [featuredTeacherExperience, setFeaturedTeacherExperience] = useState(1);
+  const [featuredTeacherCertifications, setFeaturedTeacherCertifications] = useState<string[]>([]);
+  const [featuredTeacherId, setFeaturedTeacherId] = useState<string | null>(null);
+  const [featuredTeacherLoading, setFeaturedTeacherLoading] = useState(false);
+
   // Fetch all classes when component mounts or locations change
   useEffect(() => {
     const fetchAllClasses = async () => {
@@ -241,6 +255,8 @@ export const AccountManager: React.FC = () => {
 
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const featuredTeacherPhotoRef = useRef<HTMLInputElement>(null);
+  const [teacherEditTab, setTeacherEditTab] = useState<'assignment' | 'profile'>('assignment');
 
   const BILINGUAL_SUBJECTS = [
     { id: 'english-reading', label: 'English - Reading', category: 'English' },
@@ -483,6 +499,18 @@ export const AccountManager: React.FC = () => {
     setTeacherSubjects([]);
     setTeacherClasses([]);
     setAllClassesData([]);
+    // Reset featured teacher profile fields
+    setFeaturedTeacherEnabled(false);
+    setFeaturedTeacherPhotoUrl('');
+    setFeaturedTeacherCountry('');
+    setFeaturedTeacherCountryFlag('🇮🇩');
+    setFeaturedTeacherType('local');
+    setFeaturedTeacherSpecialty('');
+    setFeaturedTeacherQuote('');
+    setFeaturedTeacherExperience(1);
+    setFeaturedTeacherCertifications([]);
+    setFeaturedTeacherId(null);
+    setTeacherEditTab('assignment'); // Reset to first tab
     setIsEditing(false);
     setEditParentId(null); setEditStudentId(null); setEditTeacherId(null);
   };
@@ -600,9 +628,43 @@ export const AccountManager: React.FC = () => {
 
     // Load class types if available
     const classTypes = teacher.classTypes || [];
+    console.log('Edit Teacher - Loading data:', {
+      id: teacher.id,
+      name: teacher.name,
+      classTypes,
+      rawClassTypes: teacher.classTypes,
+      fullTeacher: teacher
+    });
     setTeacherClassTypes(classTypes);
 
+    // Load featured teacher profile for homepage display
+    loadFeaturedTeacherProfile(teacher.id);
+
     setView('form');
+  };
+
+  // Load featured teacher profile for homepage "Our Teachers" section
+  const loadFeaturedTeacherProfile = async (teacherId: string) => {
+    setFeaturedTeacherLoading(true);
+    try {
+      const profile = await contentService.getTeacherProfileByUserId(teacherId);
+      if (profile) {
+        setFeaturedTeacherEnabled(profile.is_active || false);
+        setFeaturedTeacherId(profile.id);
+        setFeaturedTeacherPhotoUrl(profile.photo_url || '');
+        setFeaturedTeacherCountry(profile.country || '');
+        setFeaturedTeacherCountryFlag(profile.country_flag || '🇮🇩');
+        setFeaturedTeacherType(profile.type || 'local');
+        setFeaturedTeacherSpecialty(profile.specialty || '');
+        setFeaturedTeacherQuote(profile.quote || '');
+        setFeaturedTeacherExperience(profile.experience || 1);
+        setFeaturedTeacherCertifications(profile.certifications || []);
+      }
+    } catch (err) {
+      console.error('Error loading featured teacher profile:', err);
+    } finally {
+      setFeaturedTeacherLoading(false);
+    }
   };
 
   const handleEditSchool = (school: any) => {
@@ -668,6 +730,17 @@ export const AccountManager: React.FC = () => {
       const reader = new FileReader();
       reader.onloadend = () => {
         setStudentPhoto(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleFeaturedTeacherPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFeaturedTeacherPhotoUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
@@ -909,22 +982,23 @@ export const AccountManager: React.FC = () => {
         };
 
         // Smart fallback: try to save as many fields as possible
-        // Priority: assigned_location_ids > assigned_classes > assigned_subjects > class_types
+        // Priority: class_types > assigned_location_ids > assigned_classes > assigned_subjects
+        // class_types is tried in multiple combinations to ensure it gets saved if column exists
         const fieldsToTry = [
-          // 1. All fields
+          // 1. All fields including class_types
           { assigned_location_ids: teacherLocationIds, assigned_subjects: teacherSubjects, assigned_classes: teacherClasses, class_types: teacherClassTypes },
-          // 2. Without class_types (keep location_ids)
-          { assigned_location_ids: teacherLocationIds, assigned_subjects: teacherSubjects, assigned_classes: teacherClasses },
-          // 3. Without assigned_classes (keep location_ids)
+          // 2. Without assigned_classes
           { assigned_location_ids: teacherLocationIds, assigned_subjects: teacherSubjects, class_types: teacherClassTypes },
-          // 4. Just location_ids + subjects
+          // 3. Just location_ids + class_types
+          { assigned_location_ids: teacherLocationIds, class_types: teacherClassTypes },
+          // 4. Just class_types
+          { class_types: teacherClassTypes },
+          // 5. All fields WITHOUT class_types (fallback if column doesn't exist)
+          { assigned_location_ids: teacherLocationIds, assigned_subjects: teacherSubjects, assigned_classes: teacherClasses },
+          // 6. Without assigned_classes, without class_types
           { assigned_location_ids: teacherLocationIds, assigned_subjects: teacherSubjects },
-          // 5. Just location_ids
+          // 7. Just location_ids
           { assigned_location_ids: teacherLocationIds },
-          // 6. Without location_ids but with others
-          { assigned_subjects: teacherSubjects, assigned_classes: teacherClasses, class_types: teacherClassTypes },
-          // 7. Just subjects + classes
-          { assigned_subjects: teacherSubjects, assigned_classes: teacherClasses },
           // 8. Just subjects
           { assigned_subjects: teacherSubjects },
           // 9. Empty (base only)
@@ -951,6 +1025,42 @@ export const AccountManager: React.FC = () => {
 
         if (!updateSucceeded) {
           throw new Error('Gagal menyimpan data teacher setelah semua percobaan');
+        }
+
+        // Save featured teacher profile for homepage display
+        // Save if: toggle is enabled, OR already has a record, OR any profile data is filled
+        const hasProfileData = featuredTeacherPhotoUrl || featuredTeacherCountry || 
+          featuredTeacherSpecialty || featuredTeacherQuote || 
+          featuredTeacherCertifications.length > 0;
+        
+        if (featuredTeacherEnabled || featuredTeacherId || hasProfileData) {
+          try {
+            console.log('Saving featured teacher profile:', {
+              editTeacherId,
+              name: teacherName,
+              photo_url: featuredTeacherPhotoUrl,
+              country: featuredTeacherCountry,
+              is_active: featuredTeacherEnabled,
+            });
+            await contentService.upsertTeacherProfile(editTeacherId, {
+              name: teacherName,
+              photo_url: featuredTeacherPhotoUrl,
+              country: featuredTeacherCountry,
+              country_flag: featuredTeacherCountryFlag,
+              type: featuredTeacherType,
+              specialty: featuredTeacherSpecialty,
+              quote: featuredTeacherQuote,
+              experience: featuredTeacherExperience,
+              certifications: featuredTeacherCertifications,
+              is_active: featuredTeacherEnabled,
+            });
+            console.log('Featured teacher profile saved successfully');
+          } catch (featuredErr) {
+            console.error('Could not save featured teacher profile:', featuredErr);
+            // Don't fail the whole save if featured profile fails
+          }
+        } else {
+          console.log('Skipping featured teacher profile save - no data to save');
         }
 
         // Refetch to update the list
@@ -1598,6 +1708,37 @@ export const AccountManager: React.FC = () => {
             ) : (
                 <Card title={isEditing ? "Edit Teacher" : "Add New Teacher"} className="!p-4">
                      <form onSubmit={handleTeacherSubmit} className="space-y-4">
+                        {/* Tab Buttons - Only show when editing */}
+                        {isEditing && (
+                          <div className="flex gap-1 p-1 bg-gray-100 rounded-lg mb-4">
+                            <button
+                              type="button"
+                              onClick={() => setTeacherEditTab('assignment')}
+                              className={`flex-1 px-4 py-2 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                                teacherEditTab === 'assignment'
+                                  ? 'bg-white text-blue-600 shadow-sm'
+                                  : 'text-gray-500 hover:text-gray-700'
+                              }`}
+                            >
+                              <Briefcase className="w-3.5 h-3.5" />
+                              Tugas Kelas
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setTeacherEditTab('profile')}
+                              className={`flex-1 px-4 py-2 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                                teacherEditTab === 'profile'
+                                  ? 'bg-white text-amber-600 shadow-sm'
+                                  : 'text-gray-500 hover:text-gray-700'
+                              }`}
+                            >
+                              <Star className="w-3.5 h-3.5" />
+                              Profile Homepage
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Basic Info - Always visible */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-1">
                                 <label className="text-[9px] font-bold text-gray-500 uppercase">Teacher Name</label>
@@ -1621,6 +1762,10 @@ export const AccountManager: React.FC = () => {
                                 </select>
                             </div>
                         </div>
+
+                        {/* ===== ASSIGNMENT TAB CONTENT ===== */}
+                        {(!isEditing || teacherEditTab === 'assignment') && (
+                          <>
                         {/* Multi-select Schools */}
                         <div className="space-y-2 bg-blue-50 p-3 rounded-lg border border-blue-200">
                           <div className="flex items-center justify-between">
@@ -1859,6 +2004,199 @@ export const AccountManager: React.FC = () => {
                               <div className="pt-2 border-t border-gray-200 mt-2">
                                 <p className="text-[9px] text-gray-500">
                                   Selected: <span className="font-bold text-gray-700">{teacherSubjects.length} subject(s)</span>
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                          </>
+                        )}
+
+                        {/* ===== PROFILE TAB CONTENT ===== */}
+                        {/* Featured Teacher Profile - Homepage Display */}
+                        {isEditing && teacherEditTab === 'profile' && (
+                          <div className="space-y-3 bg-gradient-to-br from-amber-50 to-orange-50 p-4 rounded-xl border border-amber-200">
+                            <div className="flex justify-between items-center pb-2 border-b border-amber-200">
+                              <h3 className="font-bold text-gray-800 flex items-center gap-2 uppercase text-[10px] tracking-widest">
+                                <Star className="w-3.5 h-3.5 text-amber-500" /> Homepage Profile
+                                <span className="text-gray-400 font-normal normal-case tracking-normal">(Section "Our Teachers")</span>
+                              </h3>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[8px] font-bold uppercase ${featuredTeacherEnabled ? 'text-amber-600' : 'text-gray-400'}`}>
+                                  {featuredTeacherEnabled ? 'Tampilkan' : 'Sembunyikan'}
+                                </span>
+                                <button type="button" onClick={() => setFeaturedTeacherEnabled(!featuredTeacherEnabled)} className="focus:outline-none">
+                                  {featuredTeacherEnabled ? <ToggleRight className="w-6 h-6 text-amber-500" /> : <ToggleLeft className="w-6 h-6 text-gray-400" />}
+                                </button>
+                              </div>
+                            </div>
+
+                            {featuredTeacherLoading ? (
+                              <div className="flex items-center justify-center py-4">
+                                <Loader2 className="w-5 h-5 animate-spin text-amber-500" />
+                                <span className="ml-2 text-sm text-gray-500">Loading profile...</span>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {/* Photo Upload */}
+                                <div className="space-y-2">
+                                  <label className="text-[9px] font-bold text-gray-500 uppercase">Foto Profile</label>
+                                  <div className="flex items-center gap-4">
+                                    <div className="relative group">
+                                      <div className="w-20 h-20 rounded-full border-3 border-white shadow-lg overflow-hidden bg-gray-200 flex items-center justify-center">
+                                        {featuredTeacherPhotoUrl ? (
+                                          <img src={featuredTeacherPhotoUrl} className="w-full h-full object-cover" alt="Teacher" />
+                                        ) : (
+                                          <Users className="w-8 h-8 text-gray-400" />
+                                        )}
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => featuredTeacherPhotoRef.current?.click()}
+                                        className="absolute -bottom-1 -right-1 p-2 bg-amber-500 text-white rounded-full shadow-md hover:bg-amber-600 transition-colors"
+                                      >
+                                        <Camera className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                    <div className="flex-1">
+                                      <p className="text-xs text-gray-600 font-medium">Upload foto guru</p>
+                                      <p className="text-[10px] text-gray-400">Foto akan ditampilkan di homepage</p>
+                                      {featuredTeacherPhotoUrl && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setFeaturedTeacherPhotoUrl('')}
+                                          className="mt-1 text-[10px] text-red-500 hover:text-red-700 font-bold"
+                                        >
+                                          Hapus Foto
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <input
+                                    ref={featuredTeacherPhotoRef}
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handleFeaturedTeacherPhotoUpload}
+                                  />
+                                </div>
+
+                                {/* Country and Type Row */}
+                                <div className="grid grid-cols-3 gap-3">
+                                  <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-500 uppercase">Flag Emoji</label>
+                                    <input
+                                      type="text"
+                                      value={featuredTeacherCountryFlag}
+                                      onChange={(e) => setFeaturedTeacherCountryFlag(e.target.value)}
+                                      placeholder="🇮🇩"
+                                      className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 focus:ring-amber-500 focus:border-transparent outline-none text-sm text-center"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-500 uppercase">Country</label>
+                                    <input
+                                      type="text"
+                                      value={featuredTeacherCountry}
+                                      onChange={(e) => setFeaturedTeacherCountry(e.target.value)}
+                                      placeholder="Indonesia"
+                                      className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 focus:ring-amber-500 focus:border-transparent outline-none text-xs"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-500 uppercase">Type</label>
+                                    <div className="grid grid-cols-2 gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setFeaturedTeacherType('local')}
+                                        className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-all ${
+                                          featuredTeacherType === 'local'
+                                            ? 'bg-teal-600 text-white border-teal-600'
+                                            : 'border-gray-200 bg-white text-gray-500'
+                                        }`}
+                                      >
+                                        Local
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setFeaturedTeacherType('native')}
+                                        className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-all ${
+                                          featuredTeacherType === 'native'
+                                            ? 'bg-blue-600 text-white border-blue-600'
+                                            : 'border-gray-200 bg-white text-gray-500'
+                                        }`}
+                                      >
+                                        Native
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Experience and Specialty Row */}
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-500 uppercase">Experience (Years)</label>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      max="50"
+                                      value={featuredTeacherExperience}
+                                      onChange={(e) => setFeaturedTeacherExperience(parseInt(e.target.value) || 1)}
+                                      className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 focus:ring-amber-500 focus:border-transparent outline-none text-xs"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-500 uppercase">Specialty</label>
+                                    <input
+                                      type="text"
+                                      value={featuredTeacherSpecialty}
+                                      onChange={(e) => setFeaturedTeacherSpecialty(e.target.value)}
+                                      placeholder="e.g., IELTS Preparation"
+                                      className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 focus:ring-amber-500 focus:border-transparent outline-none text-xs"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Quote */}
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-bold text-gray-500 uppercase">Quote / Bio</label>
+                                  <textarea
+                                    rows={2}
+                                    value={featuredTeacherQuote}
+                                    onChange={(e) => setFeaturedTeacherQuote(e.target.value)}
+                                    placeholder="A short inspirational quote or bio..."
+                                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 focus:ring-amber-500 focus:border-transparent outline-none text-xs resize-none"
+                                  />
+                                </div>
+
+                                {/* Certifications */}
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-bold text-gray-500 uppercase">
+                                    Certifications <span className="text-gray-400 font-normal">(comma separated)</span>
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={featuredTeacherCertifications.join(', ')}
+                                    onChange={(e) => setFeaturedTeacherCertifications(
+                                      e.target.value.split(',').map(s => s.trim()).filter(s => s)
+                                    )}
+                                    placeholder="TESOL, CELTA, IELTS Examiner"
+                                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-1 focus:ring-amber-500 focus:border-transparent outline-none text-xs"
+                                  />
+                                  {featuredTeacherCertifications.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {featuredTeacherCertifications.map((cert, i) => (
+                                        <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded">
+                                          <Award className="w-3 h-3" />
+                                          {cert}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <p className="text-[9px] text-amber-700 bg-amber-100 p-2 rounded-lg">
+                                  <strong>Note:</strong> Profile ini akan ditampilkan di homepage section "Our Teachers" jika toggle diaktifkan.
                                 </p>
                               </div>
                             )}

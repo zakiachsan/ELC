@@ -10,7 +10,56 @@ import { useTests } from '../../hooks/useTests';
 import { ClassSession, SkillCategory, DifficultyLevel, CEFRLevel, ClassType } from '../../types';
 import { LEVEL_COLORS } from '../../constants';
 import { TestSchedule, TestType } from '../../services/tests.service';
-import { Calendar, MapPin, Clock, User, FileText, Download, ChevronRight, ChevronLeft, Loader2, ClipboardList, Globe, UserCheck, Play, Lock, AlertCircle } from 'lucide-react';
+import { Calendar, MapPin, Clock, User, FileText, Download, ChevronRight, ChevronLeft, Loader2, ClipboardList, Globe, UserCheck, Play, Lock, AlertCircle, ArrowLeft, GraduationCap, School, Paperclip, FileCheck, CalendarDays, BookOpen, File } from 'lucide-react';
+import { SKILL_ICONS } from './StudentView';
+
+// Helper to get academic year from date
+const getAcademicYear = (date: Date): string => {
+  const month = date.getMonth();
+  const year = date.getFullYear();
+  if (month >= 6) {
+    return `${year}/${year + 1}`;
+  }
+  return `${year - 1}/${year}`;
+};
+
+// Helper to get semester from date (1 = Jul-Dec, 2 = Jan-Jun)
+const getSemester = (date: Date): number => {
+  const month = date.getMonth();
+  return month >= 6 ? 1 : 2;
+};
+
+// Helper to get week number within semester
+const getWeekInSemester = (date: Date): number => {
+  const semester = getSemester(date);
+  let semesterStart: Date;
+  if (semester === 1) {
+    semesterStart = new Date(date.getFullYear(), 6, 1);
+  } else {
+    semesterStart = new Date(date.getFullYear(), 0, 1);
+  }
+  const diffTime = date.getTime() - semesterStart.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  return Math.floor(diffDays / 7) + 1;
+};
+
+// Helper to get week date range
+const getWeekDateRange = (year: string, semester: number, week: number): { start: Date; end: Date } => {
+  const [startYear] = year.split('/').map(Number);
+  let semesterStart: Date;
+  if (semester === 1) {
+    semesterStart = new Date(startYear, 6, 1);
+  } else {
+    semesterStart = new Date(startYear + 1, 0, 1);
+  }
+  const weekStart = new Date(semesterStart);
+  weekStart.setDate(weekStart.getDate() + (week - 1) * 7);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  return { start: weekStart, end: weekEnd };
+};
+
+type CategoryType = 'materi' | 'lesson-plan' | 'task';
 
 const TEST_TYPE_LABELS: Record<TestType, string> = {
   'QUIZ': 'Quiz',
@@ -60,6 +109,12 @@ export const StudentSchedule: React.FC = () => {
   const [selectedTest, setSelectedTest] = useState<TestSchedule | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
+
+  // Hierarchical view state
+  const [selectedSemester, setSelectedSemester] = useState<number | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryType | null>(null);
+  const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  const currentAcademicYear = getAcademicYear(new Date());
 
   // Get school info from AuthContext user (same approach as Dashboard)
   // Parse class name from schoolOrigin (format: "SCHOOL - CLASS")
@@ -133,6 +188,77 @@ export const StudentSchedule: React.FC = () => {
 
   // Filter sessions by student's school AND class
   const sessions = allSessions.filter(s => matchesStudentClass(s.location));
+
+  // Group sessions by semester for hierarchical view
+  const sessionsBySemester = {
+    1: sessions.filter(s => getSemester(new Date(s.dateTime)) === 1),
+    2: sessions.filter(s => getSemester(new Date(s.dateTime)) === 2),
+  };
+
+  // Get data for selected category
+  const getCategoryData = () => {
+    if (selectedSemester === null) return [];
+    const semesterSessions = sessionsBySemester[selectedSemester as 1 | 2] || [];
+
+    if (selectedCategory === 'materi') {
+      return semesterSessions.filter(s => s.materials && s.materials.length > 0);
+    } else if (selectedCategory === 'lesson-plan') {
+      return semesterSessions;
+    }
+    return semesterSessions;
+  };
+
+  // Get weeks data for current category
+  const getWeeksData = () => {
+    if (!selectedCategory || selectedSemester === null) return [];
+
+    const categoryData = getCategoryData();
+    const weekMap: Record<number, { week: number; count: number; dateRange: { start: Date; end: Date } }> = {};
+
+    categoryData.forEach(s => {
+      const week = getWeekInSemester(new Date(s.dateTime));
+      if (!weekMap[week]) {
+        weekMap[week] = {
+          week,
+          count: 0,
+          dateRange: getWeekDateRange(currentAcademicYear, selectedSemester!, week),
+        };
+      }
+      weekMap[week].count++;
+    });
+
+    return Object.values(weekMap).sort((a, b) => a.week - b.week);
+  };
+
+  // Get sessions for selected week
+  const getWeekSessions = () => {
+    if (selectedWeek === null || !selectedCategory) return [];
+
+    const categoryData = getCategoryData();
+    return categoryData
+      .filter(s => getWeekInSemester(new Date(s.dateTime)) === selectedWeek)
+      .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+  };
+
+  const weeksData = getWeeksData();
+  const weekSessions = getWeekSessions();
+
+  // Format date range helper
+  const formatDateRange = (start: Date, end: Date) => {
+    const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+    return `${start.toLocaleDateString('id-ID', options)} - ${end.toLocaleDateString('id-ID', options)}`;
+  };
+
+  // Navigation back in hierarchy
+  const navigateBack = () => {
+    if (selectedWeek !== null) {
+      setSelectedWeek(null);
+    } else if (selectedCategory !== null) {
+      setSelectedCategory(null);
+    } else if (selectedSemester !== null) {
+      setSelectedSemester(null);
+    }
+  };
 
   // Map and filter today's sessions
   const todaySessions = todaySessionsData.map(s => ({
@@ -520,12 +646,61 @@ export const StudentSchedule: React.FC = () => {
     );
   }
 
-  // --- LIST VIEW ---
+  // --- HIERARCHICAL VIEW ---
+  
+  // Breadcrumb navigation
+  const renderBreadcrumb = () => {
+    const items: { label: string; onClick: () => void }[] = [
+      { label: 'Schedule', onClick: () => { setSelectedSemester(null); setSelectedCategory(null); setSelectedWeek(null); } }
+    ];
+    
+    if (selectedSemester !== null) {
+      items.push({ 
+        label: `Semester ${selectedSemester}`, 
+        onClick: () => { setSelectedCategory(null); setSelectedWeek(null); } 
+      });
+    }
+    
+    if (selectedCategory !== null) {
+      const categoryLabels: Record<CategoryType, string> = {
+        'materi': 'Materi',
+        'lesson-plan': 'Lesson Plan',
+        'task': 'Task'
+      };
+      items.push({ 
+        label: categoryLabels[selectedCategory], 
+        onClick: () => setSelectedWeek(null) 
+      });
+    }
+    
+    if (selectedWeek !== null) {
+      items.push({ label: `Week ${selectedWeek}`, onClick: () => {} });
+    }
+    
+    return (
+      <div className="flex items-center gap-2 text-sm">
+        {items.map((item, idx) => (
+          <React.Fragment key={idx}>
+            {idx > 0 && <ChevronRight className="w-4 h-4 text-gray-400" />}
+            <button
+              onClick={item.onClick}
+              className={`font-medium ${idx === items.length - 1 ? 'text-teal-600' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              {item.label}
+            </button>
+          </React.Fragment>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4">
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <CalendarDays className="w-5 h-5 text-teal-600" />
             My Schedule
             {classType && (
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
@@ -541,255 +716,209 @@ export const StudentSchedule: React.FC = () => {
               </span>
             )}
           </h2>
-          <p className="text-xs text-gray-500">View classes and tests schedule.</p>
+          <p className="text-xs text-gray-500 mt-1">{currentAcademicYear} • {baseSchoolName} {className ? `- ${className}` : ''}</p>
         </div>
-
-        <div className="flex bg-white p-0.5 rounded-lg border border-gray-200 shadow-sm">
-           <button
-             onClick={() => setActiveTab('upcoming')}
-             className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-md transition-all ${activeTab === 'upcoming' ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-           >
-             Upcoming
-           </button>
-           <button
-             onClick={() => { setActiveTab('history'); setHistoryPage(1); }}
-             className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-md transition-all ${activeTab === 'history' ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-           >
-             History
-           </button>
-        </div>
+        {(selectedSemester !== null || selectedCategory !== null || selectedWeek !== null) && (
+          <Button
+            variant="secondary"
+            onClick={navigateBack}
+            className="flex items-center gap-2 text-xs"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </Button>
+        )}
       </div>
 
-      {/* Happening Today Section */}
-      {todaySessions.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-yellow-600" /> Happening Today
-          </h3>
-          <div className="space-y-2">
-            {todaySessions.map((session) => (
-              <Card
-                key={session.id}
-                className="!p-3 border-l-4 border-l-yellow-400 bg-yellow-50/50 cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => setSelectedSession(session as any)}
-              >
-                <div className="flex gap-3 items-start">
-                  {/* Time box - compact on mobile */}
-                  <div className="bg-white rounded-lg p-2 md:p-3 text-center border border-yellow-100 shadow-sm shrink-0">
-                    <span className="text-yellow-600 font-bold text-[8px] md:text-[9px] uppercase block">TODAY</span>
-                    <span className="text-base md:text-xl font-extrabold text-gray-900">
-                      {new Date(session.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    </span>
-                  </div>
-                  {/* Content */}
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {session.skillCategories.map((cat, idx) => (
-                        <span key={idx} className="text-[8px] md:text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded uppercase">
-                          {cat}
-                        </span>
-                      ))}
-                      <span className={`text-[8px] md:text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${LEVEL_COLORS[session.difficultyLevel]}`}>
-                        {session.difficultyLevel}
-                      </span>
-                    </div>
-                    <h3 className="text-sm md:text-base font-bold text-gray-900 leading-tight">{session.topic}</h3>
-                    <div className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-3 text-[10px] md:text-xs text-gray-600">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3 shrink-0" /> <span className="truncate">{session.location}</span>
-                      </span>
-                      {session.teacherName && (
-                        <span className="flex items-center gap-1">
-                          <User className="w-3 h-3 shrink-0" /> {session.teacherName}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
+      {/* Breadcrumb */}
+      {renderBreadcrumb()}
+
+      {/* Loading State */}
+      {sessionsLoading && (
+        <Card className="p-8 text-center">
+          <Loader2 className="w-8 h-8 text-teal-600 animate-spin mx-auto mb-3" />
+          <p className="text-sm text-gray-500">Loading schedule...</p>
+        </Card>
       )}
 
-      <Card className="!p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs min-w-[700px]">
-          <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
-            <tr>
-              <th className="px-3 py-2">Date</th>
-              <th className="px-3 py-2">Type</th>
-              <th className="px-3 py-2">Category</th>
-              <th className="px-3 py-2">Topic</th>
-              <th className="px-3 py-2">Teacher</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2 text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {(activeTab === 'upcoming' ? upcomingItems : paginatedPastItems).map(item => {
-              const isHistory = activeTab === 'history';
-              const report = isHistory && item.type === 'session' ? getMyReport(item.id) : null;
-
-              return (
-                <tr key={`${item.type}-${item.id}`} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-3 py-2">
-                    <div className="text-xs font-bold text-gray-900">
-                      {new Date(item.dateTime).toLocaleDateString()}
-                    </div>
-                    <div className="text-[10px] text-gray-500">
-                      {new Date(item.dateTime).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    {item.type === 'session' ? (
-                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200 flex items-center gap-1 w-fit">
-                        <Calendar className="w-2.5 h-2.5" /> Class
-                      </span>
-                    ) : (
-                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 w-fit ${TEST_TYPE_COLORS[item.test!.test_type]}`}>
-                        <ClipboardList className="w-2.5 h-2.5" /> {TEST_TYPE_LABELS[item.test!.test_type]}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-wrap gap-1">
-                      {(item.categories || []).map((cat, idx) => (
-                        <span key={idx} className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-800 text-white uppercase">
-                          {cat}
-                        </span>
-                      ))}
-                      {(!item.categories || item.categories.length === 0) && (
-                        <span className="text-[9px] text-gray-400 italic">-</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="text-xs font-bold text-gray-900">
-                      {item.title}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className="flex items-center gap-1 text-[10px] text-gray-600">
-                      <User className="w-3 h-3 text-teal-500" /> {item.teacherName || '-'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">
-                    {!isHistory ? (
-                      (() => {
-                        const itemStart = new Date(item.dateTime);
-                        const isInProgress = now >= itemStart;
-                        return isInProgress ? (
-                          <span className="text-[9px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full border border-green-200 animate-pulse">
-                            In Progress
-                          </span>
-                        ) : (
-                          <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                            Upcoming
-                          </span>
-                        );
-                      })()
-                    ) : item.type === 'session' && report ? (
-                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                        report.attendanceStatus === 'PRESENT' ? 'bg-green-50 text-green-700 border border-green-200' :
-                        report.attendanceStatus === 'LATE' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
-                        'bg-red-50 text-red-700 border border-red-200'
-                      }`}>
-                        {report.attendanceStatus}
-                      </span>
-                    ) : (
-                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">
-                        {item.type === 'test' ? 'Completed' : 'Pending'}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <button
-                      onClick={() => {
-                        if (item.type === 'session' && item.session) {
-                          setSelectedSession(item.session);
-                        } else if (item.type === 'test' && item.test) {
-                          setSelectedTest(item.test);
-                        }
-                      }}
-                      className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-[9px] font-bold uppercase hover:bg-blue-600 hover:text-white transition-all border border-blue-100 flex items-center gap-1 ml-auto"
-                    >
-                      Detail <ChevronRight className="w-3 h-3" />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-
-            {activeTab === 'upcoming' && upcomingItems.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-gray-400 text-[10px] italic">
-                  No upcoming classes or tests scheduled.
-                </td>
-              </tr>
-            )}
-
-            {activeTab === 'history' && pastItems.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-gray-400 text-[10px] italic">
-                  No class or test history found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        </div>
-      </Card>
-
-      {/* Pagination for History Tab */}
-      {activeTab === 'history' && totalHistoryPages > 1 && (
-        <div className="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-lg">
-          <div className="text-xs text-gray-500">
-            Showing {((historyPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(historyPage * ITEMS_PER_PAGE, pastItems.length)} of {pastItems.length} items
+      {/* Error State */}
+      {sessionsError && (
+        <Card className="p-6 bg-red-50 border-red-200">
+          <div className="flex items-center gap-3 text-red-700">
+            <AlertCircle className="w-5 h-5" />
+            <p className="text-sm">Failed to load schedule. Please try again.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
-              disabled={historyPage === 1}
-              className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4 text-gray-600" />
-            </button>
-            <div className="flex items-center gap-1">
-              {Array.from({ length: totalHistoryPages }, (_, i) => i + 1)
-                .filter(page => {
-                  // Show first page, last page, current page, and pages around current
-                  if (page === 1 || page === totalHistoryPages) return true;
-                  if (Math.abs(page - historyPage) <= 1) return true;
-                  return false;
-                })
-                .map((page, index, arr) => (
-                  <React.Fragment key={page}>
-                    {index > 0 && arr[index - 1] !== page - 1 && (
-                      <span className="text-gray-400 text-xs px-1">...</span>
-                    )}
-                    <button
-                      onClick={() => setHistoryPage(page)}
-                      className={`min-w-[28px] h-7 text-xs font-medium rounded-lg transition-colors ${
-                        historyPage === page
-                          ? 'bg-teal-600 text-white'
-                          : 'hover:bg-gray-100 text-gray-600'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  </React.Fragment>
-                ))}
+        </Card>
+      )}
+
+      {!sessionsLoading && !sessionsError && (
+        <>
+          {/* Level 1: Semester Selection */}
+          {selectedSemester === null && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[1, 2].map(semester => {
+                const count = sessionsBySemester[semester as 1 | 2]?.length || 0;
+                return (
+                  <Card
+                    key={semester}
+                    className="p-6 cursor-pointer hover:shadow-lg transition-all hover:border-teal-300 group"
+                    onClick={() => setSelectedSemester(semester)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center shadow-lg">
+                          <span className="text-2xl font-bold text-white">{semester}</span>
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-900">Semester {semester}</h3>
+                          <p className="text-sm text-gray-500">
+                            {semester === 1 ? 'Juli - Desember' : 'Januari - Juni'}
+                          </p>
+                          <p className="text-xs text-teal-600 font-medium mt-1">{count} schedule</p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-6 h-6 text-gray-400 group-hover:text-teal-600 transition-colors" />
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
-            <button
-              onClick={() => setHistoryPage(p => Math.min(totalHistoryPages, p + 1))}
-              disabled={historyPage === totalHistoryPages}
-              className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight className="w-4 h-4 text-gray-600" />
-            </button>
-          </div>
-        </div>
+          )}
+
+          {/* Level 2: Category Selection */}
+          {selectedSemester !== null && selectedCategory === null && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[
+                { key: 'materi' as CategoryType, label: 'Materi', icon: BookOpen, color: 'from-blue-500 to-blue-600', desc: 'Learning materials' },
+                { key: 'lesson-plan' as CategoryType, label: 'Lesson Plan', icon: FileText, color: 'from-green-500 to-green-600', desc: 'Lesson schedules' },
+                { key: 'task' as CategoryType, label: 'Task', icon: ClipboardList, color: 'from-orange-500 to-orange-600', desc: 'Assignments & tasks' },
+              ].map(cat => {
+                const semesterSessions = sessionsBySemester[selectedSemester as 1 | 2] || [];
+                const count = cat.key === 'materi' 
+                  ? semesterSessions.filter(s => s.materials && s.materials.length > 0).length
+                  : semesterSessions.length;
+                return (
+                  <Card
+                    key={cat.key}
+                    className="p-5 cursor-pointer hover:shadow-lg transition-all hover:border-teal-300 group"
+                    onClick={() => setSelectedCategory(cat.key)}
+                  >
+                    <div className="flex flex-col items-center text-center">
+                      <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${cat.color} flex items-center justify-center shadow-lg mb-3`}>
+                        <cat.icon className="w-7 h-7 text-white" />
+                      </div>
+                      <h3 className="text-base font-bold text-gray-900">{cat.label}</h3>
+                      <p className="text-xs text-gray-500 mt-1">{cat.desc}</p>
+                      <p className="text-xs text-teal-600 font-medium mt-2">{count} items</p>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Level 3: Week Selection */}
+          {selectedSemester !== null && selectedCategory !== null && selectedWeek === null && (
+            <div>
+              {weeksData.length === 0 ? (
+                <Card className="p-8 text-center">
+                  <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-sm text-gray-500">No schedule data for this category.</p>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {weeksData.map(w => (
+                    <Card
+                      key={w.week}
+                      className="p-4 cursor-pointer hover:shadow-lg transition-all hover:border-teal-300 group text-center"
+                      onClick={() => setSelectedWeek(w.week)}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-2 group-hover:bg-teal-600 transition-colors">
+                        <span className="text-sm font-bold text-teal-700 group-hover:text-white transition-colors">{w.week}</span>
+                      </div>
+                      <p className="text-xs font-bold text-gray-900">Week {w.week}</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">{formatDateRange(w.dateRange.start, w.dateRange.end)}</p>
+                      <p className="text-[10px] text-teal-600 font-medium mt-1">{w.count} items</p>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Level 4: Session List */}
+          {selectedSemester !== null && selectedCategory !== null && selectedWeek !== null && (
+            <div className="space-y-3">
+              {weekSessions.length === 0 ? (
+                <Card className="p-8 text-center">
+                  <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-sm text-gray-500">No schedule for this week.</p>
+                </Card>
+              ) : (
+                weekSessions.map(session => (
+                  <Card
+                    key={session.id}
+                    className="p-4 cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-teal-500"
+                    onClick={() => setSelectedSession(session as any)}
+                  >
+                    <div className="flex gap-4">
+                      {/* Date/Time Box */}
+                      <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-100 shrink-0 min-w-[70px]">
+                        <span className="text-[10px] font-bold text-teal-600 uppercase block">
+                          {new Date(session.dateTime).toLocaleDateString('id-ID', { weekday: 'short' })}
+                        </span>
+                        <span className="text-lg font-extrabold text-gray-900 block">
+                          {new Date(session.dateTime).getDate()}
+                        </span>
+                        <span className="text-[10px] text-gray-500">
+                          {new Date(session.dateTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                          {session.skillCategories.map((cat, idx) => (
+                            <span key={idx} className="text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded uppercase">
+                              {cat}
+                            </span>
+                          ))}
+                          {session.difficultyLevel && (
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${LEVEL_COLORS[session.difficultyLevel]}`}>
+                              {session.difficultyLevel}
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="text-sm font-bold text-gray-900 truncate">{session.topic}</h4>
+                        <div className="flex flex-wrap gap-2 mt-1 text-[10px] text-gray-500">
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3" /> {session.location}
+                          </span>
+                          {session.teacherName && (
+                            <span className="flex items-center gap-1">
+                              <User className="w-3 h-3" /> {session.teacherName}
+                            </span>
+                          )}
+                        </div>
+                        {session.materials && session.materials.length > 0 && (
+                          <div className="flex items-center gap-1 mt-2 text-[10px] text-teal-600">
+                            <Paperclip className="w-3 h-3" />
+                            <span>{session.materials.length} attachment(s)</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Arrow */}
+                      <div className="flex items-center">
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                      </div>
+                    </div>
+                  </Card>
+                ))
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

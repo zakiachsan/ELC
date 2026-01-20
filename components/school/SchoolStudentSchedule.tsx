@@ -19,7 +19,11 @@ import {
   Loader2,
   AlignLeft,
   Download,
+  ChevronRight,
+  FileText,
+  ClipboardList,
 } from 'lucide-react';
+import { Button } from '../Button';
 
 // Extended session type for PDF generation
 interface ExtendedSession {
@@ -268,6 +272,51 @@ const generateLessonPlanPDF = async (session: ExtendedSession, teacherName: stri
   doc.save(fileName);
 };
 
+// Helper functions for hierarchical schedule view
+const getAcademicYear = (date: Date): string => {
+  const month = date.getMonth();
+  const year = date.getFullYear();
+  if (month >= 6) {
+    return `${year}/${year + 1}`;
+  }
+  return `${year - 1}/${year}`;
+};
+
+const getSemester = (date: Date): number => {
+  const month = date.getMonth();
+  return month >= 6 ? 1 : 2;
+};
+
+const getWeekInSemester = (date: Date): number => {
+  const semester = getSemester(date);
+  let semesterStart: Date;
+  if (semester === 1) {
+    semesterStart = new Date(date.getFullYear(), 6, 1);
+  } else {
+    semesterStart = new Date(date.getFullYear(), 0, 1);
+  }
+  const diffTime = date.getTime() - semesterStart.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  return Math.floor(diffDays / 7) + 1;
+};
+
+const getWeekDateRange = (year: string, semester: number, week: number): { start: Date; end: Date } => {
+  const [startYear] = year.split('/').map(Number);
+  let semesterStart: Date;
+  if (semester === 1) {
+    semesterStart = new Date(startYear, 6, 1);
+  } else {
+    semesterStart = new Date(startYear + 1, 0, 1);
+  }
+  const weekStart = new Date(semesterStart);
+  weekStart.setDate(weekStart.getDate() + (week - 1) * 7);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  return { start: weekStart, end: weekEnd };
+};
+
+type CategoryType = 'materi' | 'lesson-plan' | 'task';
+
 export const SchoolStudentSchedule: React.FC = () => {
   const { user } = useAuth();
   const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError } = useSessions();
@@ -278,6 +327,12 @@ export const SchoolStudentSchedule: React.FC = () => {
   const [schoolName, setSchoolName] = useState<string>('');
   const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
   const [selectedSession, setSelectedSession] = useState<ExtendedSession | null>(null);
+  
+  // Hierarchical view state
+  const [selectedSemester, setSelectedSemester] = useState<number | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryType | null>(null);
+  const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  const currentAcademicYear = getAcademicYear(new Date());
 
   // Get school info from user's assigned location
   useEffect(() => {
@@ -340,6 +395,86 @@ export const SchoolStudentSchedule: React.FC = () => {
 
   // Sort by date (newest first)
   filteredSessions = filteredSessions.sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
+
+  // Group sessions by semester for hierarchical view (using base filtered sessions without teacher filter for counts)
+  const baseFilteredSessions = sessions.filter(s =>
+    schoolName && s.location.toLowerCase().includes(schoolName.toLowerCase())
+  );
+  
+  const sessionsBySemester = {
+    1: baseFilteredSessions.filter(s => getSemester(new Date(s.dateTime)) === 1),
+    2: baseFilteredSessions.filter(s => getSemester(new Date(s.dateTime)) === 2),
+  };
+
+  // Get data for selected category
+  const getCategoryData = () => {
+    if (selectedSemester === null) return [];
+    let semesterSessions = sessionsBySemester[selectedSemester as 1 | 2] || [];
+    
+    // Apply teacher filter
+    if (selectedTeacher !== 'all') {
+      semesterSessions = semesterSessions.filter(s => s.teacherId === selectedTeacher);
+    }
+
+    if (selectedCategory === 'materi') {
+      return semesterSessions.filter(s => s.materials && s.materials.length > 0);
+    } else if (selectedCategory === 'lesson-plan') {
+      return semesterSessions;
+    }
+    return semesterSessions;
+  };
+
+  // Get weeks data for current category
+  const getWeeksData = () => {
+    if (!selectedCategory || selectedSemester === null) return [];
+
+    const categoryData = getCategoryData();
+    const weekMap: Record<number, { week: number; count: number; dateRange: { start: Date; end: Date } }> = {};
+
+    categoryData.forEach(s => {
+      const week = getWeekInSemester(new Date(s.dateTime));
+      if (!weekMap[week]) {
+        weekMap[week] = {
+          week,
+          count: 0,
+          dateRange: getWeekDateRange(currentAcademicYear, selectedSemester!, week),
+        };
+      }
+      weekMap[week].count++;
+    });
+
+    return Object.values(weekMap).sort((a, b) => a.week - b.week);
+  };
+
+  // Get sessions for selected week
+  const getWeekSessions = () => {
+    if (selectedWeek === null || !selectedCategory) return [];
+
+    const categoryData = getCategoryData();
+    return categoryData
+      .filter(s => getWeekInSemester(new Date(s.dateTime)) === selectedWeek)
+      .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+  };
+
+  const weeksData = getWeeksData();
+  const weekSessions = getWeekSessions();
+
+  // Format date range helper
+  const formatDateRange = (start: Date, end: Date) => {
+    const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+    return `${start.toLocaleDateString('id-ID', options)} - ${end.toLocaleDateString('id-ID', options)}`;
+  };
+
+  // Navigation back in hierarchy
+  const navigateBack = () => {
+    if (selectedWeek !== null) {
+      setSelectedWeek(null);
+    } else if (selectedCategory !== null) {
+      setSelectedCategory(null);
+    } else if (selectedSemester !== null) {
+      setSelectedSemester(null);
+    }
+  };
 
   // Get teachers who have sessions at this school
   const teachersAtSchool = teachers.filter(t =>
@@ -518,20 +653,65 @@ export const SchoolStudentSchedule: React.FC = () => {
     );
   }
 
+  // Breadcrumb navigation
+  const renderBreadcrumb = () => {
+    const items: { label: string; onClick: () => void }[] = [
+      { label: 'Schedule', onClick: () => { setSelectedSemester(null); setSelectedCategory(null); setSelectedWeek(null); } }
+    ];
+
+    if (selectedSemester !== null) {
+      items.push({
+        label: `Semester ${selectedSemester}`,
+        onClick: () => { setSelectedCategory(null); setSelectedWeek(null); }
+      });
+    }
+
+    if (selectedCategory !== null) {
+      const categoryLabels: Record<CategoryType, string> = {
+        'materi': 'Materi',
+        'lesson-plan': 'Lesson Plan',
+        'task': 'Task'
+      };
+      items.push({
+        label: categoryLabels[selectedCategory],
+        onClick: () => setSelectedWeek(null)
+      });
+    }
+
+    if (selectedWeek !== null) {
+      items.push({ label: `Week ${selectedWeek}`, onClick: () => {} });
+    }
+
+    return (
+      <div className="flex items-center gap-2 text-sm">
+        {items.map((item, idx) => (
+          <React.Fragment key={idx}>
+            {idx > 0 && <ChevronRight className="w-4 h-4 text-gray-400" />}
+            <button
+              onClick={item.onClick}
+              className={`font-medium ${idx === items.length - 1 ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              {item.label}
+            </button>
+          </React.Fragment>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4">
-
-      {/* Header Section */}
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-blue-600" /> Class Schedule
+            <Calendar className="w-5 h-5 text-blue-600" />
+            Class Schedule
           </h2>
-          <p className="text-xs text-gray-500">{schoolName}</p>
+          <p className="text-xs text-gray-500 mt-1">{currentAcademicYear} • {schoolName}</p>
         </div>
-
-        {/* Filters */}
         <div className="flex items-center gap-2">
+          {/* Teacher Filter */}
           <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2 py-1">
             <UserIcon className="w-3 h-3 text-gray-400" />
             <select
@@ -545,8 +725,21 @@ export const SchoolStudentSchedule: React.FC = () => {
               ))}
             </select>
           </div>
+          {(selectedSemester !== null || selectedCategory !== null || selectedWeek !== null) && (
+            <Button
+              variant="outline"
+              onClick={navigateBack}
+              className="flex items-center gap-2 text-xs"
+            >
+              <ChevronRight className="w-4 h-4 rotate-180" />
+              Back
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Breadcrumb */}
+      {renderBreadcrumb()}
 
       {/* Info Banner */}
       <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 flex items-start gap-2">
@@ -557,86 +750,188 @@ export const SchoolStudentSchedule: React.FC = () => {
         </div>
       </div>
 
-      <Card className="!p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-gray-50 border-b border-gray-200 text-[9px] font-black text-gray-400 uppercase tracking-widest">
-              <tr>
-                 <th className="px-3 py-2">Date/Time</th>
-                 <th className="px-3 py-2">Category</th>
-                 <th className="px-3 py-2">Topic</th>
-                 <th className="px-3 py-2">Teacher</th>
-                 <th className="px-3 py-2">Class</th>
-                 <th className="px-3 py-2">Status</th>
-                 <th className="px-3 py-2 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredSessions.map(session => {
-                const status = getSessionStatus(session);
-                return (
-                  <tr key={session.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-3 py-2">
-                      <div className="text-xs font-medium text-gray-900">{new Date(session.dateTime).toLocaleDateString()}</div>
-                      <div className="text-[10px] text-gray-500">{new Date(session.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className="text-[9px] font-bold text-gray-600 uppercase tracking-tight bg-gray-100 px-1.5 py-0.5 rounded">
-                         {session.skillCategories.join(', ')}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-xs text-gray-700 font-medium">
-                      {session.topic}
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-1.5">
-                         <div className="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center text-[9px] font-bold text-gray-600">
-                            {getTeacherName(session.teacherId).charAt(0)}
-                         </div>
-                         <span className="text-xs text-gray-900">{getTeacherName(session.teacherId)}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className="flex items-center gap-1 text-[10px] text-gray-600 font-medium">
-                        <MapPin className="w-3 h-3 text-orange-500" /> {session.location}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${status.color}`}>
-                        {status.label}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => generateLessonPlanPDF(session, getTeacherName(session.teacherId))}
-                          className="p-1 bg-orange-50 text-orange-600 rounded hover:bg-orange-600 hover:text-white transition-all border border-orange-100"
-                          title="Download PDF"
-                        >
-                          <Download className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={() => setSelectedSession(session)}
-                          className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-[9px] font-bold uppercase hover:bg-blue-600 hover:text-white transition-all border border-blue-100"
-                        >
-                          View
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filteredSessions.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-gray-400 text-xs italic">
-                    No schedules found for {schoolName}.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      {/* Level 1: Semester Selection */}
+      {selectedSemester === null && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2].map(semester => {
+            const count = sessionsBySemester[semester as 1 | 2]?.length || 0;
+            return (
+              <Card
+                key={semester}
+                className="p-6 cursor-pointer hover:shadow-lg transition-all hover:border-blue-300 group"
+                onClick={() => setSelectedSemester(semester)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg">
+                      <span className="text-2xl font-bold text-white">{semester}</span>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">Semester {semester}</h3>
+                      <p className="text-sm text-gray-500">
+                        {semester === 1 ? 'Juli - Desember' : 'Januari - Juni'}
+                      </p>
+                      <p className="text-xs text-blue-600 font-medium mt-1">{count} schedule</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-6 h-6 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                </div>
+              </Card>
+            );
+          })}
         </div>
-      </Card>
+      )}
+
+      {/* Level 2: Category Selection */}
+      {selectedSemester !== null && selectedCategory === null && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            { key: 'materi' as CategoryType, label: 'Materi', icon: BookOpen, color: 'from-blue-500 to-blue-600', desc: 'Learning materials' },
+            { key: 'lesson-plan' as CategoryType, label: 'Lesson Plan', icon: FileText, color: 'from-green-500 to-green-600', desc: 'Lesson schedules' },
+            { key: 'task' as CategoryType, label: 'Task', icon: ClipboardList, color: 'from-orange-500 to-orange-600', desc: 'Assignments & tasks' },
+          ].map(cat => {
+            let semesterSessions = sessionsBySemester[selectedSemester as 1 | 2] || [];
+            if (selectedTeacher !== 'all') {
+              semesterSessions = semesterSessions.filter(s => s.teacherId === selectedTeacher);
+            }
+            const count = cat.key === 'materi'
+              ? semesterSessions.filter(s => s.materials && s.materials.length > 0).length
+              : semesterSessions.length;
+            return (
+              <Card
+                key={cat.key}
+                className="p-5 cursor-pointer hover:shadow-lg transition-all hover:border-blue-300 group"
+                onClick={() => setSelectedCategory(cat.key)}
+              >
+                <div className="flex flex-col items-center text-center">
+                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${cat.color} flex items-center justify-center shadow-lg mb-3`}>
+                    <cat.icon className="w-7 h-7 text-white" />
+                  </div>
+                  <h3 className="text-base font-bold text-gray-900">{cat.label}</h3>
+                  <p className="text-xs text-gray-500 mt-1">{cat.desc}</p>
+                  <p className="text-xs text-blue-600 font-medium mt-2">{count} items</p>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Level 3: Week Selection */}
+      {selectedSemester !== null && selectedCategory !== null && selectedWeek === null && (
+        <div>
+          {weeksData.length === 0 ? (
+            <Card className="p-8 text-center">
+              <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-sm text-gray-500">No schedule data for this category.</p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {weeksData.map(w => (
+                <Card
+                  key={w.week}
+                  className="p-4 cursor-pointer hover:shadow-lg transition-all hover:border-blue-300 group text-center"
+                  onClick={() => setSelectedWeek(w.week)}
+                >
+                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-2 group-hover:bg-blue-600 transition-colors">
+                    <span className="text-sm font-bold text-blue-700 group-hover:text-white transition-colors">{w.week}</span>
+                  </div>
+                  <p className="text-xs font-bold text-gray-900">Week {w.week}</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">{formatDateRange(w.dateRange.start, w.dateRange.end)}</p>
+                  <p className="text-[10px] text-blue-600 font-medium mt-1">{w.count} items</p>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Level 4: Session List */}
+      {selectedSemester !== null && selectedCategory !== null && selectedWeek !== null && (
+        <div className="space-y-3">
+          {weekSessions.length === 0 ? (
+            <Card className="p-8 text-center">
+              <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-sm text-gray-500">No schedule for this week.</p>
+            </Card>
+          ) : (
+            weekSessions.map(session => {
+              const status = getSessionStatus(session);
+              return (
+                <Card
+                  key={session.id}
+                  className="p-4 cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-blue-500"
+                  onClick={() => setSelectedSession(session)}
+                >
+                  <div className="flex gap-4">
+                    {/* Date/Time Box */}
+                    <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-100 shrink-0 min-w-[70px]">
+                      <span className="text-[10px] font-bold text-blue-600 uppercase block">
+                        {new Date(session.dateTime).toLocaleDateString('id-ID', { weekday: 'short' })}
+                      </span>
+                      <span className="text-lg font-extrabold text-gray-900 block">
+                        {new Date(session.dateTime).getDate()}
+                      </span>
+                      <span className="text-[10px] text-gray-500">
+                        {new Date(session.dateTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                        {session.skillCategories.map((cat, idx) => (
+                          <span key={idx} className="text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded uppercase">
+                            {cat}
+                          </span>
+                        ))}
+                        {session.difficultyLevel && (
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${LEVEL_COLORS[session.difficultyLevel]}`}>
+                            {session.difficultyLevel}
+                          </span>
+                        )}
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase border ${status.color}`}>
+                          {status.label}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-bold text-gray-900 truncate">{session.topic}</h4>
+                      <div className="flex flex-wrap gap-2 mt-1 text-[10px] text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" /> {session.location}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <UserIcon className="w-3 h-3" /> {getTeacherName(session.teacherId)}
+                        </span>
+                      </div>
+                      {session.materials && session.materials.length > 0 && (
+                        <div className="flex items-center gap-1 mt-2 text-[10px] text-blue-600">
+                          <FileText className="w-3 h-3" />
+                          <span>{session.materials.length} attachment(s)</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          generateLessonPlanPDF(session, getTeacherName(session.teacherId));
+                        }}
+                        className="p-1.5 bg-orange-50 text-orange-600 rounded hover:bg-orange-600 hover:text-white transition-all border border-orange-100"
+                        title="Download PDF"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                    </div>
+                  </div>
+                </Card>
+              );
+            })
+          )}
+        </div>
+      )}
     </div>
   );
 };
