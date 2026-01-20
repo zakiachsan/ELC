@@ -462,6 +462,7 @@ CREATE TABLE IF NOT EXISTS kahoot_quizzes (
   is_active BOOLEAN DEFAULT FALSE,
   questions JSONB DEFAULT '[]',
   play_count INTEGER DEFAULT 0,
+  created_by TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

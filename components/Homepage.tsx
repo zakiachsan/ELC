@@ -95,33 +95,14 @@ const MOCK_KAHOOT_QUIZZES: KahootQuiz[] = [
   }
 ];
 
-// Generate mock rankings
-const generateMockRankings = (): KahootRanking => {
-  const names = ['Ahmad Fauzi', 'Siti Nurhaliza', 'Budi Santoso', 'Maria Putri', 'Andi Pratama', 'Dewi Lestari', 'Rizki Ramadhan', 'Ayu Ningrum'];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const dailyPlayers: KahootPlayer[] = names.slice(0, 5).map((name, i) => ({
-    name,
-    score: 5000 - (i * 400) - Math.floor(Math.random() * 200),
-    timestamp: today.getTime() + Math.floor(Math.random() * 86400000),
-    correctAnswers: 5 - Math.floor(i / 2),
-    totalTime: 45 + (i * 5) + Math.floor(Math.random() * 10)
-  }));
-
-  const allTimePlayers: KahootPlayer[] = names.map((name, i) => ({
-    name,
-    score: 5000 - (i * 350) - Math.floor(Math.random() * 150),
-    timestamp: Date.now() - Math.floor(Math.random() * 7 * 86400000),
-    correctAnswers: 5 - Math.floor(i / 3),
-    totalTime: 40 + (i * 4) + Math.floor(Math.random() * 15)
-  }));
-
-  return {
-    daily: dailyPlayers.sort((a, b) => b.score - a.score),
-    allTime: allTimePlayers.sort((a, b) => b.score - a.score)
-  };
-};
+// Helper to convert database participant to KahootPlayer format
+const dbParticipantToPlayer = (p: any): KahootPlayer => ({
+  name: p.name,
+  score: p.score,
+  timestamp: new Date(p.completed_at).getTime(),
+  correctAnswers: p.correct_answers,
+  totalTime: p.time_spent
+});
 
 interface HomepageProps {
   onLoginSuccess: (role: UserRole, email?: string) => void;
@@ -255,7 +236,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
   const [kahootTimeLeft, setKahootTimeLeft] = useState(0);
   const [kahootAnswers, setKahootAnswers] = useState<{questionId: string; answer: number; timeSpent: number; isCorrect: boolean}[]>([]);
   const [kahootScore, setKahootScore] = useState(0);
-  const [kahootRankings, setKahootRankings] = useState<KahootRanking>(generateMockRankings());
+  const [kahootRankings, setKahootRankings] = useState<KahootRanking>({ daily: [], allTime: [] });
   const [kahootAnswered, setKahootAnswered] = useState(false);
   const [showRankingTab, setShowRankingTab] = useState<'daily' | 'allTime'>('daily');
 
@@ -284,6 +265,28 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
     'SMP Petra Surabaya',
     'SMA Petra Surabaya',
   ];
+
+  // Load real rankings from database
+  const loadKahootRankings = async () => {
+    try {
+      const [todayData, allTimeData] = await Promise.all([
+        olympiadService.getTodayKahootLeaderboard(10),
+        olympiadService.getKahootLeaderboard(10)
+      ]);
+
+      setKahootRankings({
+        daily: (todayData || []).map(dbParticipantToPlayer),
+        allTime: (allTimeData || []).map(dbParticipantToPlayer)
+      });
+    } catch (err) {
+      console.error('Failed to load kahoot rankings:', err);
+    }
+  };
+
+  // Load rankings on mount
+  useEffect(() => {
+    loadKahootRankings();
+  }, []);
 
   const openLogin = () => setIsLoginOpen(true);
   const closeLogin = () => setIsLoginOpen(false);
@@ -521,22 +524,8 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
   };
 
   const finishKahootQuiz = async (finalScore: number) => {
-    // Add player to rankings
     const correctCount = kahootAnswers.filter(a => a.isCorrect).length + (kahootAnswers.length < (currentQuiz?.questions.length || 0) ? 1 : 0);
     const totalTime = kahootAnswers.reduce((sum, a) => sum + a.timeSpent, 0);
-
-    const newPlayer: KahootPlayer = {
-      name: kahootPlayerName,
-      score: finalScore,
-      timestamp: Date.now(),
-      correctAnswers: correctCount,
-      totalTime
-    };
-
-    setKahootRankings(prev => ({
-      daily: [...prev.daily, newPlayer].sort((a, b) => b.score - a.score).slice(0, 10),
-      allTime: [...prev.allTime, newPlayer].sort((a, b) => b.score - a.score).slice(0, 10)
-    }));
 
     // Save participant to database
     if (currentQuiz) {
@@ -554,6 +543,8 @@ export const Homepage: React.FC<HomepageProps> = ({ onLoginSuccess, initialSecti
         });
         // Also increment play count
         await olympiadService.incrementKahootPlayCount(currentQuiz.id);
+        // Reload rankings from database to show real data
+        await loadKahootRankings();
       } catch (err) {
         console.error('Failed to save quiz result:', err);
         // Don't block the UI if save fails
