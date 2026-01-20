@@ -103,12 +103,18 @@ export const usePlacementQuestions = (activeOnly = false) => {
     return updated;
   };
 
+  const updateQuestion = async (id: string, updates: Partial<PlacementQuestion>) => {
+    const updated = await placementService.updateQuestion(id, updates);
+    setQuestions(prev => prev.map(q => q.id === id ? updated : q));
+    return updated;
+  };
+
   const deleteQuestion = async (id: string) => {
     await placementService.deleteQuestion(id);
     setQuestions(prev => prev.filter(q => q.id !== id));
   };
 
-  return { questions, loading, error, refetch: fetchQuestions, createQuestion, toggleActive, deleteQuestion };
+  return { questions, loading, error, refetch: fetchQuestions, createQuestion, updateQuestion, toggleActive, deleteQuestion };
 };
 
 export const useOralTestSlots = (availableOnly = false) => {

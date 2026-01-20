@@ -28,6 +28,7 @@ export const PlacementTestManager: React.FC = () => {
     questions,
     loading: questionsLoading,
     createQuestion,
+    updateQuestion,
     toggleActive,
     deleteQuestion,
     refetch: refetchQuestions
@@ -64,6 +65,14 @@ export const PlacementTestManager: React.FC = () => {
   // Oral Score Modal
   const [scoringLead, setScoringLead] = useState<any | null>(null);
   const [selectedOralScore, setSelectedOralScore] = useState<CEFRLevel | ''>('');
+
+  // Question Edit/Delete State
+  const [editingQuestion, setEditingQuestion] = useState<any | null>(null);
+  const [editQuestionText, setEditQuestionText] = useState('');
+  const [editQuestionOptions, setEditQuestionOptions] = useState<string[]>(['', '', '', '']);
+  const [editQuestionCorrect, setEditQuestionCorrect] = useState(0);
+  const [editQuestionWeight, setEditQuestionWeight] = useState(1);
+  const [deletingQuestion, setDeletingQuestion] = useState<any | null>(null);
 
   const filteredResults = results.filter(r =>
     r.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -187,6 +196,43 @@ export const PlacementTestManager: React.FC = () => {
 
   const availableTimes = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
   const cefrLevels = Object.values(CEFRLevel);
+
+  // Question Edit/Delete Handlers
+  const handleEditQuestion = (q: any) => {
+    setEditingQuestion(q);
+    setEditQuestionText(q.text);
+    setEditQuestionOptions([...q.options]);
+    setEditQuestionCorrect(q.correct_answer_index);
+    setEditQuestionWeight(q.weight || 1);
+  };
+
+  const handleSaveEditQuestion = async () => {
+    if (!editingQuestion) return;
+    try {
+      await updateQuestion(editingQuestion.id, {
+        text: editQuestionText,
+        options: editQuestionOptions,
+        correct_answer_index: editQuestionCorrect,
+        weight: editQuestionWeight,
+      });
+      setEditingQuestion(null);
+      refetchQuestions();
+    } catch (err) {
+      console.error('Error updating question:', err);
+      alert('Gagal menyimpan perubahan.');
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingQuestion) return;
+    try {
+      await deleteQuestion(deletingQuestion.id);
+      setDeletingQuestion(null);
+    } catch (err) {
+      console.error('Error deleting question:', err);
+      alert('Gagal menghapus pertanyaan.');
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -490,8 +536,8 @@ export const PlacementTestManager: React.FC = () => {
               {questions.map((q, idx) => (
                  <Card key={q.id} className="relative group !p-3">
                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                       <button className="p-1.5 text-gray-400 hover:text-blue-600"><Pencil className="w-3.5 h-3.5" /></button>
-                       <button className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                       <button onClick={() => handleEditQuestion(q)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
+                       <button onClick={() => setDeletingQuestion(q)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all" title="Hapus"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                     <div className="space-y-2">
                        <div className="flex items-start gap-2">
@@ -747,6 +793,126 @@ export const PlacementTestManager: React.FC = () => {
               </button>
               <Button onClick={handleSaveSlot} className="flex-1 bg-teal-600 hover:bg-teal-700 text-xs py-1.5">
                 Save
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* EDIT QUESTION MODAL */}
+      {editingQuestion && (
+        <div className="fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-lg !p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-teal-600" /> Edit Pertanyaan
+              </h3>
+              <button onClick={() => setEditingQuestion(null)} className="p-1 text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Pertanyaan</label>
+                <textarea
+                  className="w-full border rounded-lg p-3 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  rows={2}
+                  value={editQuestionText}
+                  onChange={(e) => setEditQuestionText(e.target.value)}
+                  placeholder="Ketik pertanyaan..."
+                />
+              </div>
+
+              <div>
+                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Pilihan Jawaban</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[0, 1, 2, 3].map(i => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="editCorrect"
+                        checked={editQuestionCorrect === i}
+                        onChange={() => setEditQuestionCorrect(i)}
+                        className="w-3 h-3 text-teal-600"
+                      />
+                      <input
+                        type="text"
+                        className="w-full border rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                        placeholder={`Option ${String.fromCharCode(65 + i)}`}
+                        value={editQuestionOptions[i]}
+                        onChange={(e) => {
+                          const newOptions = [...editQuestionOptions];
+                          newOptions[i] = e.target.value;
+                          setEditQuestionOptions(newOptions);
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 block">CEFR Weight (pts)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  className="w-24 border rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  value={editQuestionWeight}
+                  onChange={(e) => setEditQuestionWeight(Number(e.target.value))}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setEditingQuestion(null)}
+                className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                Batal
+              </button>
+              <Button
+                onClick={handleSaveEditQuestion}
+                className="flex-1 bg-teal-600 hover:bg-teal-700 text-xs py-2"
+              >
+                Simpan Perubahan
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {deletingQuestion && (
+        <div className="fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-sm !p-4 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">Hapus Pertanyaan?</h3>
+                <p className="text-xs text-gray-500">Tindakan ini tidak dapat dibatalkan.</p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-gray-50 rounded-xl">
+              <p className="text-xs text-gray-700 line-clamp-2">{deletingQuestion.text}</p>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDeletingQuestion(null)}
+                className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                Batal
+              </button>
+              <Button
+                onClick={handleConfirmDelete}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-xs py-2"
+              >
+                Ya, Hapus
               </Button>
             </div>
           </Card>
