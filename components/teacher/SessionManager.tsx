@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import { Card } from '../Card';
@@ -47,14 +47,15 @@ const getSemester = (date: Date): number => {
   return month >= 6 ? 1 : 2;
 };
 
-// Helper to get week number within semester
-const getWeekInSemester = (date: Date): number => {
+// Helper to get week number within semester (using academic year for consistency)
+const getWeekInSemester = (date: Date, academicYear: string): number => {
   const semester = getSemester(date);
+  const [startYear] = academicYear.split('/').map(Number);
   let semesterStart: Date;
   if (semester === 1) {
-    semesterStart = new Date(date.getFullYear(), 6, 1);
+    semesterStart = new Date(startYear, 6, 1); // July of start year
   } else {
-    semesterStart = new Date(date.getFullYear(), 0, 1);
+    semesterStart = new Date(startYear + 1, 0, 1); // January of end year
   }
   const diffTime = date.getTime() - semesterStart.getTime();
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
@@ -409,8 +410,9 @@ export const SessionManager: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<CategoryType | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
 
-  // Get current academic year
-  const currentAcademicYear = getAcademicYear(new Date());
+  // Academic year state - default to current academic year
+  const defaultAcademicYear = getAcademicYear(new Date());
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>(defaultAcademicYear);
 
   // Navigation helpers
   const navigateToSchool = (schoolName: string) => {
@@ -525,10 +527,33 @@ export const SessionManager: React.FC = () => {
     vocabularyAdjective: s.vocabulary_adjective || '',
   }));
 
-  // Group sessions by semester
+  // Get available academic years from sessions
+  const availableAcademicYears = useMemo(() => {
+    const years = new Set<string>();
+    years.add(defaultAcademicYear); // Always include current year
+    sessions.forEach(s => {
+      const sessionDate = new Date(s.dateTime);
+      if (!isNaN(sessionDate.getTime())) {
+        years.add(getAcademicYear(sessionDate));
+      }
+    });
+    // Sort years descending (newest first)
+    return Array.from(years).sort((a, b) => {
+      const yearA = parseInt(a.split('/')[0]);
+      const yearB = parseInt(b.split('/')[0]);
+      return yearB - yearA;
+    });
+  }, [sessions, defaultAcademicYear]);
+
+  // Filter sessions by selected academic year, then group by semester
+  const sessionsInCurrentYear = sessions.filter(s => {
+    const sessionDate = new Date(s.dateTime);
+    return getAcademicYear(sessionDate) === selectedAcademicYear;
+  });
+
   const sessionsBySemester = {
-    1: sessions.filter(s => getSemester(new Date(s.dateTime)) === 1),
-    2: sessions.filter(s => getSemester(new Date(s.dateTime)) === 2),
+    1: sessionsInCurrentYear.filter(s => getSemester(new Date(s.dateTime)) === 1),
+    2: sessionsInCurrentYear.filter(s => getSemester(new Date(s.dateTime)) === 2),
   };
 
   // Get data for selected category
@@ -552,12 +577,12 @@ export const SessionManager: React.FC = () => {
     const weekMap: Record<number, { week: number; count: number; dateRange: { start: Date; end: Date } }> = {};
 
     categoryData.forEach(s => {
-      const week = getWeekInSemester(new Date(s.dateTime));
+      const week = getWeekInSemester(new Date(s.dateTime), selectedAcademicYear);
       if (!weekMap[week]) {
         weekMap[week] = {
           week,
           count: 0,
-          dateRange: getWeekDateRange(currentAcademicYear, selectedSemester!, week),
+          dateRange: getWeekDateRange(selectedAcademicYear, selectedSemester!, week),
         };
       }
       weekMap[week].count++;
@@ -572,7 +597,7 @@ export const SessionManager: React.FC = () => {
 
     const categoryData = getCategoryData();
     return categoryData
-      .filter(s => getWeekInSemester(new Date(s.dateTime)) === selectedWeek)
+      .filter(s => getWeekInSemester(new Date(s.dateTime), selectedAcademicYear) === selectedWeek)
       .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
   };
 
@@ -2931,11 +2956,27 @@ export const SessionManager: React.FC = () => {
         {/* SEMESTER SELECTION */}
         {selectedSemester === null && (
           <div className="p-4">
-            {/* Academic Year Header */}
+            {/* Academic Year Header with Selector */}
             <div className="mb-4 text-center">
-              <div className="inline-flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg shadow-sm">
+              <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg shadow-sm">
                 <School className="w-4 h-4" />
-                <span className="text-sm font-bold">Tahun Ajaran {currentAcademicYear}</span>
+                <span className="text-sm font-bold">Tahun Ajaran</span>
+                <select
+                  value={selectedAcademicYear}
+                  onChange={(e) => {
+                    setSelectedAcademicYear(e.target.value);
+                    setSelectedSemester(null);
+                    setSelectedCategory(null);
+                    setSelectedWeek(null);
+                  }}
+                  className="bg-white/20 text-white text-sm font-bold border-0 rounded px-2 py-0.5 cursor-pointer hover:bg-white/30 transition-colors focus:outline-none focus:ring-2 focus:ring-white/50"
+                >
+                  {availableAcademicYears.map(year => (
+                    <option key={year} value={year} className="text-gray-900">
+                      {year}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
