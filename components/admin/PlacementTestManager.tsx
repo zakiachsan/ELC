@@ -74,6 +74,12 @@ export const PlacementTestManager: React.FC = () => {
   const [editQuestionWeight, setEditQuestionWeight] = useState(1);
   const [deletingQuestion, setDeletingQuestion] = useState<any | null>(null);
 
+  // New Question State
+  const [newQuestionText, setNewQuestionText] = useState('');
+  const [newQuestionOptions, setNewQuestionOptions] = useState<string[]>(['', '', '', '']);
+  const [newQuestionCorrect, setNewQuestionCorrect] = useState(0);
+  const [newQuestionWeight, setNewQuestionWeight] = useState(1);
+
   const filteredResults = results.filter(r =>
     r.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     r.email?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -231,6 +237,43 @@ export const PlacementTestManager: React.FC = () => {
     } catch (err) {
       console.error('Error deleting question:', err);
       alert('Gagal menghapus pertanyaan.');
+    }
+  };
+
+  const handleSaveNewQuestion = async () => {
+    // Validation
+    if (!newQuestionText.trim()) {
+      alert('Pertanyaan tidak boleh kosong!');
+      return;
+    }
+    const filledOptions = newQuestionOptions.filter(opt => opt.trim() !== '');
+    if (filledOptions.length < 2) {
+      alert('Minimal 2 pilihan jawaban harus diisi!');
+      return;
+    }
+    if (!newQuestionOptions[newQuestionCorrect]?.trim()) {
+      alert('Pilih jawaban yang benar!');
+      return;
+    }
+
+    try {
+      await createQuestion({
+        text: newQuestionText.trim(),
+        options: newQuestionOptions,
+        correct_answer_index: newQuestionCorrect,
+        weight: newQuestionWeight,
+        is_active: true,
+      });
+      // Reset form
+      setNewQuestionText('');
+      setNewQuestionOptions(['', '', '', '']);
+      setNewQuestionCorrect(0);
+      setNewQuestionWeight(1);
+      setIsAddingQ(false);
+      refetchQuestions();
+    } catch (err) {
+      console.error('Error creating question:', err);
+      alert('Gagal menyimpan pertanyaan.');
     }
   };
 
@@ -515,18 +558,52 @@ export const PlacementTestManager: React.FC = () => {
               <Card className="!p-4 animate-in slide-in-from-top-4 duration-300">
                  <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">New Placement Question</h3>
                  <div className="space-y-3">
-                    <textarea className="w-full border rounded-lg p-3 text-xs" rows={2} placeholder="Type the question text here..." />
+                    <textarea
+                      className="w-full border rounded-lg p-3 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      rows={2}
+                      placeholder="Type the question text here..."
+                      value={newQuestionText}
+                      onChange={(e) => setNewQuestionText(e.target.value)}
+                    />
                     <div className="grid grid-cols-2 gap-3">
                        {[0, 1, 2, 3].map(i => (
                           <div key={i} className="flex items-center gap-2">
-                             <input type="radio" name="correct" className="w-3 h-3" />
-                             <input type="text" className="w-full border rounded-lg px-2.5 py-1.5 text-xs" placeholder={`Option ${String.fromCharCode(65+i)}`} />
+                             <input
+                               type="radio"
+                               name="newCorrect"
+                               className="w-3 h-3 text-teal-600"
+                               checked={newQuestionCorrect === i}
+                               onChange={() => setNewQuestionCorrect(i)}
+                             />
+                             <input
+                               type="text"
+                               className="w-full border rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                               placeholder={`Option ${String.fromCharCode(65+i)}`}
+                               value={newQuestionOptions[i]}
+                               onChange={(e) => {
+                                 const updated = [...newQuestionOptions];
+                                 updated[i] = e.target.value;
+                                 setNewQuestionOptions(updated);
+                               }}
+                             />
                           </div>
                        ))}
                     </div>
+                    <div className="flex items-center gap-3">
+                       <label className="text-[9px] font-black text-gray-400 uppercase">Weight:</label>
+                       <input
+                         type="number"
+                         min={1}
+                         max={10}
+                         className="w-16 border rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                         value={newQuestionWeight}
+                         onChange={(e) => setNewQuestionWeight(Number(e.target.value))}
+                       />
+                       <span className="text-[10px] text-gray-400">pts</span>
+                    </div>
                     <div className="flex justify-end gap-2 pt-3">
                        <Button variant="outline" onClick={() => setIsAddingQ(false)} className="text-xs px-3 py-1.5 h-auto">Cancel</Button>
-                       <Button onClick={() => setIsAddingQ(false)} className="text-xs px-3 py-1.5 h-auto">Save Question</Button>
+                       <Button onClick={handleSaveNewQuestion} className="text-xs px-3 py-1.5 h-auto">Save Question</Button>
                     </div>
                  </div>
               </Card>
