@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Card } from '../Card';
 import { Calendar, Clock, User as UserIcon, BookOpen, MapPin, Eye, Filter, School, Loader2, AlignLeft, ClipboardCheck } from 'lucide-react';
 import { useSessions } from '../../hooks/useSessions';
-import { useTeachers, useLocations } from '../../hooks/useProfiles';
+import { useTeachers, useLocations, useAllClasses } from '../../hooks/useProfiles';
 import { useReports } from '../../hooks/useReports';
 import { ClassSession, SkillCategory, DifficultyLevel } from '../../types';
 import { LEVEL_COLORS } from '../../constants';
@@ -14,6 +14,7 @@ export const ScheduleManager: React.FC = () => {
   const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError } = useSessions();
   const { profiles: teachersData, loading: teachersLoading } = useTeachers();
   const { locations: locationsData, loading: locationsLoading } = useLocations();
+  const { classes: classesData } = useAllClasses();
   const { reports: reportsData } = useReports();
 
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
@@ -307,7 +308,7 @@ export const ScheduleManager: React.FC = () => {
       </div>
 
       {activeTab === 'completion' ? (
-        <CompletionTracker teachers={teachersData} locations={locationsData} />
+        <CompletionTracker teachers={teachersData} locations={locationsData} classes={classesData} />
       ) : (
       <>
       {/* Header Section */}

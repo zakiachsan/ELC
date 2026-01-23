@@ -11,7 +11,7 @@ import {
   X, ExternalLink, Search
 } from 'lucide-react';
 import { useSessions } from '../../hooks/useSessions';
-import { useTeachers, useLocations } from '../../hooks/useProfiles';
+import { useTeachers, useLocations, useAllClasses } from '../../hooks/useProfiles';
 import { useTests } from '../../hooks/useTests';
 import { ClassSession, SkillCategory, DifficultyLevel } from '../../types';
 import { LEVEL_COLORS } from '../../constants';
@@ -319,6 +319,7 @@ export const ScheduleManagerV2: React.FC = () => {
   // Load only teachers list initially
   const { profiles: teachersData, loading: teachersLoading } = useTeachers();
   const { locations: locationsData, loading: locationsLoading } = useLocations();
+  const { classes: classesData } = useAllClasses();
 
   // Load sessions only when teacher is selected (lazy loading)
   const { sessions: teacherSessionsData, loading: sessionsLoading } = useSessions({
@@ -573,7 +574,7 @@ export const ScheduleManagerV2: React.FC = () => {
       </div>
 
       {activeTab === 'completion' ? (
-        <CompletionTracker teachers={teachersData} locations={locationsData} />
+        <CompletionTracker teachers={teachersData} locations={locationsData} classes={classesData} />
       ) : (
       <>
       {/* Header - Compact */}

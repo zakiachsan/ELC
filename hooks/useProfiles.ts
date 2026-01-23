@@ -379,4 +379,29 @@ export const useClasses = (locationId?: string) => {
   };
 };
 
+
+export const useAllClasses = () => {
+  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    const fetchAllClasses = async () => {
+      try {
+        setLoading(true);
+        const data = await profilesService.getAllClasses();
+        setClasses(data as ClassItem[]);
+      } catch (err) {
+        console.warn('Failed to fetch all classes:', err);
+        setError(err as Error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAllClasses();
+  }, []);
+
+  return { classes, loading, error };
+};
+
 export default useProfiles;

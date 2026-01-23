@@ -3,12 +3,14 @@ import { Card } from '../Card';
 import { Calendar, CheckCircle2, XCircle, User, School, Loader2, ChevronDown, ChevronRight, ArrowUpDown } from 'lucide-react';
 import { sessionsService } from '../../services';
 import type { Profile, Location, ClassSession } from '../../lib/database.types';
+import type { ClassItem } from '../../hooks/useProfiles';
 
 type SortOption = 'incomplete-first' | 'complete-first' | 'name-asc' | 'name-desc';
 
 interface Props {
   teachers: Profile[];
   locations: Location[];
+  classes: ClassItem[];
 }
 
 interface TeacherAssignment {
@@ -76,7 +78,7 @@ const generateWeeks = (): number[] => {
   return Array.from({ length: 26 }, (_, i) => i + 1);
 };
 
-export const CompletionTracker: React.FC<Props> = ({ teachers, locations }) => {
+export const CompletionTracker: React.FC<Props> = ({ teachers, locations, classes }) => {
   const [loading, setLoading] = useState(true);
   const [weekSessions, setWeekSessions] = useState<ClassSession[]>([]);
   const [expandedTeachers, setExpandedTeachers] = useState<Set<string>>(new Set());
@@ -109,6 +111,18 @@ export const CompletionTracker: React.FC<Props> = ({ teachers, locations }) => {
     locations.forEach(loc => map.set(loc.id, loc.name));
     return map;
   }, [locations]);
+
+  // Classes lookup: locationId -> Set of class names at that location
+  const classesLookup = useMemo(() => {
+    const lookup = new Map<string, Set<string>>();
+    classes.forEach(cls => {
+      if (!lookup.has(cls.location_id)) {
+        lookup.set(cls.location_id, new Set());
+      }
+      lookup.get(cls.location_id)!.add(cls.name);
+    });
+    return lookup;
+  }, [classes]);
 
   // Fetch sessions for selected week
   useEffect(() => {
@@ -151,28 +165,33 @@ export const CompletionTracker: React.FC<Props> = ({ teachers, locations }) => {
 
         // Build assignments from teacher's assigned_location_ids + assigned_classes
         const locationIds = teacher.assigned_location_ids || [];
-        const classes = teacher.assigned_classes || [];
+        const teacherClasses = teacher.assigned_classes || [];
 
         locationIds.forEach(locId => {
           const locationName = locationMap.get(locId);
           if (!locationName) return;
 
-          classes.forEach(className => {
-            const locationKey = `${locationName} - ${className}`;
-            const hasSchedule = teacherSessions.has(locationKey);
-            const sessionCount = weekSessions.filter(
-              s => s.teacher_id === teacher.id && s.location === locationKey
-            ).length;
+          // Filter: only include classes that exist at this location
+          const validClassesAtLocation = classesLookup.get(locId) || new Set();
 
-            assignments.push({
-              locationId: locId,
-              locationName,
-              className,
-              locationKey,
-              hasSchedule,
-              sessionCount
+          teacherClasses
+            .filter(className => validClassesAtLocation.has(className))
+            .forEach(className => {
+              const locationKey = `${locationName} - ${className}`;
+              const hasSchedule = teacherSessions.has(locationKey);
+              const sessionCount = weekSessions.filter(
+                s => s.teacher_id === teacher.id && s.location === locationKey
+              ).length;
+
+              assignments.push({
+                locationId: locId,
+                locationName,
+                className,
+                locationKey,
+                hasSchedule,
+                sessionCount
+              });
             });
-          });
         });
 
         return {
@@ -183,7 +202,7 @@ export const CompletionTracker: React.FC<Props> = ({ teachers, locations }) => {
         };
       })
       .filter(status => status.totalCount > 0);
-  }, [teachers, locationMap, sessionLookup, weekSessions]);
+  }, [teachers, locationMap, classesLookup, sessionLookup, weekSessions]);
 
   // Sorted teacher statuses based on sort option
   const sortedTeacherStatuses = useMemo(() => {
