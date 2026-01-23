@@ -128,7 +128,8 @@ export const AccountManager: React.FC = () => {
   const [teacherStatus, setTeacherStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [teacherClassTypes, setTeacherClassTypes] = useState<ClassType[]>([]);
   const [teacherSubjects, setTeacherSubjects] = useState<string[]>([]);
-  const [teacherClasses, setTeacherClasses] = useState<string[]>([]);
+  // Teacher assigned classes with unique key (locationId|className) to handle same class names across different schools
+  const [teacherClasses, setTeacherClasses] = useState<{key: string; locationId: string; className: string}[]>([]);
   const [allClassesData, setAllClassesData] = useState<{id: string; location_id: string; name: string}[]>([]);
   const [allClassesLoading, setAllClassesLoading] = useState(false);
 
@@ -145,20 +146,36 @@ export const AccountManager: React.FC = () => {
   const [featuredTeacherId, setFeaturedTeacherId] = useState<string | null>(null);
   const [featuredTeacherLoading, setFeaturedTeacherLoading] = useState(false);
 
-  // Fetch all classes when component mounts or locations change
+  // Helper function to fetch classes for given location IDs
+  const fetchClassesForLocationIds = async (locationIds: string[]): Promise<{id: string; location_id: string; name: string}[]> => {
+    if (locationIds.length === 0) return [];
+    
+    try {
+      const { profilesService } = await import('../../services/profiles.service');
+      const allClasses = await profilesService.getAllClasses();
+      // Filter classes for selected locations
+      const filtered = allClasses.filter((c: any) => locationIds.includes(c.location_id));
+      return filtered;
+    } catch (err) {
+      console.error('Failed to fetch classes:', err);
+      return [];
+    }
+  };
+
+  // Fetch all classes when locations change - used for normal UI interaction
   useEffect(() => {
     const fetchAllClasses = async () => {
       if (teacherLocationIds.length === 0) {
         setAllClassesData([]);
         return;
       }
+      // Only auto-fetch if we're not in edit mode (edit mode handles its own fetch)
+      if (isEditing) return;
+      
       setAllClassesLoading(true);
       try {
-        const { profilesService } = await import('../../services/profiles.service');
-        const allClasses = await profilesService.getAllClasses();
-        // Filter classes for selected locations
-        const filtered = allClasses.filter((c: any) => teacherLocationIds.includes(c.location_id));
-        setAllClassesData(filtered);
+        const classes = await fetchClassesForLocationIds(teacherLocationIds);
+        setAllClassesData(classes);
       } catch (err) {
         console.error('Failed to fetch classes:', err);
         setAllClassesData([]);
@@ -167,7 +184,7 @@ export const AccountManager: React.FC = () => {
       }
     };
     fetchAllClasses();
-  }, [teacherLocationIds]);
+  }, [teacherLocationIds, isEditing]);
 
   // Toggle teacher location selection
   const toggleTeacherLocation = (locationId: string) => {
@@ -245,12 +262,16 @@ export const AccountManager: React.FC = () => {
   const availableClasses = allClassesData.map(c => c.name);
   const hasTeacherDynamicClasses = allClassesData.length > 0;
 
-  const toggleClass = (className: string) => {
-    setTeacherClasses(prev =>
-      prev.includes(className)
-        ? prev.filter(c => c !== className)
-        : [...prev, className]
-    );
+  // Toggle class with unique key including locationId to handle same class names across different schools
+  const toggleClass = (locationId: string, className: string) => {
+    const uniqueKey = `${locationId}|${className}`;
+    setTeacherClasses(prev => {
+      const exists = prev.find(item => item.key === uniqueKey);
+      if (exists) {
+        return prev.filter(item => item.key !== uniqueKey);
+      }
+      return [...prev, { key: uniqueKey, locationId, className }];
+    });
   };
 
   const [success, setSuccess] = useState(false);
@@ -600,7 +621,7 @@ export const AccountManager: React.FC = () => {
     setView('form');
   };
 
-  const handleEditTeacher = (teacher: any) => {
+  const handleEditTeacher = async (teacher: any) => {
     resetForm();
     setSubmitError(null);
     setIsEditing(true);
@@ -622,8 +643,49 @@ export const AccountManager: React.FC = () => {
     const subjects = teacher.assignedSubjects || [];
     setTeacherSubjects(subjects);
 
-    // Load assigned classes if available
-    const classes = teacher.assignedClasses || [];
+    // IMPORTANT: Fetch classes FIRST synchronously before setting teacherClasses
+    // This ensures allClassesData is populated before we try to match classes
+    let classesForLocations: {id: string; location_id: string; name: string}[] = [];
+    if (locationIds.length > 0) {
+      setAllClassesLoading(true);
+      try {
+        classesForLocations = await fetchClassesForLocationIds(locationIds);
+        setAllClassesData(classesForLocations);
+      } catch (err) {
+        console.error('Failed to fetch classes for edit:', err);
+        classesForLocations = [];
+      } finally {
+        setAllClassesLoading(false);
+      }
+    }
+
+    // Now load assigned classes with allClassesData available
+    const classesRaw = teacher.assignedClasses || [];
+    const classes = Array.isArray(classesRaw) 
+      ? classesRaw.map((c: any) => {
+          // If it's already an object with key property, use it directly
+          if (typeof c === 'object' && c.key) {
+            return c;
+          }
+          // If it's a string with pipe separator "locationId|className", convert to object
+          if (typeof c === 'string' && c.includes('|')) {
+            const [locationId, className] = c.split('|');
+            return { key: c, locationId, className };
+          }
+          // If it's just a class name string, try to infer location from teacher locations
+          if (typeof c === 'string' && locationIds.length > 0) {
+            // Find which location has this class name
+            const matchingClass = classesForLocations.find(cl => cl.name === c);
+            if (matchingClass) {
+              return { key: `${matchingClass.location_id}|${c}`, locationId: matchingClass.location_id, className: c };
+            }
+            // If no match found, use first location
+            return { key: `${locationIds[0]}|${c}`, locationId: locationIds[0], className: c };
+          }
+          // Fallback
+          return { key: `unknown|${c}`, locationId: 'unknown', className: c };
+        })
+      : [];
     setTeacherClasses(classes);
 
     // Load class types if available
@@ -648,17 +710,17 @@ export const AccountManager: React.FC = () => {
     setFeaturedTeacherLoading(true);
     try {
       const profile = await contentService.getTeacherProfileByUserId(teacherId);
-      if (profile) {
-        setFeaturedTeacherEnabled(profile.is_active || false);
-        setFeaturedTeacherId(profile.id);
-        setFeaturedTeacherPhotoUrl(profile.photo_url || '');
-        setFeaturedTeacherCountry(profile.country || '');
-        setFeaturedTeacherCountryFlag(profile.country_flag || '🇮🇩');
-        setFeaturedTeacherType(profile.type || 'local');
-        setFeaturedTeacherSpecialty(profile.specialty || '');
-        setFeaturedTeacherQuote(profile.quote || '');
-        setFeaturedTeacherExperience(profile.experience || 1);
-        setFeaturedTeacherCertifications(profile.certifications || []);
+      if (profile && typeof profile === 'object') {
+        setFeaturedTeacherEnabled((profile as any).is_active || false);
+        setFeaturedTeacherId((profile as any).id);
+        setFeaturedTeacherPhotoUrl((profile as any).photo_url || '');
+        setFeaturedTeacherCountry((profile as any).country || '');
+        setFeaturedTeacherCountryFlag((profile as any).country_flag || '🇮🇩');
+        setFeaturedTeacherType((profile as any).type || 'local');
+        setFeaturedTeacherSpecialty((profile as any).specialty || '');
+        setFeaturedTeacherQuote((profile as any).quote || '');
+        setFeaturedTeacherExperience((profile as any).experience || 1);
+        setFeaturedTeacherCertifications((profile as any).certifications || []);
       }
     } catch (err) {
       console.error('Error loading featured teacher profile:', err);
@@ -981,12 +1043,16 @@ export const AccountManager: React.FC = () => {
           status: teacherStatus,
         };
 
+        // Convert teacherClasses to array of key strings for database storage
+        // Format: "locationId|className" untuk handle same class names across different schools
+        const assignedClassesForDb = teacherClasses.map(c => c.key);
+
         // Smart fallback: try to save as many fields as possible
         // Priority: class_types > assigned_location_ids > assigned_classes > assigned_subjects
         // class_types is tried in multiple combinations to ensure it gets saved if column exists
         const fieldsToTry = [
           // 1. All fields including class_types
-          { assigned_location_ids: teacherLocationIds, assigned_subjects: teacherSubjects, assigned_classes: teacherClasses, class_types: teacherClassTypes },
+          { assigned_location_ids: teacherLocationIds, assigned_subjects: teacherSubjects, assigned_classes: assignedClassesForDb, class_types: teacherClassTypes },
           // 2. Without assigned_classes
           { assigned_location_ids: teacherLocationIds, assigned_subjects: teacherSubjects, class_types: teacherClassTypes },
           // 3. Just location_ids + class_types
@@ -994,7 +1060,7 @@ export const AccountManager: React.FC = () => {
           // 4. Just class_types
           { class_types: teacherClassTypes },
           // 5. All fields WITHOUT class_types (fallback if column doesn't exist)
-          { assigned_location_ids: teacherLocationIds, assigned_subjects: teacherSubjects, assigned_classes: teacherClasses },
+          { assigned_location_ids: teacherLocationIds, assigned_subjects: teacherSubjects, assigned_classes: assignedClassesForDb },
           // 6. Without assigned_classes, without class_types
           { assigned_location_ids: teacherLocationIds, assigned_subjects: teacherSubjects },
           // 7. Just location_ids
@@ -1113,9 +1179,11 @@ export const AccountManager: React.FC = () => {
 
         // Update with subjects, classes, and class types if selected (profile already created, just update)
         if (teacherSubjects.length > 0 || teacherClasses.length > 0 || teacherClassTypes.length > 0) {
+          // Convert teacherClasses to array of key strings for database storage
+          const assignedClassesForDb = teacherClasses.map(c => c.key);
           await updateProfile(teacherResult.user.id, {
             assigned_subjects: teacherSubjects,
-            assigned_classes: teacherClasses,
+            assigned_classes: assignedClassesForDb,
             class_types: teacherClassTypes,
           });
         }
@@ -1842,9 +1910,9 @@ export const AccountManager: React.FC = () => {
                                           <button
                                             key={`${group.locationId}-${cls}`}
                                             type="button"
-                                            onClick={() => toggleClass(cls)}
+                                            onClick={() => toggleClass(group.locationId, cls)}
                                             className={`px-2.5 py-1 rounded text-[10px] font-bold border transition-all ${
-                                              teacherClasses.includes(cls)
+                                              teacherClasses.some(item => item.key === `${group.locationId}|${cls}`)
                                                 ? 'bg-orange-600 text-white border-orange-600'
                                                 : 'bg-white text-gray-600 border-gray-200 hover:bg-orange-50 hover:border-orange-300'
                                             }`}
