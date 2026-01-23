@@ -1,13 +1,14 @@
 
 import React, { useState } from 'react';
 import { Card } from '../Card';
-import { Calendar, Clock, User as UserIcon, BookOpen, MapPin, Eye, Filter, School, Loader2, AlignLeft } from 'lucide-react';
+import { Calendar, Clock, User as UserIcon, BookOpen, MapPin, Eye, Filter, School, Loader2, AlignLeft, ClipboardCheck } from 'lucide-react';
 import { useSessions } from '../../hooks/useSessions';
 import { useTeachers, useLocations } from '../../hooks/useProfiles';
 import { useReports } from '../../hooks/useReports';
 import { ClassSession, SkillCategory, DifficultyLevel } from '../../types';
 import { LEVEL_COLORS } from '../../constants';
 import { SKILL_ICONS } from '../student/StudentView';
+import { CompletionTracker } from './CompletionTracker';
 
 export const ScheduleManager: React.FC = () => {
   const { sessions: sessionsData, loading: sessionsLoading, error: sessionsError } = useSessions();
@@ -18,6 +19,7 @@ export const ScheduleManager: React.FC = () => {
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
   const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
   const [selectedSession, setSelectedSession] = useState<ClassSession | null>(null);
+  const [activeTab, setActiveTab] = useState<'sessions' | 'completion'>('sessions');
 
   // Map database format to component format
   const sessions: ClassSession[] = sessionsData.map(s => ({
@@ -278,7 +280,36 @@ export const ScheduleManager: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {/* Tab Navigation */}
+      <div className="flex gap-2 border-b border-gray-200 pb-3">
+        <button
+          onClick={() => setActiveTab('sessions')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+            activeTab === 'sessions'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-gray-500 hover:bg-gray-100 border border-gray-200'
+          }`}
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          Sessions
+        </button>
+        <button
+          onClick={() => setActiveTab('completion')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+            activeTab === 'completion'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-gray-500 hover:bg-gray-100 border border-gray-200'
+          }`}
+        >
+          <ClipboardCheck className="w-3.5 h-3.5" />
+          Completion Tracker
+        </button>
+      </div>
 
+      {activeTab === 'completion' ? (
+        <CompletionTracker teachers={teachersData} locations={locationsData} />
+      ) : (
+      <>
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
@@ -399,6 +430,8 @@ export const ScheduleManager: React.FC = () => {
           </table>
         </div>
       </Card>
+      </>
+      )}
     </div>
   );
 };

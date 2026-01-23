@@ -11,12 +11,13 @@ import {
   X, ExternalLink, Search
 } from 'lucide-react';
 import { useSessions } from '../../hooks/useSessions';
-import { useTeachers } from '../../hooks/useProfiles';
+import { useTeachers, useLocations } from '../../hooks/useProfiles';
 import { useTests } from '../../hooks/useTests';
 import { ClassSession, SkillCategory, DifficultyLevel } from '../../types';
 import { LEVEL_COLORS } from '../../constants';
 import { SKILL_ICONS } from '../student/StudentView';
 import { TestSchedule } from '../../services/tests.service';
+import { CompletionTracker } from './CompletionTracker';
 
 // Helper to get academic year from date
 const getAcademicYear = (date: Date): string => {
@@ -302,6 +303,9 @@ interface BreadcrumbItem {
 }
 
 export const ScheduleManagerV2: React.FC = () => {
+  // Tab state for top-level navigation
+  const [activeTab, setActiveTab] = useState<'browse' | 'completion'>('browse');
+  
   // Navigation state
   const [currentLevel, setCurrentLevel] = useState<ViewLevel>('teachers');
   const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
@@ -314,6 +318,7 @@ export const ScheduleManagerV2: React.FC = () => {
 
   // Load only teachers list initially
   const { profiles: teachersData, loading: teachersLoading } = useTeachers();
+  const { locations: locationsData, loading: locationsLoading } = useLocations();
 
   // Load sessions only when teacher is selected (lazy loading)
   const { sessions: teacherSessionsData, loading: sessionsLoading } = useSessions({
@@ -530,17 +535,47 @@ export const ScheduleManagerV2: React.FC = () => {
   };
 
   // Show loading only when teachers list is loading
-  if (teachersLoading) {
+  if (teachersLoading || locationsLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-        <span className="ml-2 text-gray-500 text-sm">Loading teachers...</span>
+        <span className="ml-2 text-gray-500 text-sm">Loading data...</span>
       </div>
     );
   }
 
   return (
     <div className="space-y-3 animate-in fade-in duration-300">
+      {/* Tab Navigation */}
+      <div className="flex gap-2 border-b border-gray-200 pb-3">
+        <button
+          onClick={() => setActiveTab('browse')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+            activeTab === 'browse'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-gray-500 hover:bg-gray-100 border border-gray-200'
+          }`}
+        >
+          <FolderOpen className="w-3.5 h-3.5" />
+          Browse Schedule
+        </button>
+        <button
+          onClick={() => setActiveTab('completion')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+            activeTab === 'completion'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-gray-500 hover:bg-gray-100 border border-gray-200'
+          }`}
+        >
+          <ClipboardList className="w-3.5 h-3.5" />
+          Completion Tracker
+        </button>
+      </div>
+
+      {activeTab === 'completion' ? (
+        <CompletionTracker teachers={teachersData} locations={locationsData} />
+      ) : (
+      <>
       {/* Header - Compact */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
         <div>
@@ -1227,6 +1262,8 @@ export const ScheduleManagerV2: React.FC = () => {
             </div>
           </Card>
         </div>
+      )}
+      </>
       )}
     </div>
   );
