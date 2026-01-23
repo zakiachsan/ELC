@@ -525,6 +525,7 @@ export const SessionManager: React.FC = () => {
     vocabularyVerb: s.vocabulary_verb || '',
     vocabularyNoun: s.vocabulary_noun || '',
     vocabularyAdjective: s.vocabulary_adjective || '',
+    endTime: s.end_time || undefined,
   }));
 
   // Get available academic years from sessions
@@ -1086,6 +1087,7 @@ export const SessionManager: React.FC = () => {
         ...selectedSession,
         topic: editSessionForm.topic,
         dateTime: dateTime,
+        endTime: endTimeValue || undefined,
         skillCategories: editSessionForm.skillCategories.length > 0 ? editSessionForm.skillCategories : [SkillCategory.GRAMMAR],
         description: editSessionForm.description || undefined,
         materials: allMaterials,
@@ -2104,9 +2106,15 @@ export const SessionManager: React.FC = () => {
                  const sessionDate = new Date(selectedSession.dateTime);
                  const dateStr = formatDateForInput(sessionDate);
                  const startTime = sessionDate.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                 // Calculate end time (default 45 min after start)
-                 const endDate = new Date(sessionDate.getTime() + 45 * 60 * 1000);
-                 const endTime = endDate.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                 // Use actual end_time from database if available, otherwise calculate 45 min after start
+                 let endTime: string;
+                 if (selectedSession.endTime) {
+                   const endDate = new Date(selectedSession.endTime);
+                   endTime = endDate.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                 } else {
+                   const endDate = new Date(sessionDate.getTime() + 45 * 60 * 1000);
+                   endTime = endDate.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                 }
 
                  setEditSessionForm({
                    date: dateStr,

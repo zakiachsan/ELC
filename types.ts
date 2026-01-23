@@ -394,6 +394,7 @@ export interface ClassSession {
   vocabularyVerb?: string;
   vocabularyNoun?: string;
   vocabularyAdjective?: string;
+  endTime?: string; // End time of the session
 }
 
 export interface ModuleExam {
