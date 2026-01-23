@@ -168,6 +168,7 @@ export interface Database {
           teacher_id: string
           topic: string
           date_time: string
+          end_time: string | null
           location: string
           location_id: string | null
           video_url: string | null
@@ -193,6 +194,7 @@ export interface Database {
           teacher_id: string
           topic: string
           date_time: string
+          end_time?: string | null
           location: string
           location_id?: string | null
           video_url?: string | null
@@ -218,6 +220,7 @@ export interface Database {
           teacher_id?: string
           topic?: string
           date_time?: string
+          end_time?: string | null
           location?: string
           location_id?: string | null
           video_url?: string | null

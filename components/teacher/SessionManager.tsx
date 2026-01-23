@@ -1060,9 +1060,15 @@ export const SessionManager: React.FC = () => {
         ...editSessionFiles.map(f => f.url)
       ];
       
+      // Calculate end_time if endTime is provided
+      const endTimeValue = editSessionForm.endTime 
+        ? `${editSessionForm.date}T${editSessionForm.endTime}:00${getTimezoneOffset()}`
+        : null;
+      
       await updateSession(selectedSession.id, {
         topic: editSessionForm.topic,
         date_time: dateTime,
+        end_time: endTimeValue,
         skill_category: editSessionForm.skillCategories.length > 0 ? editSessionForm.skillCategories : ['Grammar'],
         description: editSessionForm.description || null,
         materials: allMaterials,
