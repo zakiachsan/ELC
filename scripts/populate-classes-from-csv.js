@@ -1,7 +1,8 @@
 /**
- * Populate classes table from CSV files for:
- * - SMK SANTA MARIA (from TK_SD_SMP_SMK_SANTA_MARIA_List_Full.csv)
- * - SMA ABDI SISWA BINTARO (from SMP_SMA_ABDI_SISWA_BINTARO_List_Full.csv)
+ * Populate classes table from ALL CSV files
+ *
+ * This script processes all student CSV files and extracts unique classes
+ * for each school, then inserts them into the classes table.
  *
  * Usage: node scripts/populate-classes-from-csv.js
  */
@@ -21,16 +22,122 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
 
-// Mapping from CSV Jenjang to database location names
-const JENJANG_TO_LOCATION = {
-  // Santa Maria CSV
-  'TK': 'TK SANTA MARIA',
-  'SD': 'SD SANTA MARIA',
-  'SMP': 'SMP SANTA MARIA',
-  'SMK': 'SMK SANTA MARIA',
-  // Abdi Siswa Bintaro CSV
-  'SMA': 'SMA ABDI SISWA BINTARO',
-};
+// CSV files configuration with their school mappings
+const CSV_CONFIG = [
+  {
+    file: 'TK_SD_ABDI_SISWA_BINTARO_List_Full.csv',
+    mapping: {
+      'TK': 'TK ABDI SISWA BINTARO',
+      'SD': 'SD ABDI SISWA BINTARO'
+    }
+  },
+  {
+    file: 'TK_SD_KRISTOFORUS_1_List_Full.csv',
+    mapping: {
+      'TK': 'TK KRISTOFORUS 1',
+      'SD': 'SD KRISTOFORUS 1'
+    }
+  },
+  {
+    file: 'TK_SD_KRISTOFORUS_2_List_Full.csv',
+    mapping: {
+      'TK': 'TK KRISTOFORUS 2',
+      'SD': 'SD KRISTOFORUS 2'
+    }
+  },
+  {
+    file: 'TK_SD_SMP_CHARITAS_BATAM_List_Full.csv',
+    mapping: {
+      'TK': 'TK CHARITAS BATAM',
+      'SD': 'SD CHARITAS BATAM',
+      'SMP': 'SMP CHARITAS BATAM'
+    }
+  },
+  {
+    file: 'TK_SD_SMP_SMK_SANTA_MARIA_List_Full.csv',
+    mapping: {
+      'TK': 'TK SANTA MARIA',
+      'SD': 'SD SANTA MARIA',
+      'SMP': 'SMP SANTA MARIA',
+      'SMK': 'SMK SANTA MARIA'
+    }
+  },
+  {
+    file: 'TK_SD_SMP_ST_VINCENTIUS_List_Full.csv',
+    mapping: {
+      'TK': 'TK ST VINCENTIUS',
+      'SD': 'SD ST VINCENTIUS',
+      'SMP': 'SMP ST VINCENTIUS'
+    }
+  },
+  {
+    file: 'SD_BHAKTI_List_Full.csv',
+    mapping: {
+      'SD': 'SD BHAKTI'
+    }
+  },
+  {
+    file: 'SD_SANG_TIMUR_CAKUNG_List_Full.csv',
+    mapping: {
+      'SD': 'SD SANG TIMUR CAKUNG'
+    }
+  },
+  {
+    file: 'SD_SMP_ABDI_SISWA_ARIES_List.csv',
+    mapping: {
+      'SD': 'SD ABDI SISWA ARIES',
+      'SMP': 'SMP ABDI SISWA ARIES'
+    }
+  },
+  {
+    file: 'SD_SMP_CHARITAS_JKT_List_Full.csv',
+    mapping: {
+      'SD': 'SD CHARITAS JKT',
+      'SMP': 'SMP CHARITAS JKT'
+    }
+  },
+  {
+    file: 'SD_SMP_SANG_TIMUR_KARANG_TENGAH_List_Full.csv',
+    mapping: {
+      'SD': 'SDK SANG TIMUR KARANG TENGAH',
+      'SMP': 'SMP SANG TIMUR KARANG TENGAH'
+    }
+  },
+  {
+    file: 'SD_SMP_TARAKANITA_List_Full.csv',
+    mapping: {
+      'SD': 'SD TARAKANITA',
+      'SMP': 'SMP TARAKANITA'
+    }
+  },
+  {
+    file: 'SMP_MARSUDIRINI_List_Full.csv',
+    mapping: {
+      'SMP': 'SMP MARSUDIRINI'
+    }
+  },
+  {
+    file: 'SMP_SMA_ABDI_SISWA_BINTARO_List_Full.csv',
+    mapping: {
+      'SMP': 'SMP ABDI SISWA BINTARO',
+      'SMA': 'SMA ABDI SISWA BINTARO'
+    }
+  },
+  {
+    file: 'SMP_SMA_ABDI_SISWA_PATRA_List_Full.csv',
+    mapping: {
+      'SMP': 'SMP ABDI SISWA PATRA',
+      'SMA': 'SMA ABDI SISWA PATRA'
+    }
+  },
+  {
+    file: 'SMP_SMA_BHK_List_Full.csv',
+    mapping: {
+      'SMP': 'SMP BHK',
+      'SMA': 'SMA BHK'
+    }
+  }
+];
 
 function parseCSV(content) {
   const lines = content.trim().split('\n');
@@ -63,7 +170,7 @@ function parseCSV(content) {
 
 async function main() {
   console.log('='.repeat(60));
-  console.log('POPULATE CLASSES FROM CSV FILES');
+  console.log('POPULATE CLASSES FROM ALL CSV FILES');
   console.log('='.repeat(60) + '\n');
 
   // Step 1: Get all locations
@@ -83,39 +190,41 @@ async function main() {
   });
   console.log(`  Found ${locations.length} locations\n`);
 
-  // Step 2: Parse CSV files and extract unique classes
-  console.log('[STEP 2] Parsing CSV files...\n');
+  // Step 2: Process all CSV files
+  console.log('[STEP 2] Processing CSV files...\n');
 
-  const classesToInsert = [];
+  const allClasses = new Map(); // Global map to track all unique classes
+  const csvDir = path.join(__dirname, '..', 'Daftar Student-Siswa-Sekolah');
 
-  // Process Santa Maria CSV
-  const santaMariaPath = path.join(__dirname, '..', 'Daftar Student', 'TK_SD_SMP_SMK_SANTA_MARIA_List_Full.csv');
-  if (fs.existsSync(santaMariaPath)) {
-    console.log('  Processing: TK_SD_SMP_SMK_SANTA_MARIA_List_Full.csv');
-    const content = fs.readFileSync(santaMariaPath, 'utf-8');
+  let processedFiles = 0;
+  let skippedFiles = 0;
+
+  for (const config of CSV_CONFIG) {
+    const csvPath = path.join(csvDir, config.file);
+
+    if (!fs.existsSync(csvPath)) {
+      console.log(`  ⚠ File not found: ${config.file}`);
+      skippedFiles++;
+      continue;
+    }
+
+    console.log(`  Processing: ${config.file}`);
+    const content = fs.readFileSync(csvPath, 'utf-8');
     const rows = parseCSV(content);
 
     // Extract unique classes by jenjang
-    const classesMap = new Map();
+    const fileClasses = new Map();
     for (const row of rows) {
-      const jenjang = row['Jenjang']?.trim();
+      const jenjang = row['Jenjang']?.trim().toUpperCase();
       const kelas = row['Kelas']?.trim();
       const tipeKelas = row['Tipe Kelas']?.trim() || 'Regular';
 
       if (!jenjang || !kelas) continue;
 
-      let locationName;
-      if (jenjang === 'SMK') {
-        locationName = 'SMK SANTA MARIA';
-      } else if (jenjang === 'SMP') {
-        locationName = 'SMP SANTA MARIA';
-      } else if (jenjang === 'SD') {
-        locationName = 'SD SANTA MARIA';
-      } else if (jenjang === 'TK') {
-        locationName = 'TK SANTA MARIA';
+      const locationName = config.mapping[jenjang];
+      if (!locationName) {
+        continue;
       }
-
-      if (!locationName) continue;
 
       const locationId = locationMap[locationName.toUpperCase()];
       if (!locationId) {
@@ -124,109 +233,47 @@ async function main() {
       }
 
       const key = `${locationId}|${kelas}`;
-      if (!classesMap.has(key)) {
-        classesMap.set(key, {
+      if (!allClasses.has(key)) {
+        allClasses.set(key, {
           location_id: locationId,
           name: kelas,
           class_type: tipeKelas.substring(0, 20),
           location_name: locationName
         });
+        fileClasses.set(key, true);
       }
     }
 
-    for (const cls of classesMap.values()) {
-      classesToInsert.push(cls);
-    }
-
-    // Group by location for display
+    // Show summary for this file
     const byLocation = {};
-    for (const cls of classesMap.values()) {
+    for (const [key] of fileClasses) {
+      const cls = allClasses.get(key);
       if (!byLocation[cls.location_name]) byLocation[cls.location_name] = [];
       byLocation[cls.location_name].push(cls.name);
     }
 
     for (const [locName, classes] of Object.entries(byLocation)) {
-      console.log(`    ${locName}: ${classes.length} classes`);
-      console.log(`      Classes: ${classes.sort().join(', ')}`);
+      console.log(`    → ${locName}: ${classes.length} classes`);
     }
+
+    processedFiles++;
     console.log();
-  } else {
-    console.log('  ⚠ Santa Maria CSV not found\n');
   }
 
-  // Process Abdi Siswa Bintaro CSV
-  const bintaroPath = path.join(__dirname, '..', 'Daftar Student', 'SMP_SMA_ABDI_SISWA_BINTARO_List_Full.csv');
-  if (fs.existsSync(bintaroPath)) {
-    console.log('  Processing: SMP_SMA_ABDI_SISWA_BINTARO_List_Full.csv');
-    const content = fs.readFileSync(bintaroPath, 'utf-8');
-    const rows = parseCSV(content);
-
-    // Extract unique classes by jenjang
-    const classesMap = new Map();
-    for (const row of rows) {
-      const jenjang = row['Jenjang']?.trim();
-      const kelas = row['Kelas']?.trim();
-      const tipeKelas = row['Tipe Kelas']?.trim() || 'Regular';
-
-      if (!jenjang || !kelas) continue;
-
-      let locationName;
-      if (jenjang === 'SMA') {
-        locationName = 'SMA ABDI SISWA BINTARO';
-      } else if (jenjang === 'SMP') {
-        locationName = 'SMP ABDI SISWA BINTARO';
-      }
-
-      if (!locationName) continue;
-
-      const locationId = locationMap[locationName.toUpperCase()];
-      if (!locationId) {
-        console.log(`    ⚠ Location not found: ${locationName}`);
-        continue;
-      }
-
-      const key = `${locationId}|${kelas}`;
-      if (!classesMap.has(key)) {
-        classesMap.set(key, {
-          location_id: locationId,
-          name: kelas,
-          class_type: tipeKelas.substring(0, 20),
-          location_name: locationName
-        });
-      }
-    }
-
-    for (const cls of classesMap.values()) {
-      classesToInsert.push(cls);
-    }
-
-    // Group by location for display
-    const byLocation = {};
-    for (const cls of classesMap.values()) {
-      if (!byLocation[cls.location_name]) byLocation[cls.location_name] = [];
-      byLocation[cls.location_name].push(cls.name);
-    }
-
-    for (const [locName, classes] of Object.entries(byLocation)) {
-      console.log(`    ${locName}: ${classes.length} classes`);
-      console.log(`      Classes: ${classes.sort().join(', ')}`);
-    }
-    console.log();
-  } else {
-    console.log('  ⚠ Abdi Siswa Bintaro CSV not found\n');
-  }
+  console.log(`  Processed: ${processedFiles} files`);
+  console.log(`  Skipped: ${skippedFiles} files\n`);
 
   // Step 3: Insert classes into database
   console.log('[STEP 3] Inserting classes into database...');
-  console.log(`  Total classes to insert: ${classesToInsert.length}\n`);
+  console.log(`  Total unique classes to insert: ${allClasses.size}\n`);
 
-  // Remove location_name before insert
-  const insertData = classesToInsert.map(({ location_name, ...rest }) => rest);
+  // Prepare insert data (remove location_name)
+  const insertData = Array.from(allClasses.values()).map(({ location_name, ...rest }) => rest);
 
   // Insert in batches
   const batchSize = 50;
   let inserted = 0;
-  let skipped = 0;
+  let errors = 0;
 
   for (let i = 0; i < insertData.length; i += batchSize) {
     const batch = insertData.slice(i, i + batchSize);
@@ -241,31 +288,40 @@ async function main() {
 
     if (error) {
       console.error(`  Batch ${Math.floor(i / batchSize) + 1} error:`, error.message);
-      skipped += batch.length;
+      errors += batch.length;
     } else {
       inserted += data?.length || 0;
-      console.log(`  Batch ${Math.floor(i / batchSize) + 1}: Inserted ${data?.length || 0} classes`);
+      console.log(`  Batch ${Math.floor(i / batchSize) + 1}: Inserted/Updated ${data?.length || 0} classes`);
     }
   }
 
+  // Step 4: Summary
   console.log('\n' + '='.repeat(60));
   console.log('COMPLETED');
   console.log('='.repeat(60));
-  console.log(`Inserted: ${inserted}`);
-  console.log(`Skipped/Duplicates: ${classesToInsert.length - inserted}`);
+  console.log(`Total processed: ${insertData.length}`);
+  console.log(`Inserted/Updated: ${inserted}`);
+  console.log(`Errors: ${errors}`);
 
-  // Verify by showing classes count per location
+  // Step 5: Verification - show classes count per location
   console.log('\n[VERIFICATION] Classes count by location:');
-  const targetLocations = ['SMK SANTA MARIA', 'SMA ABDI SISWA BINTARO', 'SMP ABDI SISWA BINTARO'];
-  for (const locName of targetLocations) {
-    const locId = locationMap[locName.toUpperCase()];
-    if (locId) {
-      const { count } = await supabase
-        .from('classes')
-        .select('*', { count: 'exact', head: true })
-        .eq('location_id', locId);
-      console.log(`  ${locName}: ${count} classes`);
-    }
+
+  const { data: classCounts } = await supabase
+    .from('classes')
+    .select('location_id');
+
+  // Group by location
+  const countByLocation = {};
+  for (const cls of classCounts || []) {
+    countByLocation[cls.location_id] = (countByLocation[cls.location_id] || 0) + 1;
+  }
+
+  // Show with location names
+  const sortedLocations = locations.sort((a, b) => a.name.localeCompare(b.name));
+  for (const loc of sortedLocations) {
+    const count = countByLocation[loc.id] || 0;
+    const status = count > 0 ? '✅' : '❌';
+    console.log(`  ${status} ${loc.name}: ${count} classes`);
   }
 }
 

@@ -354,6 +354,9 @@ export const SessionManager: React.FC = () => {
   const [showHomeworkModal, setShowHomeworkModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showMultiClassModal, setShowMultiClassModal] = useState(false);
+
+  // Remember last used time values for auto-fill
+  const [lastUsedTime, setLastUsedTime] = useState({ startTime: '08:00', endTime: '09:00' });
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showEditSessionModal, setShowEditSessionModal] = useState(false);
   const [editSessionForm, setEditSessionForm] = useState({
@@ -1845,6 +1848,8 @@ export const SessionManager: React.FC = () => {
                                   endTime: preset.endTime
                                 })));
                               }
+                              // Save as last used time for future schedules
+                              setLastUsedTime({ startTime: preset.startTime, endTime: preset.endTime });
                             }}
                             className="px-2 py-1 text-[10px] font-medium bg-white border border-gray-200 rounded-md hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition-colors"
                             title={`Apply ${preset.label} to all selected classes`}
@@ -1879,7 +1884,8 @@ export const SessionManager: React.FC = () => {
                                 checked={isSelected}
                                 onChange={(e) => {
                                   if (e.target.checked) {
-                                    setMultiClassEntries([...multiClassEntries, { classId: cls.name, startTime: '', endTime: '' }]);
+                                    // Auto-fill with last used time values
+                                    setMultiClassEntries([...multiClassEntries, { classId: cls.name, startTime: lastUsedTime.startTime, endTime: lastUsedTime.endTime }]);
                                   } else {
                                     setMultiClassEntries(multiClassEntries.filter(ent => ent.classId !== cls.name));
                                   }
@@ -1922,6 +1928,8 @@ export const SessionManager: React.FC = () => {
                                       setMultiClassEntries(multiClassEntries.map(ent =>
                                         ent.classId === cls.name ? { ...ent, startTime: e.target.value } : ent
                                       ));
+                                      // Save as last used time
+                                      setLastUsedTime(prev => ({ ...prev, startTime: e.target.value }));
                                     }}
                                     className="border rounded px-2 py-1 text-xs w-24"
                                   />
@@ -1935,6 +1943,8 @@ export const SessionManager: React.FC = () => {
                                       setMultiClassEntries(multiClassEntries.map(ent =>
                                         ent.classId === cls.name ? { ...ent, endTime: e.target.value } : ent
                                       ));
+                                      // Save as last used time
+                                      setLastUsedTime(prev => ({ ...prev, endTime: e.target.value }));
                                     }}
                                     className="border rounded px-2 py-1 text-xs w-24"
                                   />
@@ -2100,7 +2110,6 @@ export const SessionManager: React.FC = () => {
                onClick={() => generateLessonPlanPDF(selectedSession, currentTeacher?.name || 'Teacher')}
                className="text-xs py-1.5 px-3 text-orange-600 border-orange-200 hover:bg-orange-50"
              >
-               <Download className="w-3.5 h-3.5 mr-1" />
                Lesson Plan
              </Button>
              <Button
@@ -2941,7 +2950,11 @@ export const SessionManager: React.FC = () => {
             {selectedSchool} - {selectedClass}
           </p>
         </div>
-        <Button onClick={() => setShowCreateModal(true)} className="text-xs py-1.5 px-3">
+        <Button onClick={() => {
+          // Pre-fill time with last used values
+          setScheduleForm(prev => ({ ...prev, startTime: lastUsedTime.startTime, endTime: lastUsedTime.endTime }));
+          setShowCreateModal(true);
+        }} className="text-xs py-1.5 px-3">
           Add Schedule
         </Button>
       </div>
@@ -3295,6 +3308,8 @@ export const SessionManager: React.FC = () => {
                           startTime: preset.startTime,
                           endTime: preset.endTime
                         });
+                        // Save as last used time
+                        setLastUsedTime({ startTime: preset.startTime, endTime: preset.endTime });
                       }}
                       className={`px-2 py-1 text-[10px] font-medium border rounded-md transition-colors ${
                         scheduleForm.startTime === preset.startTime && scheduleForm.endTime === preset.endTime
@@ -3317,7 +3332,10 @@ export const SessionManager: React.FC = () => {
                 <input
                   type="time"
                   value={scheduleForm.startTime}
-                  onChange={e => setScheduleForm({ ...scheduleForm, startTime: e.target.value })}
+                  onChange={e => {
+                    setScheduleForm({ ...scheduleForm, startTime: e.target.value });
+                    setLastUsedTime(prev => ({ ...prev, startTime: e.target.value }));
+                  }}
                   className="w-full border rounded-lg px-3 py-1.5 text-xs"
                 />
               </div>
@@ -3326,7 +3344,10 @@ export const SessionManager: React.FC = () => {
                 <input
                   type="time"
                   value={scheduleForm.endTime}
-                  onChange={e => setScheduleForm({ ...scheduleForm, endTime: e.target.value })}
+                  onChange={e => {
+                    setScheduleForm({ ...scheduleForm, endTime: e.target.value });
+                    setLastUsedTime(prev => ({ ...prev, endTime: e.target.value }));
+                  }}
                   className="w-full border rounded-lg px-3 py-1.5 text-xs"
                 />
               </div>

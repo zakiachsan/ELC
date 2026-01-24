@@ -57,6 +57,47 @@ export const AccountManager: React.FC = () => {
   const [schoolPassword, setSchoolPassword] = useState(''); // Optional - leave empty to keep existing
   const [schoolStatus, setSchoolStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [schoolSearch, setSchoolSearch] = useState('');
+  const [schoolLocationId, setSchoolLocationId] = useState<string | null>(null);
+
+  // Dynamic classes hook for school edit - fetch classes for the school's location
+  const { classes: schoolClasses, loading: schoolClassesLoading, createClass: createSchoolClass, refetch: refetchSchoolClasses } = useClasses(schoolLocationId || undefined);
+
+  // State for adding new class
+  const [newClassName, setNewClassName] = useState('');
+  const [newClassType, setNewClassType] = useState<'Regular' | 'Bilingual'>('Regular');
+  const [isAddingClass, setIsAddingClass] = useState(false);
+  const [addClassError, setAddClassError] = useState<string | null>(null);
+
+  // Handle adding a new class to the school
+  const handleAddClass = async () => {
+    if (!newClassName.trim()) {
+      setAddClassError('Nama kelas tidak boleh kosong');
+      return;
+    }
+
+    // Check if class already exists
+    const classExists = schoolClasses?.some(
+      (cls: any) => cls.name.toLowerCase() === newClassName.trim().toLowerCase()
+    );
+    if (classExists) {
+      setAddClassError('Kelas dengan nama ini sudah ada');
+      return;
+    }
+
+    setIsAddingClass(true);
+    setAddClassError(null);
+
+    try {
+      await createSchoolClass(newClassName.trim(), newClassType);
+      setNewClassName('');
+      setNewClassType('Regular');
+    } catch (err: any) {
+      console.error('Failed to add class:', err);
+      setAddClassError(err.message || 'Gagal menambahkan kelas');
+    } finally {
+      setIsAddingClass(false);
+    }
+  };
   
   // School creation form state (separate from edit form)
   const [newSchoolName, setNewSchoolName] = useState('');
@@ -170,22 +211,22 @@ export const AccountManager: React.FC = () => {
   };
 
   // Fetch all classes when locations change - used for normal UI interaction
-  // Track previous location IDs to detect changes
-  const [prevLocationIds, setPrevLocationIds] = useState<string[]>([]);
+  // Track previous location IDs to detect changes (use ref to avoid infinite loop)
+  const prevLocationIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
     const fetchAllClasses = async () => {
       if (teacherLocationIds.length === 0) {
         setAllClassesData([]);
-        setPrevLocationIds([]);
+        prevLocationIdsRef.current = [];
         return;
       }
 
       // Find newly added locations (not in previous list)
-      const newlyAddedLocationIds = teacherLocationIds.filter(id => !prevLocationIds.includes(id));
+      const newlyAddedLocationIds = teacherLocationIds.filter(id => !prevLocationIdsRef.current.includes(id));
 
       // If in edit mode and no new locations added, skip (initial load already handled)
-      if (isEditing && newlyAddedLocationIds.length === 0 && prevLocationIds.length > 0) {
+      if (isEditing && newlyAddedLocationIds.length === 0 && prevLocationIdsRef.current.length > 0) {
         return;
       }
 
@@ -194,7 +235,7 @@ export const AccountManager: React.FC = () => {
         // Always fetch all classes for current locations
         const classes = await fetchClassesForLocationIds(teacherLocationIds);
         setAllClassesData(classes);
-        setPrevLocationIds(teacherLocationIds);
+        prevLocationIdsRef.current = teacherLocationIds;
       } catch (err) {
         console.error('Failed to fetch classes:', err);
         setAllClassesData([]);
@@ -203,7 +244,7 @@ export const AccountManager: React.FC = () => {
       }
     };
     fetchAllClasses();
-  }, [teacherLocationIds, isEditing, prevLocationIds]);
+  }, [teacherLocationIds, isEditing]);
 
   // Toggle teacher location selection
   const toggleTeacherLocation = (locationId: string) => {
@@ -774,6 +815,8 @@ export const AccountManager: React.FC = () => {
     setSchoolEmail(school.email || '');
     setSchoolPassword(''); // Don't show password - leave empty to keep existing
     setSchoolStatus(school.status || 'ACTIVE');
+    // Set school location ID to fetch classes
+    setSchoolLocationId(school.assigned_location_id || null);
     setView('form');
   };
 
@@ -839,7 +882,12 @@ export const AccountManager: React.FC = () => {
       await refetchSchools();
       setView('list');
       setEditSchoolId(null);
+      setSchoolLocationId(null);
       setSchoolPassword('');
+      // Reset add class form
+      setNewClassName('');
+      setNewClassType('Regular');
+      setAddClassError(null);
     } catch (err: any) {
       console.error('Error updating school:', err);
       setSubmitError(err.message || 'Gagal menyimpan perubahan');
@@ -2625,7 +2673,7 @@ export const AccountManager: React.FC = () => {
                 )}
 
                 <div className="flex justify-between items-center pt-2">
-                  <Button type="button" variant="outline" onClick={() => { setView('list'); setEditSchoolId(null); }} className="text-xs py-1.5 px-3" disabled={isSubmitting}>
+                  <Button type="button" variant="outline" onClick={() => { setView('list'); setEditSchoolId(null); setSchoolLocationId(null); setNewClassName(''); setNewClassType('Regular'); setAddClassError(null); }} className="text-xs py-1.5 px-3" disabled={isSubmitting}>
                     Cancel
                   </Button>
                   <Button type="submit" className="px-6 shadow-md text-xs py-1.5 flex items-center gap-2 bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
@@ -2699,6 +2747,89 @@ export const AccountManager: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Classes Section */}
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-2 block flex items-center gap-2">
+                    <GraduationCap className="w-3 h-3" />
+                    Daftar Kelas ({schoolClasses?.length || 0} kelas)
+                  </label>
+
+                  {/* Existing Classes */}
+                  {schoolClassesLoading ? (
+                    <div className="flex items-center gap-2 text-gray-400 text-xs py-2">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Memuat kelas...
+                    </div>
+                  ) : schoolClasses && schoolClasses.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {schoolClasses.map((cls: any) => (
+                        <div
+                          key={cls.id}
+                          className="px-2.5 py-1 bg-purple-50 text-purple-700 rounded-md text-[10px] font-medium border border-purple-100"
+                        >
+                          {cls.name}
+                          {cls.class_type && cls.class_type !== 'Regular' && (
+                            <span className="ml-1 text-purple-400">({cls.class_type})</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic py-2 mb-3">
+                      Belum ada kelas untuk sekolah ini.
+                    </p>
+                  )}
+
+                  {/* Add New Class */}
+                  {schoolLocationId && (
+                    <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                      <label className="text-[9px] font-black text-gray-500 uppercase tracking-wider mb-2 block">
+                        Tambah Kelas Baru
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newClassName}
+                          onChange={e => { setNewClassName(e.target.value); setAddClassError(null); }}
+                          placeholder="Nama kelas (misal: 7A, Kelas 1B)"
+                          className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                          disabled={isAddingClass}
+                        />
+                        <select
+                          value={newClassType}
+                          onChange={e => setNewClassType(e.target.value as 'Regular' | 'Bilingual')}
+                          className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500"
+                          disabled={isAddingClass}
+                        >
+                          <option value="Regular">Regular</option>
+                          <option value="Bilingual">Bilingual</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={handleAddClass}
+                          disabled={isAddingClass || !newClassName.trim()}
+                          className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                        >
+                          {isAddingClass ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <>
+                              <span>+</span> Tambah
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      {addClassError && (
+                        <p className="text-[10px] text-red-500 mt-1.5">{addClassError}</p>
+                      )}
+                    </div>
+                  )}
+
+                  <p className="text-[9px] text-gray-400 mt-2">
+                    Kelas yang sudah dibuat tidak dapat dihapus.
+                  </p>
+                </div>
+
                 {submitError && (
                   <div className="p-3 bg-red-50 text-red-700 rounded-lg border border-red-100 text-xs">
                     {submitError}
@@ -2706,7 +2837,7 @@ export const AccountManager: React.FC = () => {
                 )}
 
                 <div className="flex justify-between items-center pt-2">
-                  <Button type="button" variant="outline" onClick={() => { setView('list'); setEditSchoolId(null); }} className="text-xs py-1.5 px-3" disabled={isSubmitting}>
+                  <Button type="button" variant="outline" onClick={() => { setView('list'); setEditSchoolId(null); setSchoolLocationId(null); setNewClassName(''); setNewClassType('Regular'); setAddClassError(null); }} className="text-xs py-1.5 px-3" disabled={isSubmitting}>
                     Cancel
                   </Button>
                   <Button type="submit" className="px-6 shadow-md text-xs py-1.5 flex items-center gap-2" disabled={isSubmitting}>
