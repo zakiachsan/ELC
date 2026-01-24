@@ -13,6 +13,7 @@ import { testsService, TestType, TestScheduleInsert } from '../../services/tests
 import { User, SkillCategory, DifficultyLevel, CEFRLevel, ClassType } from '../../types';
 import { School, ChevronRight, GraduationCap, Calendar, MapPin, Clock, CheckCircle, XCircle, Loader2, BookOpen, Save, ClipboardList, Plus, X, Upload, File, Trash2, Globe, UserCheck, Download, RefreshCw } from 'lucide-react';
 import { uploadFile, isAllowedFileType, UploadResult } from '../../lib/storage';
+import { filterAssignedClassesByLocation } from '../../utils/teacherClasses';
 
 const TEST_TYPE_LABELS: Record<TestType, string> = {
   'QUIZ': 'Quiz',
@@ -407,15 +408,17 @@ export const StudentGrades: React.FC = () => {
     }));
 
   // Get teacher's assigned classes filtered by what's available in the selected school
+  // Uses centralized utility that handles both old format (class name) and new format (location_id|class_name)
   const getAvailableClasses = (): string[] => {
     // Get class names that exist in the selected location from database
     const locationClassNames = locationClasses.map(c => c.name);
 
     // If teacher has assigned classes, filter to only show ones in this location
     if (currentTeacher?.assignedClasses && currentTeacher.assignedClasses.length > 0) {
-      // Filter teacher's classes to only show ones that exist in this school's location
-      const filteredClasses = currentTeacher.assignedClasses.filter(teacherClass =>
-        locationClassNames.includes(teacherClass)
+      const filteredClasses = filterAssignedClassesByLocation(
+        currentTeacher.assignedClasses,
+        selectedLocationId || '',
+        locationClassNames
       );
       // If teacher has classes for this location, return them
       if (filteredClasses.length > 0) {

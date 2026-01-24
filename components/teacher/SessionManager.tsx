@@ -14,6 +14,7 @@ import { ClassSession, StudentSessionReport, CEFRLevel, Homework, SkillCategory,
 import { Clock, MapPin, Calendar, CheckCircle, FileText, Upload, Trash2, Download, ShieldCheck, ShieldAlert, UserCheck, PenLine, Save, X, BookOpen, ClipboardList, Award, Mic, FileEdit, Plus, School, ChevronRight, GraduationCap, Loader2, File, Globe, Copy, AlignLeft, ArrowLeft, Paperclip, FileCheck, CalendarDays } from 'lucide-react';
 import { uploadFile, isAllowedFileType, formatFileSize, UploadResult } from '../../lib/storage';
 import { SKILL_ICONS } from '../student/StudentView';
+import { filterAssignedClassesByLocation } from '../../utils/teacherClasses';
 
 // Type for multi-class schedule entry
 interface MultiClassScheduleEntry {
@@ -753,25 +754,13 @@ export const SessionManager: React.FC = () => {
     const locationClassNames = locationClasses.map(c => c.name);
 
     // If teacher has assigned classes, filter to only show ones in this location
+    // Uses centralized utility that handles both old format (class name) and new format (location_id|class_name)
     if (currentTeacher?.assignedClasses && currentTeacher.assignedClasses.length > 0) {
-      // Handle both old format (just class name) and new format (location_id|class_name)
-      const teacherClassesForLocation: string[] = [];
-
-      for (const assignedClass of currentTeacher.assignedClasses) {
-        if (assignedClass.includes('|')) {
-          // New format: location_id|class_name
-          const [locId, className] = assignedClass.split('|');
-          // Only include if it matches the selected location
-          if (locId === selectedLocationId && locationClassNames.includes(className)) {
-            teacherClassesForLocation.push(className);
-          }
-        } else {
-          // Old format: just class name - check if it exists in current location
-          if (locationClassNames.includes(assignedClass)) {
-            teacherClassesForLocation.push(assignedClass);
-          }
-        }
-      }
+      const teacherClassesForLocation = filterAssignedClassesByLocation(
+        currentTeacher.assignedClasses,
+        selectedLocationId || '',
+        locationClassNames
+      );
 
       // If teacher has classes for this location, return them with class_type
       if (teacherClassesForLocation.length > 0) {

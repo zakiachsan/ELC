@@ -9,6 +9,7 @@ import { useTeachers, useLocations, useParents, useStudentsPaginated, useClasses
 import { supabase, supabaseAdmin } from '../../lib/supabase';
 import { profilesService } from '../../services/profiles.service';
 import { contentService } from '../../services/content.service';
+import { parseAssignedClass } from '../../utils/teacherClasses';
 
 export const AccountManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'families' | 'teachers' | 'schools'>('families');
@@ -432,6 +433,7 @@ export const AccountManager: React.FC = () => {
   // Get student count for teacher based on assigned classes
   // If teacher has assigned classes, count students in those classes
   // Otherwise, fall back to total students in assigned schools
+  // Uses centralized utility that handles both old format (class name) and new format (location_id|class_name)
   const getTeacherStudentCount = (teacher: any): number => {
     const locationIds = teacher.assignedLocationIds && teacher.assignedLocationIds.length > 0
       ? teacher.assignedLocationIds
@@ -446,21 +448,18 @@ export const AccountManager: React.FC = () => {
       let total = 0;
 
       for (const assignedClass of assignedClasses) {
-        let key: string;
+        const parsed = parseAssignedClass(assignedClass);
 
-        if (assignedClass.includes('|')) {
-          // New format: location_id|class_name - use directly as key
-          key = assignedClass;
+        if (parsed.locationId) {
+          // New format: location_id|class_name - use raw as key
+          total += classStudentCounts[parsed.raw] || 0;
         } else {
           // Old format: just class name - need to try all locations
           for (const locId of locationIds) {
-            const oldKey = `${locId}|${assignedClass}`;
-            total += classStudentCounts[oldKey] || 0;
+            const key = `${locId}|${parsed.className}`;
+            total += classStudentCounts[key] || 0;
           }
-          continue;
         }
-
-        total += classStudentCounts[key] || 0;
       }
       return total;
     }

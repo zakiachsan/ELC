@@ -4,6 +4,7 @@ import { Calendar, CheckCircle2, XCircle, User, School, Loader2, ChevronDown, Ch
 import { sessionsService } from '../../services';
 import type { Profile, Location, ClassSession } from '../../lib/database.types';
 import type { ClassItem } from '../../hooks/useProfiles';
+import { getClassNamesForLocation } from '../../utils/teacherClasses';
 
 type SortOption = 'incomplete-first' | 'complete-first' | 'name-asc' | 'name-desc';
 
@@ -164,6 +165,7 @@ export const CompletionTracker: React.FC<Props> = ({ teachers, locations, classe
         const teacherSessions = sessionLookup.get(teacher.id) || new Set();
 
         // Build assignments from teacher's assigned_location_ids + assigned_classes
+        // Uses centralized utility that handles both old format (class name) and new format (location_id|class_name)
         const locationIds = teacher.assigned_location_ids || [];
         const teacherClasses = teacher.assigned_classes || [];
 
@@ -174,7 +176,10 @@ export const CompletionTracker: React.FC<Props> = ({ teachers, locations, classe
           // Filter: only include classes that exist at this location
           const validClassesAtLocation = classesLookup.get(locId) || new Set();
 
-          teacherClasses
+          // Get class names for this specific location (handles both old and new format)
+          const classNamesForLocation = getClassNamesForLocation(teacherClasses, locId);
+
+          classNamesForLocation
             .filter(className => validClassesAtLocation.has(className))
             .forEach(className => {
               const locationKey = `${locationName} - ${className}`;

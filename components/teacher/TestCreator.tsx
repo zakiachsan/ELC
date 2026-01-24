@@ -12,6 +12,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { uploadFile, isAllowedFileType, UploadResult } from '../../lib/storage';
+import { filterAssignedClassesByLocation } from '../../utils/teacherClasses';
 import type { Database } from '../../lib/database.types';
 
 type TestQuestion = Database['public']['Tables']['test_questions']['Row'];
@@ -173,11 +174,14 @@ export const TestCreator: React.FC = () => {
     }));
 
   // Get available classes
+  // Uses centralized utility that handles both old format (class name) and new format (location_id|class_name)
   const getAvailableClasses = (): string[] => {
     const locationClassNames = locationClasses.map(c => c.name);
     if (currentTeacher?.assignedClasses && currentTeacher.assignedClasses.length > 0) {
-      const filteredClasses = currentTeacher.assignedClasses.filter(teacherClass =>
-        locationClassNames.includes(teacherClass)
+      const filteredClasses = filterAssignedClassesByLocation(
+        currentTeacher.assignedClasses,
+        selectedLocationId || '',
+        locationClassNames
       );
       if (filteredClasses.length > 0) return filteredClasses;
       if (locationClassNames.length > 0) return locationClassNames;
