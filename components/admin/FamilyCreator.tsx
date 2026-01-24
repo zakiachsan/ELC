@@ -444,11 +444,23 @@ export const AccountManager: React.FC = () => {
     // If teacher has assigned classes, count students in those specific classes
     if (assignedClasses.length > 0) {
       let total = 0;
-      for (const locId of locationIds) {
-        for (const className of assignedClasses) {
-          const key = `${locId}|${className}`;
-          total += classStudentCounts[key] || 0;
+
+      for (const assignedClass of assignedClasses) {
+        let key: string;
+
+        if (assignedClass.includes('|')) {
+          // New format: location_id|class_name - use directly as key
+          key = assignedClass;
+        } else {
+          // Old format: just class name - need to try all locations
+          for (const locId of locationIds) {
+            const oldKey = `${locId}|${assignedClass}`;
+            total += classStudentCounts[oldKey] || 0;
+          }
+          continue;
         }
+
+        total += classStudentCounts[key] || 0;
       }
       return total;
     }

@@ -754,13 +754,28 @@ export const SessionManager: React.FC = () => {
 
     // If teacher has assigned classes, filter to only show ones in this location
     if (currentTeacher?.assignedClasses && currentTeacher.assignedClasses.length > 0) {
-      // Filter teacher's classes to only show ones that exist in this school's location
-      const filteredClasses = currentTeacher.assignedClasses.filter(teacherClass =>
-        locationClassNames.includes(teacherClass)
-      );
+      // Handle both old format (just class name) and new format (location_id|class_name)
+      const teacherClassesForLocation: string[] = [];
+
+      for (const assignedClass of currentTeacher.assignedClasses) {
+        if (assignedClass.includes('|')) {
+          // New format: location_id|class_name
+          const [locId, className] = assignedClass.split('|');
+          // Only include if it matches the selected location
+          if (locId === selectedLocationId && locationClassNames.includes(className)) {
+            teacherClassesForLocation.push(className);
+          }
+        } else {
+          // Old format: just class name - check if it exists in current location
+          if (locationClassNames.includes(assignedClass)) {
+            teacherClassesForLocation.push(assignedClass);
+          }
+        }
+      }
+
       // If teacher has classes for this location, return them with class_type
-      if (filteredClasses.length > 0) {
-        return sortClasses(filteredClasses.map(className => {
+      if (teacherClassesForLocation.length > 0) {
+        return sortClasses(teacherClassesForLocation.map(className => {
           const classData = locationClasses.find(c => c.name === className);
           return { name: className, classType: classData?.class_type || null };
         }));
