@@ -19,7 +19,7 @@ export const AccountManager: React.FC = () => {
   const { profiles: teachersData, loading: teachersLoading, updateProfile, refetch: refetchTeachers } = useTeachers();
   const { profiles: parentsData, loading: parentsLoading, refetch: refetchParents } = useParents();
   const { profiles: schoolsData, loading: schoolsLoading, updateProfile: updateSchoolProfile, refetch: refetchSchools } = useSchools();
-  const { locations, loading: locationsLoading } = useLocations();
+  const { locations, loading: locationsLoading, createLocation } = useLocations();
 
   // Pagination and filter state for families (moved up for hook dependency)
   const [familiesPage, setFamiliesPage] = useState(1);
@@ -54,9 +54,15 @@ export const AccountManager: React.FC = () => {
   const [schoolName, setSchoolName] = useState('');
   const [schoolEmail, setSchoolEmail] = useState('');
   const [schoolPassword, setSchoolPassword] = useState(''); // Optional - leave empty to keep existing
-  const [schoolLocationId, setSchoolLocationId] = useState('');
   const [schoolStatus, setSchoolStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [schoolSearch, setSchoolSearch] = useState('');
+  
+  // School creation form state (separate from edit form)
+  const [newSchoolName, setNewSchoolName] = useState('');
+  const [newSchoolEmail, setNewSchoolEmail] = useState('');
+  const [newSchoolPassword, setNewSchoolPassword] = useState('');
+  const [newSchoolLocationId, setNewSchoolLocationId] = useState('');
+  const [newSchoolStatus, setNewSchoolStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, id: string, name: string, type: 'student' | 'teacher' }>({
     isOpen: false,
@@ -163,19 +169,31 @@ export const AccountManager: React.FC = () => {
   };
 
   // Fetch all classes when locations change - used for normal UI interaction
+  // Track previous location IDs to detect changes
+  const [prevLocationIds, setPrevLocationIds] = useState<string[]>([]);
+
   useEffect(() => {
     const fetchAllClasses = async () => {
       if (teacherLocationIds.length === 0) {
         setAllClassesData([]);
+        setPrevLocationIds([]);
         return;
       }
-      // Only auto-fetch if we're not in edit mode (edit mode handles its own fetch)
-      if (isEditing) return;
-      
+
+      // Find newly added locations (not in previous list)
+      const newlyAddedLocationIds = teacherLocationIds.filter(id => !prevLocationIds.includes(id));
+
+      // If in edit mode and no new locations added, skip (initial load already handled)
+      if (isEditing && newlyAddedLocationIds.length === 0 && prevLocationIds.length > 0) {
+        return;
+      }
+
       setAllClassesLoading(true);
       try {
+        // Always fetch all classes for current locations
         const classes = await fetchClassesForLocationIds(teacherLocationIds);
         setAllClassesData(classes);
+        setPrevLocationIds(teacherLocationIds);
       } catch (err) {
         console.error('Failed to fetch classes:', err);
         setAllClassesData([]);
@@ -184,16 +202,24 @@ export const AccountManager: React.FC = () => {
       }
     };
     fetchAllClasses();
-  }, [teacherLocationIds, isEditing]);
+  }, [teacherLocationIds, isEditing, prevLocationIds]);
 
   // Toggle teacher location selection
   const toggleTeacherLocation = (locationId: string) => {
     setTeacherLocationIds(prev => {
-      const newIds = prev.includes(locationId)
+      const isRemoving = prev.includes(locationId);
+      const newIds = isRemoving
         ? prev.filter(id => id !== locationId)
         : [...prev, locationId];
-      // Clear selected classes when locations change
-      setTeacherClasses([]);
+
+      // Only remove classes from the removed location, keep classes from other locations
+      if (isRemoving) {
+        setTeacherClasses(prevClasses =>
+          prevClasses.filter(c => c.locationId !== locationId)
+        );
+      }
+      // When adding a new location, keep existing classes (don't clear them)
+
       return newIds;
     });
   };
@@ -736,7 +762,6 @@ export const AccountManager: React.FC = () => {
     setSchoolName(school.name || '');
     setSchoolEmail(school.email || '');
     setSchoolPassword(''); // Don't show password - leave empty to keep existing
-    setSchoolLocationId(school.assigned_location_id || '');
     setSchoolStatus(school.status || 'ACTIVE');
     setView('form');
   };
@@ -751,10 +776,36 @@ export const AccountManager: React.FC = () => {
         throw new Error('No school ID to update');
       }
 
+      // Auto-match: Find location that matches the school name
+      let matchedLocation = locations.find(
+        loc => loc.name.toLowerCase().trim() === schoolName.toLowerCase().trim()
+      );
+
+      let assignedLocationId = matchedLocation?.id || null;
+
+      // If no matching location found, create a new one with the school name
+      if (!matchedLocation && schoolName.trim()) {
+        console.log('No matching location found for edit, creating new location:', schoolName);
+        try {
+          const createdLocation = await createLocation({
+            name: schoolName.trim(),
+            address: schoolName.trim(), // Use school name as address (as per existing pattern)
+          });
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          assignedLocationId = (createdLocation as any)?.id ?? null;
+          console.log('Created new location for school edit:', createdLocation);
+        } catch (locErr) {
+          console.error('Failed to create location:', locErr);
+          throw new Error('Gagal membuat lokasi baru untuk sekolah');
+        }
+      }
+
+      console.log('Location assignment for edit:', { schoolName, matchedLocation, assignedLocationId });
+
       // Update profile data
       await updateSchoolProfile(editSchoolId, {
         name: schoolName,
-        assigned_location_id: schoolLocationId || null,
+        assigned_location_id: assignedLocationId,
         status: schoolStatus,
       });
 
@@ -781,6 +832,116 @@ export const AccountManager: React.FC = () => {
     } catch (err: any) {
       console.error('Error updating school:', err);
       setSubmitError(err.message || 'Gagal menyimpan perubahan');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCreateSchoolSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitError(null);
+    setIsSubmitting(true);
+
+    try {
+      // Validate required fields (location is optional now)
+      if (!newSchoolName || !newSchoolEmail || !newSchoolPassword) {
+        throw new Error('Mohon lengkapi semua data sekolah');
+      }
+
+      // Auto-match: Find location that matches the school name
+      let matchedLocation = locations.find(
+        loc => loc.name.toLowerCase().trim() === newSchoolName.toLowerCase().trim()
+      );
+
+      let assignedLocationId = matchedLocation?.id || null;
+
+      // If no matching location found, create a new one with the school name
+      if (!matchedLocation) {
+        console.log('No matching location found, creating new location:', newSchoolName);
+        try {
+          const createdLocation = await createLocation({
+            name: newSchoolName.trim(),
+            address: newSchoolName.trim(), // Use school name as address (as per existing pattern)
+          });
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          assignedLocationId = (createdLocation as any)?.id ?? null;
+          console.log('Created new location:', createdLocation);
+        } catch (locErr) {
+          console.error('Failed to create location:', locErr);
+          throw new Error('Gagal membuat lokasi baru untuk sekolah');
+        }
+      }
+
+      console.log('Location assignment:', { schoolName: newSchoolName, matchedLocation, assignedLocationId });
+
+      // Verify user is logged in
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Anda harus login untuk membuat user baru');
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      console.log('Creating new school with:', {
+        email: newSchoolEmail,
+        name: newSchoolName,
+        role: 'SCHOOL',
+        assigned_location_id: assignedLocationId,
+        status: newSchoolStatus,
+      });
+
+      // Create school via Edge Function
+      const schoolResponse = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify({
+          email: newSchoolEmail,
+          password: newSchoolPassword,
+          name: newSchoolName,
+          role: 'SCHOOL',
+          assigned_location_id: assignedLocationId,
+          status: newSchoolStatus,
+        }),
+      });
+
+      const schoolResult = await schoolResponse.json();
+      console.log('School response status:', schoolResponse.status);
+      console.log('School result:', schoolResult);
+
+      if (!schoolResponse.ok) {
+        throw new Error(`Gagal membuat akun sekolah: ${schoolResult.error || schoolResponse.statusText}`);
+      }
+
+      if (!schoolResult?.success) {
+        throw new Error(schoolResult?.error || 'Gagal membuat akun sekolah - response tidak valid');
+      }
+
+      const newSchoolId = schoolResult.user.id;
+      console.log('School created with ID:', newSchoolId);
+
+      // Refetch data to update the list
+      await refetchSchools();
+
+      setSuccess(true);
+      setTimeout(() => {
+        setSuccess(false);
+        setView('list');
+        setEditSchoolId(null);
+        // Reset form fields
+        setNewSchoolName('');
+        setNewSchoolEmail('');
+        setNewSchoolPassword('');
+        setNewSchoolLocationId('');
+        setNewSchoolStatus('ACTIVE');
+      }, 1500);
+    } catch (error) {
+      console.error('Failed to create school:', error);
+      setSubmitError(error instanceof Error ? error.message : 'Gagal membuat akun sekolah');
     } finally {
       setIsSubmitting(false);
     }
@@ -1036,11 +1197,13 @@ export const AccountManager: React.FC = () => {
 
         // Try to update with all fields first, then fallback progressively
         // This handles cases where some columns might not exist in the database yet
+        // class_types is included in baseData to ensure it's always saved
         const baseData = {
           name: teacherName,
           email: teacherEmail,
           assigned_location_id: teacherLocationIds[0] || null,
           status: teacherStatus,
+          class_types: teacherClassTypes, // Always include class_types in base save
         };
 
         // Convert teacherClasses to array of key strings for database storage
@@ -1048,26 +1211,17 @@ export const AccountManager: React.FC = () => {
         const assignedClassesForDb = teacherClasses.map(c => c.key);
 
         // Smart fallback: try to save as many fields as possible
-        // Priority: class_types > assigned_location_ids > assigned_classes > assigned_subjects
-        // class_types is tried in multiple combinations to ensure it gets saved if column exists
+        // class_types is already in baseData, so we only need to handle location_ids, subjects, classes
         const fieldsToTry = [
-          // 1. All fields including class_types
-          { assigned_location_ids: teacherLocationIds, assigned_subjects: teacherSubjects, assigned_classes: assignedClassesForDb, class_types: teacherClassTypes },
-          // 2. Without assigned_classes
-          { assigned_location_ids: teacherLocationIds, assigned_subjects: teacherSubjects, class_types: teacherClassTypes },
-          // 3. Just location_ids + class_types
-          { assigned_location_ids: teacherLocationIds, class_types: teacherClassTypes },
-          // 4. Just class_types
-          { class_types: teacherClassTypes },
-          // 5. All fields WITHOUT class_types (fallback if column doesn't exist)
+          // 1. All extra fields
           { assigned_location_ids: teacherLocationIds, assigned_subjects: teacherSubjects, assigned_classes: assignedClassesForDb },
-          // 6. Without assigned_classes, without class_types
+          // 2. Without assigned_classes
           { assigned_location_ids: teacherLocationIds, assigned_subjects: teacherSubjects },
-          // 7. Just location_ids
+          // 3. Just location_ids
           { assigned_location_ids: teacherLocationIds },
-          // 8. Just subjects
+          // 4. Just subjects
           { assigned_subjects: teacherSubjects },
-          // 9. Empty (base only)
+          // 5. Empty (base only - still includes class_types)
           {},
         ];
 
@@ -2296,22 +2450,35 @@ export const AccountManager: React.FC = () => {
         <>
           {view === 'list' ? (
             <div className="space-y-3">
+              {/* Add Button and Search */}
+              <div className="flex justify-end items-center">
+                <Button 
+                  onClick={() => {
+                    setNewSchoolName('');
+                    setNewSchoolEmail('');
+                    setNewSchoolPassword('');
+                    setNewSchoolLocationId('');
+                    setNewSchoolStatus('ACTIVE');
+                    setEditSchoolId('new');
+                    setView('form');
+                  }}
+                  className="text-xs py-1.5 px-4"
+                >
+                  Tambah Sekolah
+                </Button>
+              </div>
+
               {/* Search */}
               <Card className="!p-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <input
-                      type="text"
-                      placeholder="Cari nama sekolah atau email..."
-                      className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50 focus:bg-white"
-                      value={schoolSearch}
-                      onChange={e => setSchoolSearch(e.target.value)}
-                    />
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {schoolsData.length} akun sekolah
-                  </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Cari nama sekolah atau email..."
+                    className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50 focus:bg-white"
+                    value={schoolSearch}
+                    onChange={e => setSchoolSearch(e.target.value)}
+                  />
                 </div>
               </Card>
 
@@ -2376,6 +2543,88 @@ export const AccountManager: React.FC = () => {
                 </div>
               )}
             </div>
+          ) : editSchoolId === 'new' ? (
+            /* Create New School Form */
+            <Card className="!p-4">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <School className="w-4 h-4 text-green-600" />
+                Tambah Sekolah Baru
+              </h3>
+              <form onSubmit={handleCreateSchoolSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Name */}
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1 block">Nama Sekolah</label>
+                    <input
+                      type="text"
+                      value={newSchoolName}
+                      onChange={e => setNewSchoolName(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500"
+                      placeholder="SD SANG TIMUR"
+                      required
+                    />
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1 block">Email</label>
+                    <input
+                      type="email"
+                      value={newSchoolEmail}
+                      onChange={e => setNewSchoolEmail(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500"
+                      placeholder="admin@sangtimur.sch.id"
+                      required
+                    />
+                  </div>
+
+                  {/* Password */}
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1 block">
+                      Password <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={newSchoolPassword}
+                      onChange={e => setNewSchoolPassword(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500"
+                      placeholder="Set password untuk akun sekolah"
+                      required
+                    />
+                  </div>
+
+                  {/* Status */}
+                  <div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1 block">Status</label>
+                    <select
+                      value={newSchoolStatus}
+                      onChange={e => setNewSchoolStatus(e.target.value as 'ACTIVE' | 'INACTIVE')}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500"
+                    >
+                      <option value="ACTIVE">Active</option>
+                      <option value="INACTIVE">Inactive</option>
+                    </select>
+                  </div>
+                </div>
+
+                {submitError && (
+                  <div className="p-3 bg-red-50 text-red-700 rounded-lg border border-red-100 text-xs">
+                    {submitError}
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center pt-2">
+                  <Button type="button" variant="outline" onClick={() => { setView('list'); setEditSchoolId(null); }} className="text-xs py-1.5 px-3" disabled={isSubmitting}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="px-6 shadow-md text-xs py-1.5 flex items-center gap-2 bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="w-3 h-3 animate-spin" />}
+                    {isSubmitting ? "Menyimpan..." : "Buat Sekolah"}
+                  </Button>
+                </div>
+              </form>
+              {success && <div className="mt-3 p-3 bg-green-50 text-green-700 rounded-lg border border-green-100 font-bold text-center text-xs">Sekolah baru berhasil dibuat!</div>}
+            </Card>
           ) : (
             /* Edit School Form */
             <Card className="!p-4">
@@ -2423,24 +2672,6 @@ export const AccountManager: React.FC = () => {
                       placeholder="Kosongkan jika tidak ingin ganti"
                     />
                     <p className="text-[10px] text-gray-400 mt-1">Biarkan kosong untuk mempertahankan password lama</p>
-                  </div>
-
-                  {/* Location */}
-                  <div>
-                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1 block">Lokasi/Sekolah</label>
-                    <select
-                      value={schoolLocationId}
-                      onChange={e => setSchoolLocationId(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
-                      required
-                    >
-                      <option value="">Pilih lokasi...</option>
-                      {locations
-                        .filter(l => l.name && !l.name.includes('Online'))
-                        .map(loc => (
-                          <option key={loc.id} value={loc.id}>{loc.name}</option>
-                        ))}
-                    </select>
                   </div>
 
                   {/* Status */}
