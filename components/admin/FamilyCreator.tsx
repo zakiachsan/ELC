@@ -6,7 +6,7 @@ import { Users, Link as LinkIcon, Lock, Mail, GraduationCap, Briefcase, Trash2, 
 import { MOCK_USERS, MOCK_SCHOOLS, MOCK_SESSIONS, MOCK_SESSION_REPORTS } from '../../constants';
 import { UserRole, User, ClassType } from '../../types';
 import { useTeachers, useLocations, useParents, useStudentsPaginated, useClasses, useSchools } from '../../hooks/useProfiles';
-import { supabase, supabaseAdmin } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { profilesService } from '../../services/profiles.service';
 import { contentService } from '../../services/content.service';
 import { parseAssignedClass } from '../../utils/teacherClasses';
@@ -872,14 +872,11 @@ export const AccountManager: React.FC = () => {
 
       // Update password only if provided (optional)
       if (schoolPassword && schoolPassword.trim().length > 0) {
-        const { error: passwordError } = await supabaseAdmin.auth.admin.updateUserById(
-          editSchoolId,
-          { password: schoolPassword }
-        );
-        if (passwordError) {
-          console.error('Password update error:', passwordError);
+        const passwordResult = await updatePasswordViaEdgeFunction(editSchoolId, schoolPassword);
+        if (!passwordResult.success) {
+          console.error('Password update error:', passwordResult.error);
           // Don't throw - profile was updated, just password failed
-          setSubmitError('Profil berhasil diupdate, tapi gagal mengubah password: ' + passwordError.message);
+          setSubmitError('Profil berhasil diupdate, tapi gagal mengubah password: ' + passwordResult.error);
           setIsSubmitting(false);
           return;
         }
@@ -1071,13 +1068,10 @@ export const AccountManager: React.FC = () => {
 
         // Update student password only if provided (optional)
         if (studentPassword && studentPassword.trim().length > 0) {
-          const { error: passwordError } = await supabaseAdmin.auth.admin.updateUserById(
-            editStudentId,
-            { password: studentPassword }
-          );
-          if (passwordError) {
-            console.error('Student password update error:', passwordError);
-            setSubmitError('Profil student berhasil diupdate, tapi gagal mengubah password: ' + passwordError.message);
+          const passwordResult = await updatePasswordViaEdgeFunction(editStudentId, studentPassword);
+          if (!passwordResult.success) {
+            console.error('Student password update error:', passwordResult.error);
+            setSubmitError('Profil student berhasil diupdate, tapi gagal mengubah password: ' + passwordResult.error);
             setIsSubmitting(false);
             return;
           }
@@ -1096,13 +1090,10 @@ export const AccountManager: React.FC = () => {
 
           // Update parent password only if provided (optional)
           if (parentPassword && parentPassword.trim().length > 0) {
-            const { error: parentPasswordError } = await supabaseAdmin.auth.admin.updateUserById(
-              editParentId,
-              { password: parentPassword }
-            );
-            if (parentPasswordError) {
-              console.error('Parent password update error:', parentPasswordError);
-              setSubmitError('Profil parent berhasil diupdate, tapi gagal mengubah password: ' + parentPasswordError.message);
+            const parentPasswordResult = await updatePasswordViaEdgeFunction(editParentId, parentPassword);
+            if (!parentPasswordResult.success) {
+              console.error('Parent password update error:', parentPasswordResult.error);
+              setSubmitError('Profil parent berhasil diupdate, tapi gagal mengubah password: ' + parentPasswordResult.error);
               setIsSubmitting(false);
               return;
             }
@@ -1268,6 +1259,40 @@ export const AccountManager: React.FC = () => {
   const isValidUUID = (str: string) => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     return uuidRegex.test(str);
+  };
+
+  // Helper to update password via edge function (secure, works in production)
+  const updatePasswordViaEdgeFunction = async (userId: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        return { success: false, error: 'Anda harus login untuk mengubah password' };
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/update-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify({ userId, password }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        return { success: false, error: result.error || 'Gagal mengubah password' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Update password error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Gagal mengubah password' };
+    }
   };
 
   const handleTeacherSubmit = async (e: React.FormEvent) => {
