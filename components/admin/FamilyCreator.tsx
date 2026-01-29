@@ -830,6 +830,13 @@ export const AccountManager: React.FC = () => {
         throw new Error('No school ID to update');
       }
 
+      // Check if this is a real Supabase record (valid UUID) or mock data
+      if (!isValidUUID(editSchoolId)) {
+        setSubmitError('Data ini adalah mock data dan tidak dapat disimpan ke database. Silakan jalankan seed.sql terlebih dahulu untuk menambahkan data sekolah ke Supabase.');
+        setIsSubmitting(false);
+        return;
+      }
+
       // Auto-match: Find location that matches the school name
       let matchedLocation = locations.find(
         loc => loc.name.toLowerCase().trim() === schoolName.toLowerCase().trim()
@@ -1036,6 +1043,20 @@ export const AccountManager: React.FC = () => {
     try {
       // Check if we're editing existing records
       if (isEditing && editStudentId) {
+        // Check if this is a real Supabase record (valid UUID) or mock data
+        if (!isValidUUID(editStudentId)) {
+          setSubmitError('Data ini adalah mock data dan tidak dapat disimpan ke database. Silakan jalankan seed.sql terlebih dahulu untuk menambahkan data student ke Supabase.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Also validate editParentId if it exists
+        if (editParentId && !isValidUUID(editParentId)) {
+          setSubmitError('Data parent ini adalah mock data dan tidak dapat disimpan ke database.');
+          setIsSubmitting(false);
+          return;
+        }
+
         // Always update student profile
         console.log('Updating student - Student ID:', editStudentId);
         await updateProfile(editStudentId, {
@@ -1048,6 +1069,21 @@ export const AccountManager: React.FC = () => {
           status: studentStatus,
         });
 
+        // Update student password only if provided (optional)
+        if (studentPassword && studentPassword.trim().length > 0) {
+          const { error: passwordError } = await supabaseAdmin.auth.admin.updateUserById(
+            editStudentId,
+            { password: studentPassword }
+          );
+          if (passwordError) {
+            console.error('Student password update error:', passwordError);
+            setSubmitError('Profil student berhasil diupdate, tapi gagal mengubah password: ' + passwordError.message);
+            setIsSubmitting(false);
+            return;
+          }
+          console.log('Student password updated successfully');
+        }
+
         if (editParentId) {
           // UPDATE MODE - Update existing parent
           console.log('Updating parent - Parent ID:', editParentId);
@@ -1057,6 +1093,21 @@ export const AccountManager: React.FC = () => {
             phone: parentPhone || null,
             address: parentAddress || null,
           });
+
+          // Update parent password only if provided (optional)
+          if (parentPassword && parentPassword.trim().length > 0) {
+            const { error: parentPasswordError } = await supabaseAdmin.auth.admin.updateUserById(
+              editParentId,
+              { password: parentPassword }
+            );
+            if (parentPasswordError) {
+              console.error('Parent password update error:', parentPasswordError);
+              setSubmitError('Profil parent berhasil diupdate, tapi gagal mengubah password: ' + parentPasswordError.message);
+              setIsSubmitting(false);
+              return;
+            }
+            console.log('Parent password updated successfully');
+          }
         } else if (includeParent && parentEmail && parentName && parentPassword) {
           // CREATE NEW PARENT for existing student (only if includeParent is ON)
           console.log('Creating new parent for student:', editStudentId);
